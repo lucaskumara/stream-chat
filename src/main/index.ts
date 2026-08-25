@@ -7,6 +7,7 @@ import { IPC, registerIpc, unregisterIpc } from './ipc'
 import { TwitchAuth } from './twitch/auth'
 import { BadgeCache, Helix } from './twitch/helix'
 import { EventSubHub } from './twitch/eventsub'
+import { IrcHub } from './twitch/irc'
 import { buildAuthState } from './twitch/state'
 
 const isDev = !app.isPackaged
@@ -36,7 +37,11 @@ const hub = new EventSubHub(helix, (status, error) => {
   if (status === 'error') console.warn('[eventsub]', error)
 })
 
-const sources = new SourceManager(bus, broadcastSources, { auth, helix, hub, badges })
+const irc = new IrcHub((status, error) => {
+  if (status === 'error') console.warn('[irc]', error)
+})
+
+const sources = new SourceManager(bus, broadcastSources, { auth, helix, hub, badges }, irc)
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -117,7 +122,8 @@ if (!app.requestSingleInstanceLock()) {
     // first status updates are not dropped on the floor.
     mainWindow.webContents.once('did-finish-load', () => {
       broadcastTwitchAuth()
-      if (auth.isSignedIn()) void sources.restoreSaved()
+      // Saved channels reconnect whether or not the user ever signed in.
+      void sources.restoreSaved()
     })
 
     mainWindow.on('closed', () => {
@@ -142,6 +148,7 @@ if (!app.requestSingleInstanceLock()) {
     bus.detach()
     auth.cancelPolling()
     hub.shutdown()
+    irc.shutdown()
     void sources.disconnectAll()
   })
 }

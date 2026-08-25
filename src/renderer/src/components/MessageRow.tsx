@@ -71,7 +71,7 @@ function BadgeView({ badge }: { badge: BadgeType }): React.ReactElement {
         title={badge.label}
         className="mr-1 rounded-sm bg-slate-600/40 px-1 text-[0.75em] text-slate-300"
       >
-        {badge.label.slice(0, 3).toUpperCase()}
+        {badge.label.length <= 5 ? badge.label : badge.label.slice(0, 3).toUpperCase()}
       </span>
     )
   }

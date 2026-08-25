@@ -156,6 +156,30 @@ function DevTools(): React.ReactElement {
   )
 }
 
+function TwitchModeLine(): React.ReactElement {
+  const auth = useStore((s) => s.twitchAuth)
+  const signedIn = auth.status === 'signed-in'
+
+  return (
+    <div className="flex items-center gap-1 border-t border-[#232932] px-2 py-[6px] text-[11px] text-slate-600">
+      <span className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ backgroundColor: '#9146ff' }} />
+      <span className="truncate">
+        {signedIn ? `twitch: ${auth.login}` : 'twitch: anonymous'}
+      </span>
+      {signedIn && (
+        <button
+          type="button"
+          onClick={() => void bridge().api.twitchSignOut()}
+          className="ml-auto shrink-0 cursor-pointer text-slate-600 underline underline-offset-2 hover:text-slate-400"
+          title="chat still works signed out; you lose badge images and the live indicator"
+        >
+          sign out
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function Sidebar(): React.ReactElement {
   const sources = useStore((s) => s.sources)
 
@@ -180,6 +204,7 @@ export function Sidebar(): React.ReactElement {
       </div>
 
       <AddChannel />
+      <TwitchModeLine />
       <DevTools />
     </aside>
   )

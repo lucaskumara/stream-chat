@@ -3,6 +3,8 @@ import type { MessageBus } from './bus'
 import type { ChatProvider, ProviderEvents } from './providers/types'
 import { MockProvider } from './providers/mock'
 import { TwitchProvider, type TwitchDeps } from './providers/twitch'
+import { TwitchIrcProvider } from './providers/twitchIrc'
+import type { IrcHub } from './twitch/irc'
 import { config } from './config'
 
 interface Entry {
@@ -26,7 +28,8 @@ export class SourceManager {
   constructor(
     private bus: MessageBus,
     private onStateChange: (states: SourceState[]) => void,
-    private twitch: TwitchDeps
+    private twitch: TwitchDeps,
+    private irc: IrcHub
   ) {}
 
   list(): SourceState[] {
@@ -142,13 +145,15 @@ export class SourceManager {
       case 'mock':
         return new MockProvider(sourceId, { rate: req.rate, label: req.label }, emit)
 
-      case 'twitch':
-        return new TwitchProvider(
-          sourceId,
-          { login: (req.identifier ?? '').toLowerCase() },
-          emit,
-          this.twitch
-        )
+      case 'twitch': {
+        const login = (req.identifier ?? '').toLowerCase()
+        // Anonymous by default so a channel can be added with no account at
+        // all. Signing in is an optional upgrade: EventSub adds badge images
+        // and a real live indicator.
+        return this.twitch.auth.isSignedIn()
+          ? new TwitchProvider(sourceId, { login }, emit, this.twitch)
+          : new TwitchIrcProvider(sourceId, { login }, emit, this.irc)
+      }
 
       case 'youtube':
       case 'kick':
