@@ -51,6 +51,7 @@ export class EventSubHub {
   private reconnectAttempt = 0
   private status: HubStatus = 'idle'
   private closing = false
+  private keepaliveSeconds = 10
 
   constructor(
     private helix: Helix,
@@ -101,14 +102,19 @@ export class EventSubHub {
       this.ws = ws
 
       ws.on('message', (raw: WebSocket.RawData) => {
+        if (this.ws !== ws) return
         void this.onMessage(raw.toString(), resolve)
       })
 
       ws.on('error', (err: Error) => {
+        if (this.ws !== ws) return
         this.setStatus('error', err.message)
       })
 
       ws.on('close', () => {
+        // A superseded socket (session_reconnect handed us a new one) must not
+        // trigger reconnect logic on its way out.
+        if (this.ws !== ws) return
         this.clearKeepalive()
         if (this.closing) return
         this.scheduleReconnect()
@@ -126,7 +132,9 @@ export class EventSubHub {
     }
 
     const type = msg.metadata?.message_type
-    this.armKeepalive(msg.payload?.session?.keepalive_timeout_seconds)
+    const negotiated = msg.payload?.session?.keepalive_timeout_seconds
+    if (typeof negotiated === 'number' && negotiated > 0) this.keepaliveSeconds = negotiated
+    this.armKeepalive()
 
     switch (type) {
       case 'session_welcome': {
@@ -165,7 +173,6 @@ export class EventSubHub {
         const nextUrl = msg.payload.session?.reconnect_url
         if (!nextUrl) return
         const old = this.ws
-        this.closing = true
         await this.connect(nextUrl)
         old?.close()
         return
@@ -178,9 +185,9 @@ export class EventSubHub {
     }
   }
 
-  private armKeepalive(timeoutSeconds?: number): void {
+  private armKeepalive(): void {
     this.clearKeepalive()
-    const ms = (timeoutSeconds ? timeoutSeconds * 1000 : 10_000) + KEEPALIVE_GRACE_MS
+    const ms = this.keepaliveSeconds * 1000 + KEEPALIVE_GRACE_MS
     this.keepaliveTimer = setTimeout(() => {
       // Silence past the keepalive window means the socket is gone even though
       // no close frame arrived — a common failure on flaky connections.
