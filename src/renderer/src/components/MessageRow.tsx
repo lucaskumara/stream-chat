@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import type { ChatMessage, Fragment, Platform } from '@shared/types'
+import type { Badge as BadgeType, ChatMessage, Fragment, Platform } from '@shared/types'
 import type { Decision } from '../rules'
 
 export const PLATFORM_COLOR: Record<Platform, string> = {
@@ -55,6 +55,35 @@ function Emote({ name, url }: { name: string; url: string }): React.ReactElement
       loading="lazy"
       draggable={false}
       className="mx-[1px] inline-block h-[1.55em] max-w-none align-middle"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
+function BadgeView({ badge }: { badge: BadgeType }): React.ReactElement {
+  const [failed, setFailed] = useState(false)
+
+  // Mock sources and unresolved sets have no image; the short title is the
+  // fallback rather than the default.
+  if (!badge.url || failed) {
+    return (
+      <span
+        title={badge.label}
+        className="mr-1 rounded-sm bg-slate-600/40 px-1 text-[0.75em] text-slate-300"
+      >
+        {badge.label.slice(0, 3).toUpperCase()}
+      </span>
+    )
+  }
+
+  return (
+    <img
+      src={badge.url}
+      alt={badge.label}
+      title={badge.label}
+      loading="lazy"
+      draggable={false}
+      className="mr-1 inline-block h-[1.15em] w-[1.15em] align-middle"
       onError={() => setFailed(true)}
     />
   )
@@ -152,13 +181,7 @@ function MessageRowImpl({
         )}
 
         {msg.badges.map((badge) => (
-          <span
-            key={badge.id}
-            title={badge.label}
-            className="mr-1 rounded-sm bg-slate-600/40 px-1 text-[0.75em] text-slate-300"
-          >
-            {badge.label.slice(0, 3).toUpperCase()}
-          </span>
+          <BadgeView key={badge.id} badge={badge} />
         ))}
 
         <span className="font-semibold" style={{ color: readableColor(msg.authorColor) }}>
