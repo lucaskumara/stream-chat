@@ -1,13 +1,13 @@
 export type Platform = 'twitch' | 'youtube' | 'kick' | 'mock'
 
+/** Which service supplied an emote, so the UI can hide one source live. */
+export type EmoteProvider = 'native' | '7tv' | 'bttv'
+
 /**
  * Messages arrive pre-split into fragments so the renderer never parses text.
  * Twitch/YouTube both hand us emote positions; re-deriving them by regex in the
  * UI would break on overlapping emote names and unicode offsets.
  */
-/** Which service supplied an emote, so the UI can hide one source live. */
-export type EmoteProvider = 'native' | '7tv' | 'bttv'
-
 export type Fragment =
   | { kind: 'text'; text: string }
   | {
@@ -167,8 +167,6 @@ export interface Rule {
   /** Restrict the rule to one platform. */
   platform?: Platform
 }
-
-export type ViewMode = 'panes' | 'combined'
 
 /**
  * The complete surface the preload exposes on `window.api`. Declared here so

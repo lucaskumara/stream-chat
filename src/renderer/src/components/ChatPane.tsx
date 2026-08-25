@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { ChatMessage, EmoteSettings } from '@shared/types'
 import type { RuleEngine } from '../rules'
@@ -176,32 +176,4 @@ export function ChatPane({
       </div>
     </div>
   )
-}
-
-/** Live throughput readout, sampled on its own timer so it never re-renders rows. */
-export function useThroughput(received: number): number {
-  const [rate, setRate] = useState(0)
-
-  // Written every render, read only by the sampler, so a 10Hz ingest cadence
-  // never restarts the interval.
-  const latest = useRef(received)
-  latest.current = received
-
-  useEffect(() => {
-    let last = latest.current
-    let at = Date.now()
-
-    const id = setInterval(() => {
-      const now = Date.now()
-      const elapsed = (now - at) / 1000
-      if (elapsed <= 0) return
-      setRate(Math.max(0, Math.round((latest.current - last) / elapsed)))
-      last = latest.current
-      at = now
-    }, 1000)
-
-    return () => clearInterval(id)
-  }, [])
-
-  return rate
 }

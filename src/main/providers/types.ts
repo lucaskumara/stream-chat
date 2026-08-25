@@ -19,9 +19,3 @@ export interface ChatProvider {
   connect(): Promise<void>
   disconnect(): Promise<void>
 }
-
-export type ProviderFactory = (
-  sourceId: string,
-  config: Record<string, unknown>,
-  emit: ProviderEvents
-) => ChatProvider
