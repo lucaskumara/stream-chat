@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+
+# build output
+out/
+dist/
+release/
+.vite/
+
+# typescript incremental build state
+*.tsbuildinfo
+
+# secrets — Phase 1 onward stores OAuth tokens via safeStorage in userData,
+# never in the repo, but keep env files out regardless
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# editors / OS
+.idea/
+*.local
+.DS_Store
+Thumbs.db

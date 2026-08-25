@@ -1,0 +1,58 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-twitch: #9146ff;
+  --color-youtube: #ff0033;
+  --color-kick: #53fc18;
+  --color-mock: #64748b;
+
+  --color-ink-900: #0b0d10;
+  --color-ink-800: #12151a;
+  --color-ink-700: #171b22;
+  --color-ink-600: #1f242d;
+  --color-ink-500: #2b323d;
+}
+
+:root {
+  /* Driven by the font-size control in the top bar; every message-row size
+     is expressed in em so this one value scales timestamps, badges and
+     emotes together. */
+  --chat-font-size: 15px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink-900);
+  color: #d7dce3;
+  font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  overflow: hidden;
+}
+
+/* Chat scrollers get a thin, low-contrast bar so a fast-moving list doesn't
+   draw the eye to the scrollbar instead of the messages. */
+.chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-500) transparent;
+  overflow-anchor: none;
+}
+.chat-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.chat-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-ink-500);
+  border-radius: 5px;
+}
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+input[type='range'] {
+  accent-color: #6366f1;
+}
