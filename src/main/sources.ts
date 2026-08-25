@@ -5,6 +5,7 @@ import { MockProvider } from './providers/mock'
 import { TwitchProvider, type TwitchDeps } from './providers/twitch'
 import { TwitchIrcProvider } from './providers/twitchIrc'
 import type { IrcHub } from './twitch/irc'
+import type { SevenTvEmotes } from './emotes/seventv'
 import { config } from './config'
 
 interface Entry {
@@ -29,7 +30,8 @@ export class SourceManager {
     private bus: MessageBus,
     private onStateChange: (states: SourceState[]) => void,
     private twitch: TwitchDeps,
-    private irc: IrcHub
+    private irc: IrcHub,
+    private seventv: SevenTvEmotes
   ) {}
 
   list(): SourceState[] {
@@ -152,7 +154,7 @@ export class SourceManager {
         // and a real live indicator.
         return this.twitch.auth.isSignedIn()
           ? new TwitchProvider(sourceId, { login }, emit, this.twitch)
-          : new TwitchIrcProvider(sourceId, { login }, emit, this.irc)
+          : new TwitchIrcProvider(sourceId, { login }, emit, this.irc, this.seventv)
       }
 
       case 'youtube':

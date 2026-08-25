@@ -3,6 +3,7 @@ import type { ChatProvider, ProviderEvents } from './types'
 import type { IrcHub } from '../twitch/irc'
 import type { IrcMessage } from '../twitch/ircparse'
 import { normalizeIrcPrivmsg, normalizeIrcUsernotice } from '../twitch/ircnormalize'
+import { applySevenTv, type SevenTvEmotes } from '../emotes/seventv'
 
 export interface TwitchIrcConfig {
   login: string
@@ -24,13 +25,31 @@ export class TwitchIrcProvider implements ChatProvider {
 
   private joined = false
 
+  /** Twitch's numeric channel id, learned from the room-id tag. */
+  private roomId: string | null = null
+
   constructor(
     readonly sourceId: string,
     private config: TwitchIrcConfig,
     private emit: ProviderEvents,
-    private hub: IrcHub
+    private hub: IrcHub,
+    private seventv: SevenTvEmotes
   ) {
     this.label = config.login
+  }
+
+  /** Channel emotes first, then 7TV globals. */
+  private lookupEmote = (name: string): ReturnType<SevenTvEmotes['lookup']> =>
+    this.roomId ? this.seventv.lookup('twitch', this.roomId, name) : undefined
+
+  /**
+   * Every PRIVMSG and ROOMSTATE carries room-id, so the channel's numeric id
+   * arrives for free — no Helix call and no sign-in needed to load its emotes.
+   */
+  private ensureEmotes(roomId: string | undefined): void {
+    if (!roomId || this.roomId === roomId) return
+    this.roomId = roomId
+    void this.seventv.loadChannel('twitch', roomId)
   }
 
   async connect(): Promise<void> {
@@ -60,14 +79,22 @@ export class TwitchIrcProvider implements ChatProvider {
   private handle(msg: IrcMessage): void {
     switch (msg.command) {
       case 'PRIVMSG': {
+        this.ensureEmotes(msg.tags['room-id'])
         const chat = normalizeIrcPrivmsg(msg, this.sourceId)
-        if (chat) this.emit.message(chat)
+        if (chat) {
+          chat.fragments = applySevenTv(chat.fragments, this.lookupEmote)
+          this.emit.message(chat)
+        }
         return
       }
 
       case 'USERNOTICE': {
+        this.ensureEmotes(msg.tags['room-id'])
         const notice = normalizeIrcUsernotice(msg, this.sourceId)
-        if (notice) this.emit.message(notice)
+        if (notice) {
+          notice.fragments = applySevenTv(notice.fragments, this.lookupEmote)
+          this.emit.message(notice)
+        }
         return
       }
 
@@ -100,7 +127,9 @@ export class TwitchIrcProvider implements ChatProvider {
       }
 
       case 'ROOMSTATE': {
-        // Arrives on join; confirms the channel exists and we are in it.
+        // Arrives on join; confirms the channel exists and carries room-id, so
+        // emotes start loading before the first message shows up.
+        this.ensureEmotes(msg.tags['room-id'])
         this.emit.status('connected')
         return
       }

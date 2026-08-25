@@ -4,6 +4,7 @@ import type { TwitchAuth } from '../twitch/auth'
 import type { BadgeCache, Helix } from '../twitch/helix'
 import type { EventSubHub } from '../twitch/eventsub'
 import { normalizeChatMessage, type TwitchChatEvent } from '../twitch/normalize'
+import { applySevenTv, type SevenTvEmotes } from '../emotes/seventv'
 
 export interface TwitchProviderConfig {
   /** Lowercased channel login, as typed by the user. */
@@ -15,6 +16,7 @@ export interface TwitchDeps {
   helix: Helix
   hub: EventSubHub
   badges: BadgeCache
+  seventv: SevenTvEmotes
 }
 
 /**
@@ -30,6 +32,7 @@ export class TwitchProvider implements ChatProvider {
   label: string
 
   private registered = false
+  private broadcasterId: string | null = null
 
   constructor(
     readonly sourceId: string,
@@ -57,8 +60,11 @@ export class TwitchProvider implements ChatProvider {
 
       this.label = user.display_name || user.login
 
+      this.broadcasterId = user.id
+
       // Cosmetic, and deliberately not awaited into the failure path.
       await this.deps.badges.load(user.id)
+      void this.deps.seventv.loadChannel('twitch', user.id)
 
       const self = this.deps.auth.getTokens()?.userId
       if (!self) {
@@ -115,13 +121,18 @@ export class TwitchProvider implements ChatProvider {
   private handle(type: string, event: Record<string, unknown>): void {
     switch (type) {
       case 'channel.chat.message': {
-        this.emit.message(
-          normalizeChatMessage(
-            event as unknown as TwitchChatEvent,
-            this.sourceId,
-            this.deps.badges
-          )
+        const chat = normalizeChatMessage(
+          event as unknown as TwitchChatEvent,
+          this.sourceId,
+          this.deps.badges
         )
+        const broadcasterId = this.broadcasterId
+        if (broadcasterId) {
+          chat.fragments = applySevenTv(chat.fragments, (name) =>
+            this.deps.seventv.lookup('twitch', broadcasterId, name)
+          )
+        }
+        this.emit.message(chat)
         return
       }
 
