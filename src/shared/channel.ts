@@ -31,15 +31,66 @@ export interface ParseResult {
 
 const TWITCH_LOGIN = /^[a-z0-9_]{3,25}$/
 const KICK_SLUG = /^[a-z0-9_-]{2,25}$/
-const YT_CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/
-const YT_HANDLE = /^@[A-Za-z0-9._-]{3,30}$/
-const YT_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
+const YOUTUBE_CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/
+const YOUTUBE_HANDLE = /^@[A-Za-z0-9._-]{3,30}$/
+const YOUTUBE_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
 
-function ref(platform: Platform, kind: ChannelRefKind, value: string, label = value): ChannelRef {
-  return { platform, kind, value, label }
+/** `twitch:name` / `twitch/name`, handy for typing without the dropdown. */
+const PLATFORM_PREFIX = /^(twitch|youtube|kick)\s*[:/]\s*(.+)$/i
+
+/** Anything with a dot before a letter is treated as a URL rather than a name. */
+const LOOKS_LIKE_URL = /^[a-z]+\.[a-z]|^http/i
+
+function ok(platform: Platform, kind: ChannelRefKind, value: string): ParseResult {
+  return { ok: true, ref: { platform, kind, value, label: value } }
 }
 
-/** Pull a URL apart when the user pasted a link rather than typing a name. */
+function fail(error: string): ParseResult {
+  return { ok: false, error }
+}
+
+function parseTwitchUrl(segments: string[]): ParseResult {
+  // /popout/<login>/chat and /<login>/... both appear in pasted links.
+  const login = (segments[0] === 'popout' ? segments[1] : segments[0])?.toLowerCase()
+  if (!login) return fail('That Twitch link has no channel name in it.')
+  if (!TWITCH_LOGIN.test(login)) return fail(`"${login}" is not a valid Twitch channel.`)
+  return ok('twitch', 'twitch-login', login)
+}
+
+function parseKickUrl(segments: string[]): ParseResult {
+  const slug = segments[0]?.toLowerCase()
+  if (!slug) return fail('That Kick link has no channel name in it.')
+  if (!KICK_SLUG.test(slug)) return fail(`"${slug}" is not a valid Kick channel.`)
+  return ok('kick', 'kick-slug', slug)
+}
+
+/** Chat lives on a video, so a watch link is the most precise thing to get. */
+function parseYouTubeUrl(url: URL, segments: string[], isShortLink: boolean): ParseResult {
+  if (isShortLink) {
+    const videoId = segments[0]
+    if (videoId && YOUTUBE_VIDEO_ID.test(videoId)) {
+      return ok('youtube', 'youtube-video-id', videoId)
+    }
+    return fail('That YouTube link has no video id in it.')
+  }
+
+  const watchId = url.searchParams.get('v')
+  if (watchId && YOUTUBE_VIDEO_ID.test(watchId)) {
+    return ok('youtube', 'youtube-video-id', watchId)
+  }
+  if (segments[0] === 'live' && segments[1] && YOUTUBE_VIDEO_ID.test(segments[1])) {
+    return ok('youtube', 'youtube-video-id', segments[1])
+  }
+  if (segments[0]?.startsWith('@') && YOUTUBE_HANDLE.test(segments[0])) {
+    return ok('youtube', 'youtube-handle', segments[0])
+  }
+  if (segments[0] === 'channel' && segments[1] && YOUTUBE_CHANNEL_ID.test(segments[1])) {
+    return ok('youtube', 'youtube-channel-id', segments[1])
+  }
+  return fail('Could not find a channel or video in that YouTube link.')
+}
+
+/** Returns null when the text is not a URL we recognise, so callers can retry. */
 function parseUrl(raw: string): ParseResult | null {
   let url: URL
   try {
@@ -51,46 +102,47 @@ function parseUrl(raw: string): ParseResult | null {
   const host = url.hostname.replace(/^www\./, '').toLowerCase()
   const segments = url.pathname.split('/').filter(Boolean)
 
-  if (host === 'twitch.tv' || host === 'm.twitch.tv') {
-    // /popout/<login>/chat and /<login>/... both appear in pasted links.
-    const login = (segments[0] === 'popout' ? segments[1] : segments[0])?.toLowerCase()
-    if (!login) return { ok: false, error: 'That Twitch link has no channel name in it.' }
-    if (!TWITCH_LOGIN.test(login)) return { ok: false, error: `"${login}" is not a valid Twitch channel.` }
-    return { ok: true, ref: ref('twitch', 'twitch-login', login) }
+  if (host === 'twitch.tv' || host === 'm.twitch.tv') return parseTwitchUrl(segments)
+  if (host === 'kick.com') return parseKickUrl(segments)
+  if (host === 'youtube.com' || host === 'm.youtube.com') {
+    return parseYouTubeUrl(url, segments, false)
   }
-
-  if (host === 'kick.com') {
-    const slug = segments[0]?.toLowerCase()
-    if (!slug) return { ok: false, error: 'That Kick link has no channel name in it.' }
-    if (!KICK_SLUG.test(slug)) return { ok: false, error: `"${slug}" is not a valid Kick channel.` }
-    return { ok: true, ref: ref('kick', 'kick-slug', slug) }
-  }
-
-  if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtu.be') {
-    // Chat lives on a video, so a watch link is the most precise thing to get.
-    if (host === 'youtu.be') {
-      const id = segments[0]
-      if (id && YT_VIDEO_ID.test(id)) return { ok: true, ref: ref('youtube', 'youtube-video-id', id) }
-      return { ok: false, error: 'That YouTube link has no video id in it.' }
-    }
-
-    const videoId = url.searchParams.get('v')
-    if (videoId && YT_VIDEO_ID.test(videoId)) {
-      return { ok: true, ref: ref('youtube', 'youtube-video-id', videoId) }
-    }
-    if (segments[0] === 'live' && segments[1] && YT_VIDEO_ID.test(segments[1])) {
-      return { ok: true, ref: ref('youtube', 'youtube-video-id', segments[1]) }
-    }
-    if (segments[0]?.startsWith('@') && YT_HANDLE.test(segments[0])) {
-      return { ok: true, ref: ref('youtube', 'youtube-handle', segments[0]) }
-    }
-    if (segments[0] === 'channel' && segments[1] && YT_CHANNEL_ID.test(segments[1])) {
-      return { ok: true, ref: ref('youtube', 'youtube-channel-id', segments[1]) }
-    }
-    return { ok: false, error: 'Could not find a channel or video in that YouTube link.' }
-  }
+  if (host === 'youtu.be') return parseYouTubeUrl(url, segments, true)
 
   return null
+}
+
+/** A YouTube handle or channel id identifies itself without a platform hint. */
+function parseSelfDescribingName(name: string): ParseResult | null {
+  if (YOUTUBE_CHANNEL_ID.test(name)) return ok('youtube', 'youtube-channel-id', name)
+  if (name.startsWith('@') && YOUTUBE_HANDLE.test(name)) {
+    return ok('youtube', 'youtube-handle', name)
+  }
+  return null
+}
+
+function parseBareName(name: string, platform: Platform): ParseResult {
+  const lower = name.toLowerCase()
+
+  switch (platform) {
+    case 'twitch':
+      return TWITCH_LOGIN.test(lower)
+        ? ok('twitch', 'twitch-login', lower)
+        : fail(`"${name}" is not a valid Twitch channel name.`)
+
+    case 'kick':
+      return KICK_SLUG.test(lower)
+        ? ok('kick', 'kick-slug', lower)
+        : fail(`"${name}" is not a valid Kick channel name.`)
+
+    case 'youtube':
+      return YOUTUBE_VIDEO_ID.test(name)
+        ? ok('youtube', 'youtube-video-id', name)
+        : fail('For YouTube, use an @handle, a channel id, or paste the live video link.')
+
+    default:
+      return fail(`Unsupported platform: ${platform}`)
+  }
 }
 
 /**
@@ -100,57 +152,26 @@ function parseUrl(raw: string): ParseResult | null {
  */
 export function parseChannelInput(input: string, platformHint?: Platform): ParseResult {
   const raw = input.trim()
-  if (raw === '') return { ok: false, error: 'Enter a channel name or paste a link.' }
+  if (raw === '') return fail('Enter a channel name or paste a link.')
 
-  if (/^[a-z]+\.[a-z]/i.test(raw) || raw.startsWith('http')) {
+  if (LOOKS_LIKE_URL.test(raw)) {
     const fromUrl = parseUrl(raw)
     if (fromUrl) return fromUrl
   }
 
-  // `twitch:xqc` style, handy for typing without touching the dropdown.
-  const prefixed = raw.match(/^(twitch|youtube|kick)\s*[:/]\s*(.+)$/i)
+  const prefixed = raw.match(PLATFORM_PREFIX)
   if (prefixed) {
     return parseChannelInput(prefixed[2] as string, prefixed[1]?.toLowerCase() as Platform)
   }
 
-  const name = raw.replace(/^@?/, (m) => m) // keep a leading @ for YouTube handles
-
-  // A YouTube handle or channel id identifies itself without a hint.
-  if (YT_CHANNEL_ID.test(name)) return { ok: true, ref: ref('youtube', 'youtube-channel-id', name) }
-  if (name.startsWith('@') && YT_HANDLE.test(name)) {
-    return { ok: true, ref: ref('youtube', 'youtube-handle', name) }
-  }
+  const selfDescribing = parseSelfDescribingName(raw)
+  if (selfDescribing) return selfDescribing
 
   if (!platformHint || platformHint === 'mock') {
     return { ok: false, needsPlatform: true, error: 'Pick a platform, or paste the channel link.' }
   }
 
-  const lower = name.toLowerCase()
-  switch (platformHint) {
-    case 'twitch':
-      if (!TWITCH_LOGIN.test(lower)) {
-        return { ok: false, error: `"${name}" is not a valid Twitch channel name.` }
-      }
-      return { ok: true, ref: ref('twitch', 'twitch-login', lower) }
-
-    case 'kick':
-      if (!KICK_SLUG.test(lower)) {
-        return { ok: false, error: `"${name}" is not a valid Kick channel name.` }
-      }
-      return { ok: true, ref: ref('kick', 'kick-slug', lower) }
-
-    case 'youtube':
-      if (YT_VIDEO_ID.test(name)) {
-        return { ok: true, ref: ref('youtube', 'youtube-video-id', name) }
-      }
-      return {
-        ok: false,
-        error: 'For YouTube, use an @handle, a channel id, or paste the live video link.'
-      }
-
-    default:
-      return { ok: false, error: `Unsupported platform: ${platformHint}` }
-  }
+  return parseBareName(raw, platformHint)
 }
 
 /** Where auto-connect is free versus quota-metered, for honest UI labelling. */

@@ -1,5 +1,6 @@
 import WebSocket from 'ws'
 import { parseIrcLine, type IrcMessage } from './ircparse'
+import { reconnectDelayMs } from '../net/backoff'
 
 const IRC_URL = 'wss://irc-ws.chat.twitch.tv:443'
 
@@ -54,52 +55,67 @@ export class IrcHub {
       this.closing = false
       this.onStatus(this.attempt > 0 ? 'reconnecting' : 'connecting')
 
-      const ws = new WebSocket(IRC_URL)
-      this.ws = ws
+      const socket = new WebSocket(IRC_URL)
+      this.ws = socket
 
-      ws.on('open', () => {
-        if (this.ws !== ws) return
-        // Tags carry colour, badges, emote positions and message ids; commands
-        // carry CLEARCHAT / CLEARMSG, which message hiding depends on.
-        ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands')
-        ws.send(`NICK justinfan${Math.floor(Math.random() * 80000 + 1000)}`)
-        for (const channel of this.channels.keys()) ws.send(`JOIN #${channel}`)
-
-        this.attempt = 0
-        this.onStatus('connected')
-        this.armSilence()
+      // Every handler ignores a socket that is no longer the active one, so a
+      // superseded connection cannot trigger reconnect logic on its way out.
+      socket.on('open', () => {
+        if (this.ws !== socket) return
+        this.registerAnonymously(socket)
         resolve()
       })
 
-      ws.on('message', (raw: WebSocket.RawData) => {
-        if (this.ws !== ws) return
+      socket.on('message', (raw: WebSocket.RawData) => {
+        if (this.ws !== socket) return
         this.armSilence()
-        for (const line of raw.toString().split('\r\n')) {
-          if (line === '') continue
-          const msg = parseIrcLine(line)
-          if (!msg) continue
-
-          if (msg.command === 'PING') {
-            this.send(`PONG :${msg.trailing ?? 'tmi.twitch.tv'}`)
-            continue
-          }
-          this.dispatch(msg)
-        }
+        this.consume(raw.toString())
       })
 
-      ws.on('error', (err: Error) => {
-        if (this.ws !== ws) return
-        this.onStatus('error', err.message)
+      socket.on('error', (error: Error) => {
+        if (this.ws !== socket) return
+        this.onStatus('error', error.message)
       })
 
-      ws.on('close', () => {
-        if (this.ws !== ws) return
+      socket.on('close', () => {
+        if (this.ws !== socket) return
         this.clearSilence()
         if (this.closing) return
         this.scheduleReconnect()
         resolve()
       })
     })
+  }
+
+  /**
+   * Logging in as justinfan<n> with no password is the long-standing way to
+   * read chat without an account. Tags carry colour, badges, emote positions
+   * and message ids; commands carry CLEARCHAT / CLEARMSG, which message hiding
+   * depends on.
+   */
+  private registerAnonymously(socket: WebSocket): void {
+    const anonymousNick = `justinfan${Math.floor(Math.random() * 80000 + 1000)}`
+    socket.send('CAP REQ :twitch.tv/tags twitch.tv/commands')
+    socket.send(`NICK ${anonymousNick}`)
+    for (const channel of this.channels.keys()) socket.send(`JOIN #${channel}`)
+
+    this.attempt = 0
+    this.onStatus('connected')
+    this.armSilence()
+  }
+
+  private consume(payload: string): void {
+    for (const line of payload.split('\r\n')) {
+      if (line === '') continue
+      const message = parseIrcLine(line)
+      if (!message) continue
+
+      if (message.command === 'PING') {
+        this.send(`PONG :${message.trailing ?? 'tmi.twitch.tv'}`)
+        continue
+      }
+      this.dispatch(message)
+    }
   }
 
   private dispatch(msg: IrcMessage): void {
@@ -122,15 +138,11 @@ export class IrcHub {
   private scheduleReconnect(): void {
     if (this.reconnectTimer || this.channels.size === 0) return
     this.attempt++
-    const delay = Math.min(30_000, 1000 * 2 ** Math.min(this.attempt, 5))
     this.onStatus('reconnecting')
-    this.reconnectTimer = setTimeout(
-      () => {
-        this.reconnectTimer = null
-        void this.connect()
-      },
-      delay + Math.round(Math.random() * 500)
-    )
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      void this.connect()
+    }, reconnectDelayMs(this.attempt))
   }
 
   shutdown(): void {

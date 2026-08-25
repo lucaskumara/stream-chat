@@ -1,8 +1,12 @@
 import { ipcMain, shell } from 'electron'
-import type { AddSourceRequest } from '@shared/types'
+import type { AddSourceRequest, EmoteSettings, Platform } from '@shared/types'
 import type { SourceManager } from './sources'
 import type { TwitchAuth } from './twitch/auth'
 import { buildAuthState } from './twitch/state'
+
+const MAX_MOCK_RATE = 2000
+const MAX_LABEL_LENGTH = 80
+const MAX_IDENTIFIER_LENGTH = 100
 
 export const IPC = {
   listSources: 'sources:list',
@@ -27,57 +31,43 @@ export const IPC = {
  * so every handler validates its arguments rather than trusting the preload.
  */
 export function registerIpc(sources: SourceManager, auth: TwitchAuth): void {
+  registerSourceHandlers(sources)
+  registerShellHandlers()
+  registerTwitchAuthHandlers(sources, auth)
+}
+
+function registerSourceHandlers(sources: SourceManager): void {
   ipcMain.handle(IPC.listSources, () => sources.list())
 
-  ipcMain.handle(IPC.addSource, async (_e, req: unknown) => sources.add(parseAddSource(req)))
+  ipcMain.handle(IPC.addSource, async (_e, request: unknown) =>
+    sources.add(parseAddSource(request))
+  )
 
   ipcMain.handle(IPC.removeSource, async (_e, sourceId: unknown) => {
-    if (typeof sourceId !== 'string') throw new Error('sourceId must be a string')
-    await sources.remove(sourceId)
+    await sources.remove(requireString(sourceId, 'sourceId'))
   })
 
   ipcMain.handle(IPC.setRate, (_e, sourceId: unknown, rate: unknown) => {
-    if (typeof sourceId !== 'string') throw new Error('sourceId must be a string')
     if (typeof rate !== 'number' || !Number.isFinite(rate)) {
       throw new Error('rate must be a finite number')
     }
-    sources.setRate(sourceId, Math.min(Math.max(rate, 0), 2000))
+    sources.setRate(requireString(sourceId, 'sourceId'), clamp(rate, 0, MAX_MOCK_RATE))
   })
 
   ipcMain.handle(IPC.setEmotes, (_e, sourceId: unknown, settings: unknown) => {
-    if (typeof sourceId !== 'string') throw new Error('sourceId must be a string')
-    if (typeof settings !== 'object' || settings === null) {
-      throw new Error('settings must be an object')
-    }
-    const s = settings as Record<string, unknown>
-    sources.setEmoteSettings(sourceId, {
-      sevenTv: s.sevenTv !== false,
-      bttv: s.bttv !== false
-    })
+    sources.setEmoteSettings(requireString(sourceId, 'sourceId'), parseEmoteSettings(settings))
   })
+}
 
+function registerShellHandlers(): void {
   ipcMain.handle(IPC.openExternal, async (_e, url: unknown) => {
-    if (typeof url !== 'string') throw new Error('url must be a string')
-    // Chat messages carry arbitrary user-supplied links. Only ever hand plain
-    // web URLs to the OS — never file:, and never a custom protocol handler.
-    let parsedUrl: URL
-    try {
-      parsedUrl = new URL(url)
-    } catch {
-      throw new Error('invalid url')
-    }
-    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-      throw new Error(`refusing to open protocol: ${parsedUrl.protocol}`)
-    }
-    await shell.openExternal(parsedUrl.toString())
+    await shell.openExternal(parseWebUrl(url))
   })
+}
 
-  /* ---------------------------- Twitch auth ---------------------------- */
-
+function registerTwitchAuthHandlers(sources: SourceManager, auth: TwitchAuth): void {
   ipcMain.handle(IPC.twitchAuthState, () => buildAuthState(auth))
-
   ipcMain.handle(IPC.twitchStartLogin, async () => auth.startDeviceFlow())
-
   ipcMain.handle(IPC.twitchSignOut, async () => {
     await sources.removeByPlatform('twitch')
     auth.signOut()
@@ -100,28 +90,65 @@ export function unregisterIpc(): void {
   }
 }
 
-function parseAddSource(req: unknown): AddSourceRequest {
-  if (typeof req !== 'object' || req === null) throw new Error('request must be an object')
-  const r = req as Record<string, unknown>
+const SUPPORTED_PLATFORMS: Platform[] = ['mock', 'twitch', 'youtube', 'kick']
 
-  const platform = r.platform
-  if (
-    platform !== 'mock' &&
-    platform !== 'twitch' &&
-    platform !== 'youtube' &&
-    platform !== 'kick'
-  ) {
-    throw new Error(`unknown platform: ${String(platform)}`)
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== 'string') throw new Error(`${field} must be a string`)
+  return value
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
+
+function parseEmoteSettings(value: unknown): EmoteSettings {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('settings must be an object')
   }
+  const record = value as Record<string, unknown>
+  // Absent means enabled, so an older renderer cannot silently disable emotes.
+  return { sevenTv: record.sevenTv !== false, bttv: record.bttv !== false }
+}
 
-  const label = typeof r.label === 'string' ? r.label.slice(0, 80) : ''
+/**
+ * Chat messages carry arbitrary user-supplied links. Only ever hand plain web
+ * URLs to the OS — never file:, and never a custom protocol handler.
+ */
+function parseWebUrl(value: unknown): string {
+  let parsed: URL
+  try {
+    parsed = new URL(requireString(value, 'url'))
+  } catch {
+    throw new Error('invalid url')
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`refusing to open protocol: ${parsed.protocol}`)
+  }
+  return parsed.toString()
+}
+
+function parsePlatform(value: unknown): Platform {
+  const platform = SUPPORTED_PLATFORMS.find((candidate) => candidate === value)
+  if (!platform) throw new Error(`unknown platform: ${String(value)}`)
+  return platform
+}
+
+function parseAddSource(value: unknown): AddSourceRequest {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('request must be an object')
+  }
+  const record = value as Record<string, unknown>
+
+  const platform = parsePlatform(record.platform)
+  const label = typeof record.label === 'string' ? record.label.slice(0, MAX_LABEL_LENGTH) : ''
   const rate =
-    typeof r.rate === 'number' && Number.isFinite(r.rate)
-      ? Math.min(Math.max(r.rate, 0), 2000)
+    typeof record.rate === 'number' && Number.isFinite(record.rate)
+      ? clamp(record.rate, 0, MAX_MOCK_RATE)
       : undefined
-
   const identifier =
-    typeof r.identifier === 'string' ? r.identifier.trim().slice(0, 100) : undefined
+    typeof record.identifier === 'string'
+      ? record.identifier.trim().slice(0, MAX_IDENTIFIER_LENGTH)
+      : undefined
 
   if (platform !== 'mock' && !identifier) {
     throw new Error(`${platform} sources need a channel identifier`)

@@ -55,7 +55,11 @@ export default function App(): React.ReactElement {
     const offAuth = api.onTwitchAuth(setTwitchAuth)
 
     void api.listSources().then(setSources)
-    void api.twitchAuthState().then(setTwitchAuth).catch(() => undefined)
+    void api
+      .twitchAuthState()
+      .then(setTwitchAuth)
+      // Auth state is optional context; the browser harness has none.
+      .catch((error) => console.debug('[auth] state unavailable:', error))
 
     return () => {
       offBatch()

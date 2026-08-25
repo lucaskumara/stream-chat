@@ -8,6 +8,7 @@ import { TwitchIrcProvider } from './providers/twitchIrc'
 import type { IrcHub } from './twitch/irc'
 import type { ThirdPartyEmotes } from './emotes'
 import { config } from './config'
+import { ignoreTeardownFailure } from './lifecycle'
 
 interface Entry {
   provider: ChatProvider
@@ -39,27 +40,12 @@ export class SourceManager {
     return [...this.entries.values()].map((e) => ({ ...e.state }))
   }
 
-  async add(req: AddSourceRequest): Promise<string> {
+  async add(request: AddSourceRequest): Promise<string> {
     const sourceId = `src-${++this.seq}`
+    const identifier = request.identifier?.toLowerCase()
+    const state = this.buildInitialState(sourceId, request, identifier)
 
-    const state: SourceState = {
-      id: sourceId,
-      platform: req.platform,
-      label: req.label || req.identifier || req.platform,
-      status: 'disconnected',
-      live: false,
-      emotes: { ...DEFAULT_EMOTE_SETTINGS }
-    }
-
-    const identifier = req.identifier?.toLowerCase()
-    // Restore saved switches so a channel keeps its preference across restarts.
-    if (identifier) {
-      const saved = config().getChannels().find(
-        (c) => c.platform === req.platform && c.login === identifier
-      )?.emotes
-      if (saved) state.emotes = { ...saved }
-    }
-    const provider = this.createProvider(sourceId, req, state)
+    const provider = this.createProvider(sourceId, request, state)
     this.entries.set(sourceId, { provider, state, identifier })
     this.onStateChange(this.list())
 
@@ -67,18 +53,50 @@ export class SourceManager {
       await provider.connect()
       // Providers may discover their real display name during connect.
       if (provider.label) state.label = provider.label
-      // Only remember channels that actually connected, so a typo is not
-      // retried on every launch.
-      if (req.platform === 'twitch' && identifier && state.status === 'connected') {
-        config().addChannel({ platform: 'twitch', login: identifier, emotes: state.emotes })
-      }
-    } catch (err) {
+      this.rememberIfConnected(request, identifier, state)
+    } catch (error) {
       state.status = 'error'
-      state.error = err instanceof Error ? err.message : String(err)
+      state.error = error instanceof Error ? error.message : String(error)
     }
 
     this.onStateChange(this.list())
     return sourceId
+  }
+
+  private buildInitialState(
+    sourceId: string,
+    request: AddSourceRequest,
+    identifier: string | undefined
+  ): SourceState {
+    const state: SourceState = {
+      id: sourceId,
+      platform: request.platform,
+      label: request.label || request.identifier || request.platform,
+      status: 'disconnected',
+      live: false,
+      emotes: { ...DEFAULT_EMOTE_SETTINGS }
+    }
+
+    // Restore saved switches so a channel keeps its preference across restarts.
+    const saved = identifier
+      ? config().getChannels().find(
+          (channel) => channel.platform === request.platform && channel.login === identifier
+        )?.emotes
+      : undefined
+    if (saved) state.emotes = { ...saved }
+
+    return state
+  }
+
+  /** Only remember channels that actually connected, so a typo is not retried forever. */
+  private rememberIfConnected(
+    request: AddSourceRequest,
+    identifier: string | undefined,
+    state: SourceState
+  ): void {
+    if (request.platform !== 'twitch' || !identifier) return
+    if (state.status !== 'connected') return
+    config().addChannel({ platform: 'twitch', login: identifier, emotes: state.emotes })
   }
 
   async remove(sourceId: string): Promise<void> {
@@ -93,7 +111,7 @@ export class SourceManager {
       config().removeChannel('twitch', entry.identifier)
     }
 
-    await entry.provider.disconnect().catch(() => undefined)
+    await entry.provider.disconnect().catch(ignoreTeardownFailure(`source ${sourceId}`))
     this.onStateChange(this.list())
   }
 
@@ -103,7 +121,7 @@ export class SourceManager {
     for (const entry of doomed) {
       this.entries.delete(entry.state.id)
       this.bus.dropSource(entry.state.id)
-      await entry.provider.disconnect().catch(() => undefined)
+      await entry.provider.disconnect().catch(ignoreTeardownFailure(entry.state.id))
     }
     this.onStateChange(this.list())
   }
@@ -141,7 +159,11 @@ export class SourceManager {
   async disconnectAll(): Promise<void> {
     const entries = [...this.entries.values()]
     this.entries.clear()
-    await Promise.all(entries.map((e) => e.provider.disconnect().catch(() => undefined)))
+    await Promise.all(
+      entries.map((entry) =>
+        entry.provider.disconnect().catch(ignoreTeardownFailure(entry.state.id))
+      )
+    )
   }
 
   private createProvider(

@@ -1,4 +1,5 @@
 import type { ThirdPartyEmote } from './types'
+import { fetchOptionalJson } from '../net/fetchJson'
 
 const API = 'https://7tv.io/v3'
 const CDN_SCALES = ['1x', '2x', '3x'] as const
@@ -77,20 +78,9 @@ export class SevenTvEmotes {
   private byChannel = new Map<string, Map<string, SevenTvEmote>>()
   private inFlight = new Map<string, Promise<void>>()
 
-  private async fetchJson<T>(url: string): Promise<T | null> {
-    try {
-      const res = await fetch(url)
-      if (!res.ok) return null
-      return (await res.json()) as T
-    } catch {
-      // Emotes are cosmetic; a 7TV outage must never disturb chat.
-      return null
-    }
-  }
-
   async loadGlobal(): Promise<void> {
     if (this.global) return
-    const set = await this.fetchJson<ApiEmoteSet>(`${API}/emote-sets/global`)
+    const set = await fetchOptionalJson<ApiEmoteSet>(`${API}/emote-sets/global`)
     this.global = index(set ?? undefined)
   }
 
@@ -104,7 +94,7 @@ export class SevenTvEmotes {
 
     const task = (async (): Promise<void> => {
       await this.loadGlobal()
-      const user = await this.fetchJson<{ emote_set?: ApiEmoteSet }>(
+      const user = await fetchOptionalJson<{ emote_set?: ApiEmoteSet }>(
         `${API}/users/${platform}/${encodeURIComponent(channelId)}`
       )
       // A channel with no 7TV account caches as empty so we stop asking.

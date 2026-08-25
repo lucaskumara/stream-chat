@@ -5,6 +5,8 @@ import type { BadgeCache, Helix } from '../twitch/helix'
 import type { EventSubHub } from '../twitch/eventsub'
 import { normalizeChatMessage, type TwitchChatEvent } from '../twitch/normalize'
 import { applyEmotes, type ThirdPartyEmotes } from '../emotes'
+import { ignoreTeardownFailure } from '../lifecycle'
+import type { SubscriptionRequest } from '../twitch/eventsub'
 
 export interface TwitchProviderConfig {
   /** Lowercased channel login, as typed by the user. */
@@ -27,6 +29,24 @@ export interface TwitchDeps {
  * Reconnect and session handling live in EventSubHub; this class only owns the
  * lifecycle of its own subscriptions.
  */
+/**
+ * Reading any channel's chat needs only user:read:chat on our own account — no
+ * moderator status — which is what makes "add a channel by name" work.
+ */
+function buildSubscriptions(broadcasterId: string, viewerId: string): SubscriptionRequest[] {
+  const chatCondition = { broadcaster_user_id: broadcasterId, user_id: viewerId }
+  const streamCondition = { broadcaster_user_id: broadcasterId }
+
+  return [
+    { type: 'channel.chat.message', version: '1', condition: chatCondition },
+    { type: 'channel.chat.message_delete', version: '1', condition: chatCondition },
+    { type: 'channel.chat.clear_user_messages', version: '1', condition: chatCondition },
+    { type: 'channel.chat.clear', version: '1', condition: chatCondition },
+    { type: 'stream.online', version: '1', condition: streamCondition },
+    { type: 'stream.offline', version: '1', condition: streamCondition }
+  ]
+}
+
 export class TwitchProvider implements ChatProvider {
   readonly platform: Platform = 'twitch'
   label: string
@@ -52,123 +72,106 @@ export class TwitchProvider implements ChatProvider {
     }
 
     try {
-      const user = await this.deps.helix.getUserByLogin(this.config.login)
-      if (!user) {
-        this.emit.status('error', `Twitch channel "${this.config.login}" does not exist.`)
-        return
-      }
+      const channel = await this.resolveChannel()
+      if (!channel) return
 
-      this.label = user.display_name || user.login
-
-      this.broadcasterId = user.id
-
-      // Cosmetic, and deliberately not awaited into the failure path.
-      await this.deps.badges.load(user.id)
-      void this.deps.seventv.loadChannel('twitch', user.id)
-
-      const self = this.deps.auth.getTokens()?.userId
-      if (!self) {
+      const viewerId = this.deps.auth.getTokens()?.userId
+      if (!viewerId) {
         this.emit.status('error', 'Twitch session is missing a user id. Sign in again.')
         return
       }
 
-      const condition = { broadcaster_user_id: user.id, user_id: self }
-
       await this.deps.hub.register(
         this.sourceId,
-        [
-          // Reading any channel's chat needs only user:read:chat on our own
-          // account — no moderator status — which is what makes "add by name" work.
-          { type: 'channel.chat.message', version: '1', condition },
-          { type: 'channel.chat.message_delete', version: '1', condition },
-          { type: 'channel.chat.clear_user_messages', version: '1', condition },
-          { type: 'channel.chat.clear', version: '1', condition },
-          {
-            type: 'stream.online',
-            version: '1',
-            condition: { broadcaster_user_id: user.id }
-          },
-          {
-            type: 'stream.offline',
-            version: '1',
-            condition: { broadcaster_user_id: user.id }
-          }
-        ],
-        (type, event) => this.handle(type, event)
+        buildSubscriptions(channel.id, viewerId),
+        (type, event) => this.route(type, event)
       )
-
       this.registered = true
       this.emit.status('connected')
 
       // Subscriptions persist while the channel is offline, so chat simply
       // starts flowing when they go live.
-      const live = await this.deps.helix.isLive(user.id)
-      this.emit.live(live)
-    } catch (err) {
-      this.emit.status('error', err instanceof Error ? err.message : String(err))
+      this.emit.live(await this.deps.helix.isLive(channel.id))
+    } catch (error) {
+      this.emit.status('error', error instanceof Error ? error.message : String(error))
     }
+  }
+
+  /** Resolves the login to a channel and warms its cosmetics. Null if missing. */
+  private async resolveChannel(): Promise<{ id: string } | null> {
+    const user = await this.deps.helix.getUserByLogin(this.config.login)
+    if (!user) {
+      this.emit.status('error', `Twitch channel "${this.config.login}" does not exist.`)
+      return null
+    }
+
+    this.label = user.display_name || user.login
+    this.broadcasterId = user.id
+
+    // Cosmetic: never allowed to fail a connection.
+    await this.deps.badges.load(user.id)
+    void this.deps.seventv.loadChannel('twitch', user.id)
+
+    return { id: user.id }
   }
 
   async disconnect(): Promise<void> {
     if (this.registered) {
-      await this.deps.hub.unregister(this.sourceId).catch(() => undefined)
+      await this.deps.hub
+        .unregister(this.sourceId)
+        .catch(ignoreTeardownFailure(`eventsub registration ${this.sourceId}`))
       this.registered = false
     }
     this.emit.live(false)
     this.emit.status('disconnected')
   }
 
-  private handle(type: string, event: Record<string, unknown>): void {
+  private route(type: string, event: Record<string, unknown>): void {
     switch (type) {
-      case 'channel.chat.message': {
-        const chat = normalizeChatMessage(
-          event as unknown as TwitchChatEvent,
-          this.sourceId,
-          this.deps.badges
-        )
-        const broadcasterId = this.broadcasterId
-        if (broadcasterId) {
-          chat.fragments = applyEmotes(chat.fragments, (name) =>
-            this.deps.seventv.lookup('twitch', broadcasterId, name)
-          )
-        }
-        this.emit.message(chat)
-        return
-      }
-
-      case 'channel.chat.message_delete': {
-        const messageId = event['message_id']
-        if (typeof messageId !== 'string') return
-        this.emit.moderation({
-          type: 'delete-message',
-          sourceId: this.sourceId,
-          // Must match how normalizeChatMessage composes ids.
-          messageId: `twitch:${this.sourceId}:${messageId}`
-        })
-        return
-      }
-
-      case 'channel.chat.clear_user_messages': {
-        const userId = event['target_user_id']
-        if (typeof userId !== 'string') return
-        this.emit.moderation({ type: 'clear-user', sourceId: this.sourceId, userId })
-        return
-      }
-
-      case 'channel.chat.clear': {
-        this.emit.moderation({ type: 'clear-chat', sourceId: this.sourceId })
-        return
-      }
-
-      case 'stream.online': {
-        this.emit.live(true)
-        return
-      }
-
-      case 'stream.offline': {
-        this.emit.live(false)
-        return
-      }
+      case 'channel.chat.message':
+        return this.emitChatMessage(event)
+      case 'channel.chat.message_delete':
+        return this.emitMessageDeleted(event)
+      case 'channel.chat.clear_user_messages':
+        return this.emitUserCleared(event)
+      case 'channel.chat.clear':
+        return this.emit.moderation({ type: 'clear-chat', sourceId: this.sourceId })
+      case 'stream.online':
+        return this.emit.live(true)
+      case 'stream.offline':
+        return this.emit.live(false)
     }
+  }
+
+  private emitChatMessage(event: Record<string, unknown>): void {
+    const chat = normalizeChatMessage(
+      event as unknown as TwitchChatEvent,
+      this.sourceId,
+      this.deps.badges
+    )
+    const broadcasterId = this.broadcasterId
+    if (broadcasterId) {
+      chat.fragments = applyEmotes(chat.fragments, (name) =>
+        this.deps.seventv.lookup('twitch', broadcasterId, name)
+      )
+    }
+    this.emit.message(chat)
+  }
+
+  private emitMessageDeleted(event: Record<string, unknown>): void {
+    const messageId = event['message_id']
+    if (typeof messageId !== 'string') return
+    this.emit.moderation({
+      type: 'delete-message',
+      sourceId: this.sourceId,
+      // Must match how normalizeChatMessage composes ids.
+      messageId: `twitch:${this.sourceId}:${messageId}`
+    })
+  }
+
+  private emitUserCleared(event: Record<string, unknown>): void {
+    const userId = event['target_user_id']
+    if (typeof userId !== 'string') return
+    this.emit.moderation({ type: 'clear-user', sourceId: this.sourceId, userId })
   }
 }

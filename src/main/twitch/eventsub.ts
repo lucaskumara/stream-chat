@@ -1,5 +1,7 @@
 import WebSocket from 'ws'
 import type { Helix } from './helix'
+import { reconnectDelayMs } from '../net/backoff'
+import { ignoreTeardownFailure } from '../lifecycle'
 
 const DEFAULT_URL = 'wss://eventsub.wss.twitch.tv/ws'
 
@@ -80,7 +82,9 @@ export class EventSubHub {
 
     await Promise.all(
       reg.remoteIds.map((rid) =>
-        this.helix.deleteEventSubSubscription(rid).catch(() => undefined)
+        this.helix
+          .deleteEventSubSubscription(rid)
+          .catch(ignoreTeardownFailure(`eventsub subscription ${rid}`))
       )
     )
 
@@ -124,65 +128,74 @@ export class EventSubHub {
   }
 
   private async onMessage(raw: string, resolveConnect: () => void): Promise<void> {
-    let msg: WelcomeMessage
+    let message: WelcomeMessage
     try {
-      msg = JSON.parse(raw) as WelcomeMessage
+      message = JSON.parse(raw) as WelcomeMessage
     } catch {
       return
     }
 
-    const type = msg.metadata?.message_type
-    const negotiated = msg.payload?.session?.keepalive_timeout_seconds
+    // keepalive_timeout only appears in session_welcome, so retain whatever was
+    // negotiated rather than reverting to the default on every later message.
+    const negotiated = message.payload?.session?.keepalive_timeout_seconds
     if (typeof negotiated === 'number' && negotiated > 0) this.keepaliveSeconds = negotiated
     this.armKeepalive()
 
-    switch (type) {
-      case 'session_welcome': {
-        const session = msg.payload.session
-        if (!session) return
-        this.sessionId = session.id
-        this.reconnectAttempt = 0
-        this.setStatus('connected')
-        await this.subscribeAll()
-        resolveConnect()
-        return
-      }
-
+    switch (message.metadata?.message_type) {
+      case 'session_welcome':
+        return this.onWelcome(message, resolveConnect)
+      case 'notification':
+        return this.onNotification(message)
+      case 'session_reconnect':
+        return this.onReconnectRequested(message)
+      case 'revocation':
+        return this.setStatus(
+          'error',
+          'Twitch revoked a subscription (token or permission changed).'
+        )
       case 'session_keepalive':
+      default:
         return
+    }
+  }
 
-      case 'notification': {
-        const subType = msg.payload.subscription?.type
-        const event = msg.payload.event
-        if (!subType || !event) return
-        // Fan out to whichever channel registered for this broadcaster.
-        for (const reg of this.registrations.values()) {
-          if (reg.requests.some((r) => r.type === subType)) {
-            const broadcaster = event['broadcaster_user_id']
-            const wanted = reg.requests.find((r) => r.type === subType)?.condition[
-              'broadcaster_user_id'
-            ]
-            if (!wanted || wanted === broadcaster) reg.handler(subType, event)
-          }
-        }
-        return
-      }
+  private async onWelcome(
+    message: WelcomeMessage,
+    resolveConnect: () => void
+  ): Promise<void> {
+    const session = message.payload.session
+    if (!session) return
+    this.sessionId = session.id
+    this.reconnectAttempt = 0
+    this.setStatus('connected')
+    await this.subscribeAll()
+    resolveConnect()
+  }
 
-      case 'session_reconnect': {
-        // Twitch is asking us to move; the old socket stays valid until we do.
-        const nextUrl = msg.payload.session?.reconnect_url
-        if (!nextUrl) return
-        const old = this.ws
-        await this.connect(nextUrl)
-        old?.close()
-        return
-      }
+  /** Fans an event out to whichever channel registered for that broadcaster. */
+  private onNotification(message: WelcomeMessage): void {
+    const subscriptionType = message.payload.subscription?.type
+    const event = message.payload.event
+    if (!subscriptionType || !event) return
 
-      case 'revocation': {
-        this.setStatus('error', 'Twitch revoked a subscription (token or permission changed).')
-        return
+    for (const registration of this.registrations.values()) {
+      const request = registration.requests.find((r) => r.type === subscriptionType)
+      if (!request) continue
+
+      const wanted = request.condition['broadcaster_user_id']
+      if (!wanted || wanted === event['broadcaster_user_id']) {
+        registration.handler(subscriptionType, event)
       }
     }
+  }
+
+  /** Twitch asks us to move; the old socket stays valid until we have the new one. */
+  private async onReconnectRequested(message: WelcomeMessage): Promise<void> {
+    const nextUrl = message.payload.session?.reconnect_url
+    if (!nextUrl) return
+    const previous = this.ws
+    await this.connect(nextUrl)
+    previous?.close()
   }
 
   private armKeepalive(): void {
@@ -204,15 +217,12 @@ export class EventSubHub {
     if (this.reconnectTimer || this.registrations.size === 0) return
 
     this.reconnectAttempt++
-    const delay = Math.min(30_000, 1000 * 2 ** Math.min(this.reconnectAttempt, 5))
-    const jitter = Math.round(Math.random() * 500)
-
     this.setStatus('reconnecting')
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       this.sessionId = null
       void this.connect()
-    }, delay + jitter)
+    }, reconnectDelayMs(this.reconnectAttempt))
   }
 
   private async subscribeAll(): Promise<void> {

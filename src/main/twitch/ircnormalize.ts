@@ -1,31 +1,8 @@
 import type { Badge, ChatMessage, Fragment, MessageKind } from '@shared/types'
 import { parseBadgeTag, parseEmoteTag, type IrcMessage } from './ircparse'
+import { splitLinks } from '../text/links'
 
 const EMOTE_CDN = 'https://static-cdn.jtvnw.net/emoticons/v2'
-
-// Same conservative rule as the EventSub path: only obvious links, and only in
-// text that is left over after emotes have been carved out.
-const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi
-
-function splitLinks(text: string): Fragment[] {
-  const out: Fragment[] = []
-  let last = 0
-
-  for (const match of text.matchAll(URL_RE)) {
-    const start = match.index ?? 0
-    const trimmed = match[0].replace(/[.,!?)\]}]+$/, '')
-    if (start > last) out.push({ kind: 'text', text: text.slice(last, start) })
-    out.push({
-      kind: 'link',
-      text: trimmed,
-      href: trimmed.startsWith('http') ? trimmed : `https://${trimmed}`
-    })
-    last = start + trimmed.length
-  }
-
-  if (last < text.length) out.push({ kind: 'text', text: text.slice(last) })
-  return out
-}
 
 function emoteUrls(id: string): { url: string; srcSet: string } {
   // IRC gives no format hint, so ask for the default and let Twitch pick.

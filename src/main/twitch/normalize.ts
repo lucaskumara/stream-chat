@@ -1,5 +1,6 @@
 import type { Badge, ChatMessage, Fragment, MessageKind } from '@shared/types'
 import type { BadgeCache } from './helix'
+import { splitLinks } from '../text/links'
 
 const EMOTE_CDN = 'https://static-cdn.jtvnw.net/emoticons/v2'
 
@@ -28,34 +29,6 @@ export interface TwitchChatEvent {
     parent_message_body: string
     parent_user_name: string
   } | null
-}
-
-// Deliberately conservative: only obvious links, applied to *text* fragments
-// after Twitch has already carved out emotes. Running a regex over the whole
-// message would be the thing the fragment design exists to avoid.
-const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi
-
-function splitLinks(text: string): Fragment[] {
-  const out: Fragment[] = []
-  let last = 0
-
-  for (const match of text.matchAll(URL_RE)) {
-    const start = match.index ?? 0
-    const raw = match[0]
-    // Trailing punctuation is almost never part of the URL.
-    const trimmed = raw.replace(/[.,!?)\]}]+$/, '')
-
-    if (start > last) out.push({ kind: 'text', text: text.slice(last, start) })
-    out.push({
-      kind: 'link',
-      text: trimmed,
-      href: trimmed.startsWith('http') ? trimmed : `https://${trimmed}`
-    })
-    last = start + trimmed.length
-  }
-
-  if (last < text.length) out.push({ kind: 'text', text: text.slice(last) })
-  return out.length > 0 ? out : [{ kind: 'text', text }]
 }
 
 function emoteUrls(id: string, formats: string[] | undefined): { url: string; srcSet: string } {

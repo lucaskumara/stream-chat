@@ -1,4 +1,5 @@
 import type { ThirdPartyEmote } from './types'
+import { fetchOptionalJson } from '../net/fetchJson'
 
 const API = 'https://api.betterttv.net/3'
 const CDN = 'https://cdn.betterttv.net/emote'
@@ -50,19 +51,9 @@ export class BttvEmotes {
   private byChannel = new Map<string, Map<string, ThirdPartyEmote>>()
   private inFlight = new Map<string, Promise<void>>()
 
-  private async fetchJson<T>(url: string): Promise<T | null> {
-    try {
-      const res = await fetch(url)
-      if (!res.ok) return null
-      return (await res.json()) as T
-    } catch {
-      return null
-    }
-  }
-
   async loadGlobal(): Promise<void> {
     if (this.global) return
-    const list = await this.fetchJson<ApiEmote[]>(`${API}/cached/emotes/global`)
+    const list = await fetchOptionalJson<ApiEmote[]>(`${API}/cached/emotes/global`)
     this.global = index(list ?? [])
   }
 
@@ -73,7 +64,7 @@ export class BttvEmotes {
 
     const task = (async (): Promise<void> => {
       await this.loadGlobal()
-      const data = await this.fetchJson<ApiChannel>(
+      const data = await fetchOptionalJson<ApiChannel>(
         `${API}/cached/users/twitch/${encodeURIComponent(twitchId)}`
       )
       // A channel with no BTTV account caches empty so we stop asking.
