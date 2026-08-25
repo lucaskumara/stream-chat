@@ -197,6 +197,40 @@ Everything below was measured against the running app, not assumed.
 - **Phase 5:** polish — 7TV/BTTV/FFZ emotes, settings persistence, sending messages back,
   auto-update.
 
+## Auth model per platform (checked 2026-08-25)
+
+Only Twitch needs the user to connect an account. The others need a *developer*
+credential baked into the build, or nothing at all.
+
+| Platform | User sign-in? | Build credential | Why |
+|---|---|---|---|
+| Twitch | **Yes** | Client ID | EventSub is never anonymous — every `channel.chat.message` subscription carries the reading user's `user_id`. Anonymous IRC exists but loses clean delete/timeout/clear events. |
+| YouTube | **No** (for public chat) | Google API key | Method pages state "An API key is required unless you provide an OAuth 2.0 token." OAuth is only needed for account-scoped calls like `liveBroadcasts.list?mine=true`. |
+| Kick | **No** | none | The internal Pusher socket is anonymous. Kick's *official* API is OAuth + webhook, which is useless to a desktop app with no public URL. |
+
+### Phase 3 update: `liveChatMessages.streamList` changes the quota picture
+
+The brief assumed polling `liveChatMessages.list` every ~5s, which is what produces
+the "~3 hours of streaming per day" ceiling. Google now documents a **server-streaming**
+method that pushes instead:
+
+> "This API facilitates a server-streaming connection to retrieve live chat messages for
+> a specific chat, delivering low-latency updates."
+
+It "pushes new messages to your client as soon as they are available, rather than
+requiring you to poll for updates", supports resuming from `nextPageToken` after a
+disconnect, and the docs call it "the most efficient way to consume live chat messages".
+
+Neither `list` nor `streamList` appears on the official quota-cost table, so both costs
+still have to be **measured empirically** at Phase 3 — but a single long-lived streaming
+connection should not bill per-poll the way a 5s timer does. Evaluate `streamList` before
+reaching for the unofficial innertube fallback.
+
+Confirmed still true on the cost table: `videos.list`, `playlistItems.list` and
+`channels.list` are 1 unit each — which is the cheap chain for resolving a third-party
+handle to a live video, versus `search.list`. (The table's `search.list` entry no longer
+reads as a flat 100 units; re-check that number rather than trusting the old note.)
+
 ## Official API references
 
 - Twitch (Helix + EventSub): https://dev.twitch.tv/docs/api/
