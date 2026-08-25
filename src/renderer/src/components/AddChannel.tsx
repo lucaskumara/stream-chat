@@ -5,19 +5,18 @@ import { bridge } from '../bridge'
 
 const READY: Record<Platform, boolean> = {
   twitch: true,
-  youtube: false,
+  youtube: true,
   kick: false,
   mock: true
 }
 
 const PHASE_NOTE: Partial<Record<Platform, string>> = {
-  youtube: 'YouTube arrives in Phase 3, with the quota strategy decided then.',
   kick: 'Kick arrives in Phase 4, over its unofficial socket.'
 }
 
 const AUTO_LABEL: Record<'push' | 'polled' | 'none', string> = {
   push: 'auto-connects when live (push, no polling)',
-  polled: 'liveness is polled — costs API quota',
+  polled: 'rechecked every 2 min while the channel is offline',
   none: 'synthetic traffic'
 }
 
@@ -128,7 +127,7 @@ export function AddChannel(): React.ReactElement {
         </div>
       )}
 
-      {!READY[effectivePlatform] && (
+      {!READY[effectivePlatform] && PHASE_NOTE[effectivePlatform] && (
         <div className="text-[11px] leading-relaxed text-amber-500/80">
           {PHASE_NOTE[effectivePlatform]}
         </div>

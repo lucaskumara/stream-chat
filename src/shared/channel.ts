@@ -124,10 +124,14 @@ function parseBareName(name: string, platform: Platform): ParseResult {
         ? ok('kick', 'kick-slug', lower)
         : fail(`"${name}" is not a valid Kick channel name.`)
 
-    case 'youtube':
-      return YOUTUBE_VIDEO_ID.test(name)
-        ? ok('youtube', 'youtube-video-id', name)
+    case 'youtube': {
+      if (YOUTUBE_VIDEO_ID.test(name)) return ok('youtube', 'youtube-video-id', name)
+
+      const handle = `@${name}`
+      return YOUTUBE_HANDLE.test(handle)
+        ? ok('youtube', 'youtube-handle', handle)
         : fail('For YouTube, use an @handle, a channel id, or paste the live video link.')
+    }
 
     default:
       return fail(`Unsupported platform: ${platform}`)

@@ -63,7 +63,13 @@ function SourceRow({ source }: { source: SourceState }): React.ReactElement {
       </div>
 
       {source.error && (
-        <div className="mt-1 text-[11px] leading-relaxed text-red-400" title={source.error}>
+        <div
+          className={[
+            'mt-1 text-[11px] leading-relaxed',
+            source.status === 'error' ? 'text-red-400' : 'text-slate-500'
+          ].join(' ')}
+          title={source.error}
+        >
           {source.error}
         </div>
       )}

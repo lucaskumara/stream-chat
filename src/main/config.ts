@@ -13,8 +13,10 @@ export interface StoredTwitchTokens {
   login: string
 }
 
+export type StoredPlatform = 'twitch' | 'youtube'
+
 export interface StoredChannel {
-  platform: 'twitch'
+  platform: StoredPlatform
 
   login: string
   emotes?: { sevenTv: boolean; bttv: boolean }
@@ -114,7 +116,7 @@ class Config {
   }
 
   setChannelEmotes(
-    platform: 'twitch',
+    platform: StoredPlatform,
     login: string,
     emotes: { sevenTv: boolean; bttv: boolean }
   ): void {
@@ -126,7 +128,7 @@ class Config {
     this.write()
   }
 
-  removeChannel(platform: 'twitch', login: string): void {
+  removeChannel(platform: StoredPlatform, login: string): void {
     this.data.channels = this.getChannels().filter(
       (c) => !(c.platform === platform && c.login === login)
     )
