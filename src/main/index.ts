@@ -4,6 +4,10 @@ import type { SourceState } from '@shared/types'
 import { MessageBus } from './bus'
 import { SourceManager } from './sources'
 import { IPC, registerIpc, unregisterIpc } from './ipc'
+import { TwitchAuth } from './twitch/auth'
+import { BadgeCache, Helix } from './twitch/helix'
+import { EventSubHub } from './twitch/eventsub'
+import { buildAuthState } from './twitch/state'
 
 const isDev = !app.isPackaged
 
@@ -17,7 +21,22 @@ function broadcastSources(states: SourceState[]): void {
   }
 }
 
-const sources = new SourceManager(bus, broadcastSources)
+function broadcastTwitchAuth(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC.twitchAuth, buildAuthState(auth))
+  }
+}
+
+const auth = new TwitchAuth(broadcastTwitchAuth)
+const helix = new Helix(auth)
+const badges = new BadgeCache(helix)
+const hub = new EventSubHub(helix, (status, error) => {
+  // Surfaced through the console for now; per-source status already reflects
+  // connection health in the UI.
+  if (status === 'error') console.warn('[eventsub]', error)
+})
+
+const sources = new SourceManager(bus, broadcastSources, { auth, helix, hub, badges })
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -89,10 +108,17 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     app.setAppUserModelId('com.lucaskumara.streamchat')
 
-    registerIpc(sources)
+    registerIpc(sources, auth)
 
     mainWindow = createWindow()
     bus.attach(mainWindow)
+
+    // Reconnect saved Twitch channels once the renderer is listening, so the
+    // first status updates are not dropped on the floor.
+    mainWindow.webContents.once('did-finish-load', () => {
+      broadcastTwitchAuth()
+      if (auth.isSignedIn()) void sources.restoreSaved()
+    })
 
     mainWindow.on('closed', () => {
       bus.detach()
@@ -114,6 +140,8 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', () => {
     unregisterIpc()
     bus.detach()
+    auth.cancelPolling()
+    hub.shutdown()
     void sources.disconnectAll()
   })
 }

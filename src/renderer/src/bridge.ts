@@ -3,9 +3,11 @@ import type {
   ChatApi,
   ChatBatch,
   ChatMessage,
+  DeviceCodePrompt,
   ModerationEvent,
   Platform,
-  SourceState
+  SourceState,
+  TwitchAuthState
 } from '@shared/types'
 import { MOCK_PLATFORMS, makeMockMessage, pick } from '@shared/mockdata'
 
@@ -169,6 +171,28 @@ function createBrowserBridge(): ChatApi {
     onSources(cb) {
       sourceListeners.add(cb)
       return () => sourceListeners.delete(cb)
+    },
+
+    // Real auth needs the main process (OS keychain, no CORS). In a browser tab
+    // the harness reports a fixed signed-out state rather than pretending.
+    async twitchAuthState(): Promise<TwitchAuthState> {
+      return { status: 'no-client-id', error: 'Twitch auth requires the Electron app.' }
+    },
+
+    async twitchSetClientId(): Promise<TwitchAuthState> {
+      throw new Error('Twitch auth requires the Electron app.')
+    },
+
+    async twitchStartLogin(): Promise<DeviceCodePrompt> {
+      throw new Error('Twitch auth requires the Electron app.')
+    },
+
+    async twitchSignOut(): Promise<void> {
+      /* nothing to sign out of in the browser harness */
+    },
+
+    onTwitchAuth() {
+      return () => undefined
     }
   }
 }

@@ -1,5 +1,12 @@
 import { create } from 'zustand'
-import type { ChatBatch, ChatMessage, Rule, SourceState, ViewMode } from '@shared/types'
+import type {
+  ChatBatch,
+  ChatMessage,
+  Rule,
+  SourceState,
+  TwitchAuthState,
+  ViewMode
+} from '@shared/types'
 
 /** Per-pane scrollback. Chat is a live feed; old messages are not worth memory. */
 const DEFAULT_CAPACITY = 500
@@ -35,7 +42,10 @@ interface ChatState {
   /** Monotonic count of everything received, for the throughput readout. */
   received: number
 
+  twitchAuth: TwitchAuthState
+
   setSources: (states: SourceState[]) => void
+  setTwitchAuth: (state: TwitchAuthState) => void
   ingest: (batch: ChatBatch) => void
   clearSource: (sourceId: string) => void
   forgetSource: (sourceId: string) => void
@@ -73,8 +83,10 @@ export const useStore = create<ChatState>()((set) => ({
   fontSize: 15,
 
   received: 0,
+  twitchAuth: { status: 'signed-out' },
 
   setSources: (states) => set({ sources: states }),
+  setTwitchAuth: (twitchAuth) => set({ twitchAuth }),
 
   ingest: (batch) =>
     set((s) => {

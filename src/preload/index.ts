@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AddSourceRequest, ChatApi, ChatBatch, SourceState } from '@shared/types'
+import type {
+  AddSourceRequest,
+  ChatApi,
+  ChatBatch,
+  DeviceCodePrompt,
+  SourceState,
+  TwitchAuthState
+} from '@shared/types'
 
 const IPC = {
   listSources: 'sources:list',
@@ -7,8 +14,13 @@ const IPC = {
   removeSource: 'sources:remove',
   setRate: 'sources:set-rate',
   openExternal: 'shell:open-external',
+  twitchAuthState: 'twitch:auth-state',
+  twitchSetClientId: 'twitch:set-client-id',
+  twitchStartLogin: 'twitch:start-login',
+  twitchSignOut: 'twitch:sign-out',
   batch: 'chat:batch',
-  sourceState: 'sources:state'
+  sourceState: 'sources:state',
+  twitchAuth: 'twitch:auth'
 } as const
 
 /**
@@ -45,6 +57,23 @@ const api: ChatApi = {
     ipcRenderer.on(IPC.sourceState, handler)
     return () => {
       ipcRenderer.off(IPC.sourceState, handler)
+    }
+  },
+
+  twitchAuthState: (): Promise<TwitchAuthState> => ipcRenderer.invoke(IPC.twitchAuthState),
+
+  twitchSetClientId: (clientId: string): Promise<TwitchAuthState> =>
+    ipcRenderer.invoke(IPC.twitchSetClientId, clientId),
+
+  twitchStartLogin: (): Promise<DeviceCodePrompt> => ipcRenderer.invoke(IPC.twitchStartLogin),
+
+  twitchSignOut: (): Promise<void> => ipcRenderer.invoke(IPC.twitchSignOut),
+
+  onTwitchAuth: (cb: (state: TwitchAuthState) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, state: TwitchAuthState): void => cb(state)
+    ipcRenderer.on(IPC.twitchAuth, handler)
+    return () => {
+      ipcRenderer.off(IPC.twitchAuth, handler)
     }
   }
 }

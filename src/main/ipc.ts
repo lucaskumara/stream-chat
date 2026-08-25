@@ -1,6 +1,8 @@
 import { ipcMain, shell } from 'electron'
 import type { AddSourceRequest } from '@shared/types'
 import type { SourceManager } from './sources'
+import type { TwitchAuth } from './twitch/auth'
+import { buildAuthState } from './twitch/state'
 
 export const IPC = {
   listSources: 'sources:list',
@@ -8,22 +10,26 @@ export const IPC = {
   removeSource: 'sources:remove',
   setRate: 'sources:set-rate',
   openExternal: 'shell:open-external',
+
+  twitchAuthState: 'twitch:auth-state',
+  twitchSetClientId: 'twitch:set-client-id',
+  twitchStartLogin: 'twitch:start-login',
+  twitchSignOut: 'twitch:sign-out',
+
   // main -> renderer
   batch: 'chat:batch',
-  sourceState: 'sources:state'
+  sourceState: 'sources:state',
+  twitchAuth: 'twitch:auth'
 } as const
 
 /**
  * The renderer is untrusted by construction (it renders remote chat content),
  * so every handler validates its arguments rather than trusting the preload.
  */
-export function registerIpc(sources: SourceManager): void {
+export function registerIpc(sources: SourceManager, auth: TwitchAuth): void {
   ipcMain.handle(IPC.listSources, () => sources.list())
 
-  ipcMain.handle(IPC.addSource, async (_e, req: unknown) => {
-    const parsed = parseAddSource(req)
-    return sources.add(parsed)
-  })
+  ipcMain.handle(IPC.addSource, async (_e, req: unknown) => sources.add(parseAddSource(req)))
 
   ipcMain.handle(IPC.removeSource, async (_e, sourceId: unknown) => {
     if (typeof sourceId !== 'string') throw new Error('sourceId must be a string')
@@ -53,6 +59,29 @@ export function registerIpc(sources: SourceManager): void {
     }
     await shell.openExternal(parsedUrl.toString())
   })
+
+  /* ---------------------------- Twitch auth ---------------------------- */
+
+  ipcMain.handle(IPC.twitchAuthState, () => buildAuthState(auth))
+
+  ipcMain.handle(IPC.twitchSetClientId, (_e, clientId: unknown) => {
+    if (typeof clientId !== 'string') throw new Error('clientId must be a string')
+    const trimmed = clientId.trim()
+    // Twitch client ids are 30 lowercase alphanumerics; catching a bad paste
+    // here gives a far clearer error than a 401 six calls later.
+    if (!/^[a-z0-9]{20,40}$/i.test(trimmed)) {
+      throw new Error('That does not look like a Twitch Client ID (30 alphanumeric characters).')
+    }
+    auth.setClientId(trimmed)
+    return buildAuthState(auth)
+  })
+
+  ipcMain.handle(IPC.twitchStartLogin, async () => auth.startDeviceFlow())
+
+  ipcMain.handle(IPC.twitchSignOut, async () => {
+    await sources.removeByPlatform('twitch')
+    auth.signOut()
+  })
 }
 
 export function unregisterIpc(): void {
@@ -61,7 +90,11 @@ export function unregisterIpc(): void {
     IPC.addSource,
     IPC.removeSource,
     IPC.setRate,
-    IPC.openExternal
+    IPC.openExternal,
+    IPC.twitchAuthState,
+    IPC.twitchSetClientId,
+    IPC.twitchStartLogin,
+    IPC.twitchSignOut
   ]) {
     ipcMain.removeHandler(channel)
   }
@@ -87,5 +120,12 @@ function parseAddSource(req: unknown): AddSourceRequest {
       ? Math.min(Math.max(r.rate, 0), 2000)
       : undefined
 
-  return { platform, label, rate }
+  const identifier =
+    typeof r.identifier === 'string' ? r.identifier.trim().slice(0, 100) : undefined
+
+  if (platform !== 'mock' && !identifier) {
+    throw new Error(`${platform} sources need a channel identifier`)
+  }
+
+  return { platform, label, rate, identifier }
 }

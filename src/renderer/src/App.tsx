@@ -197,16 +197,23 @@ export default function App(): React.ReactElement {
   // off the rules array identity and nothing else.
   const engine = useMemo(() => createRuleEngine(rules), [rules])
 
+  const setTwitchAuth = useStore((s) => s.setTwitchAuth)
+
   useEffect(() => {
     const { api } = bridge()
     const offBatch = api.onBatch(ingest)
     const offSources = api.onSources(setSources)
+    const offAuth = api.onTwitchAuth(setTwitchAuth)
+
     void api.listSources().then(setSources)
+    void api.twitchAuthState().then(setTwitchAuth).catch(() => undefined)
+
     return () => {
       offBatch()
       offSources()
+      offAuth()
     }
-  }, [ingest, setSources])
+  }, [ingest, setSources, setTwitchAuth])
 
   const shared = { engine, deleted, showDeleted, showTimestamps, search }
 

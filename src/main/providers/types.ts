@@ -14,7 +14,8 @@ export interface ProviderEvents {
 export interface ChatProvider {
   readonly sourceId: string
   readonly platform: Platform
-  readonly label: string
+  /** Mutable: providers may resolve a nicer display name during connect. */
+  label: string
   connect(): Promise<void>
   disconnect(): Promise<void>
 }

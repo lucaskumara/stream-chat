@@ -90,6 +90,30 @@ export interface AddSourceRequest {
   label: string
   /** Mock provider only: synthetic messages per second. */
   rate?: number
+  /**
+   * Channel identifier for real platforms: a Twitch login, a Kick slug, or a
+   * YouTube handle/channel id/video id. Produced by parseChannelInput.
+   */
+  identifier?: string
+}
+
+export type TwitchAuthStatus = 'no-client-id' | 'signed-out' | 'pending' | 'signed-in' | 'error'
+
+export interface TwitchAuthState {
+  status: TwitchAuthStatus
+  /** Present when signed in. */
+  login?: string
+  userId?: string
+  error?: string
+  scopes?: string[]
+}
+
+/** Shown to the user during Device Code Flow. */
+export interface DeviceCodePrompt {
+  userCode: string
+  verificationUri: string
+  expiresAt: number
+  interval: number
 }
 
 export type RuleField = 'any' | 'author' | 'text'
@@ -131,4 +155,12 @@ export interface ChatApi {
   onBatch(cb: (batch: ChatBatch) => void): () => void
   /** Returns an unsubscribe function. */
   onSources(cb: (states: SourceState[]) => void): () => void
+
+  /* ---- Twitch auth ---- */
+  twitchAuthState(): Promise<TwitchAuthState>
+  twitchSetClientId(clientId: string): Promise<TwitchAuthState>
+  twitchStartLogin(): Promise<DeviceCodePrompt>
+  twitchSignOut(): Promise<void>
+  /** Returns an unsubscribe function. */
+  onTwitchAuth(cb: (state: TwitchAuthState) => void): () => void
 }

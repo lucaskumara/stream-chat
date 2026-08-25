@@ -168,7 +168,9 @@ function MessageRowImpl({
 
         {msg.monetary && (
           <span className="mr-1 rounded-sm bg-emerald-500/20 px-1 text-[0.8em] font-semibold text-emerald-300">
-            {msg.monetary.currency} {msg.monetary.amount.toFixed(2)}
+            {msg.monetary.currency === 'bits'
+              ? `${msg.monetary.amount.toLocaleString()} bits`
+              : `${msg.monetary.currency} ${msg.monetary.amount.toFixed(2)}`}
           </span>
         )}
 
