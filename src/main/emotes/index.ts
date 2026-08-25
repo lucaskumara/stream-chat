@@ -33,12 +33,15 @@ export class ThirdPartyEmotes {
   lookup(
     platform: SevenTvPlatform,
     channelId: string,
-    name: string
+    name: string,
+    enabled: { sevenTv: boolean; bttv: boolean } = { sevenTv: true, bttv: true }
   ): ThirdPartyEmote | undefined {
-    return (
-      this.seventv.lookup(platform, channelId, name) ??
-      (platform === 'twitch' ? this.bttv.lookup(channelId, name) : undefined)
-    )
+    if (enabled.sevenTv) {
+      const hit = this.seventv.lookup(platform, channelId, name)
+      if (hit) return hit
+    }
+    if (enabled.bttv && platform === 'twitch') return this.bttv.lookup(channelId, name)
+    return undefined
   }
 
   counts(platform: SevenTvPlatform, channelId: string): { seventv: number; bttv: number } {

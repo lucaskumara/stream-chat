@@ -1,4 +1,4 @@
-import type { Platform } from '@shared/types'
+import type { EmoteSettings, Platform } from '@shared/types'
 import type { ChatProvider, ProviderEvents } from './types'
 import type { TwitchAuth } from '../twitch/auth'
 import type { BadgeCache, Helix } from '../twitch/helix'
@@ -38,7 +38,8 @@ export class TwitchProvider implements ChatProvider {
     readonly sourceId: string,
     private config: TwitchProviderConfig,
     private emit: ProviderEvents,
-    private deps: TwitchDeps
+    private deps: TwitchDeps,
+    private getEmoteSettings: () => EmoteSettings
   ) {
     this.label = config.login
   }
@@ -129,7 +130,7 @@ export class TwitchProvider implements ChatProvider {
         const broadcasterId = this.broadcasterId
         if (broadcasterId) {
           chat.fragments = applyEmotes(chat.fragments, (name) =>
-            this.deps.seventv.lookup('twitch', broadcasterId, name)
+            this.deps.seventv.lookup('twitch', broadcasterId, name, this.getEmoteSettings())
           )
         }
         this.emit.message(chat)

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Platform, SourceState, SourceStatus } from '@shared/types'
+import type { EmoteSettings, Platform, SourceState, SourceStatus } from '@shared/types'
 import { bridge } from '../bridge'
 import { useStore } from '../store'
 import { PLATFORM_COLOR } from './MessageRow'
@@ -20,6 +20,12 @@ function SourceRow({ source }: { source: SourceState }): React.ReactElement {
   const [rate, setRate] = useState(5)
 
   const isMock = source.platform === 'mock'
+  // BTTV keys channels by Twitch user id, so it has nothing to offer elsewhere.
+  const supportsBttv = source.platform === 'twitch'
+
+  const setEmotes = (patch: Partial<EmoteSettings>): void => {
+    void bridge().api.setEmoteSettings(source.id, { ...source.emotes, ...patch })
+  }
 
   const remove = async (): Promise<void> => {
     await bridge().api.removeSource(source.id)
@@ -76,6 +82,32 @@ function SourceRow({ source }: { source: SourceState }): React.ReactElement {
           <span className="w-12 shrink-0 text-right text-[12px] tabular-nums text-slate-500">
             {rate}/s
           </span>
+        </div>
+      )}
+
+      {!isMock && (
+        <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
+          <label className="flex cursor-pointer items-center gap-1" title="7TV emotes">
+            <input
+              type="checkbox"
+              checked={source.emotes.sevenTv}
+              onChange={(e) => setEmotes({ sevenTv: e.target.checked })}
+              className="cursor-pointer"
+            />
+            7TV
+          </label>
+
+          {supportsBttv && (
+            <label className="flex cursor-pointer items-center gap-1" title="BetterTTV emotes">
+              <input
+                type="checkbox"
+                checked={source.emotes.bttv}
+                onChange={(e) => setEmotes({ bttv: e.target.checked })}
+                className="cursor-pointer"
+              />
+              BTTV
+            </label>
+          )}
         </div>
       )}
 

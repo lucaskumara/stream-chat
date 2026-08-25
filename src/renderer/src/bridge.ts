@@ -1,5 +1,6 @@
 import type {
   AddSourceRequest,
+  EmoteSettings,
   ChatApi,
   ChatBatch,
   ChatMessage,
@@ -127,7 +128,8 @@ function createBrowserBridge(): ChatApi {
           platform,
           label: req.label || `mock/${platform}`,
           status: 'connecting',
-          live: false
+          live: false,
+          emotes: { sevenTv: true, bttv: true }
         },
         rate: req.rate ?? 5,
         seq: 0,
@@ -157,6 +159,12 @@ function createBrowserBridge(): ChatApi {
     async setRate(sourceId: string, rate: number) {
       const sim = sources.get(sourceId)
       if (sim) sim.rate = Math.max(0, rate)
+    },
+
+    async setEmoteSettings(sourceId: string, settings: EmoteSettings) {
+      const sim = sources.get(sourceId)
+      if (sim) sim.state.emotes = { ...settings }
+      emitStates()
     },
 
     async openExternal(url: string) {

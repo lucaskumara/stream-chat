@@ -17,6 +17,7 @@ export interface StoredChannel {
   platform: 'twitch'
   /** Lowercased login name, the stable identifier. */
   login: string
+  emotes?: { sevenTv: boolean; bttv: boolean }
 }
 
 interface PersistedShape {
@@ -120,6 +121,19 @@ class Config {
     const existing = this.getChannels()
     if (existing.some((c) => c.platform === channel.platform && c.login === channel.login)) return
     this.data.channels = [...existing, channel]
+    this.write()
+  }
+
+  setChannelEmotes(
+    platform: 'twitch',
+    login: string,
+    emotes: { sevenTv: boolean; bttv: boolean }
+  ): void {
+    const channels = this.getChannels()
+    const found = channels.find((c) => c.platform === platform && c.login === login)
+    if (!found) return
+    found.emotes = emotes
+    this.data.channels = channels
     this.write()
   }
 

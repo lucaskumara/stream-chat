@@ -63,6 +63,15 @@ export type SourceStatus =
   | 'offline'
   | 'error'
 
+/** Per-channel third-party emote switches. */
+export interface EmoteSettings {
+  sevenTv: boolean
+  /** Twitch-only: BTTV keys channels by Twitch user id. */
+  bttv: boolean
+}
+
+export const DEFAULT_EMOTE_SETTINGS: EmoteSettings = { sevenTv: true, bttv: true }
+
 export interface SourceState {
   id: string
   platform: Platform
@@ -77,6 +86,7 @@ export interface SourceState {
    * channel is broadcasting — so guessing from traffic would be a lie.
    */
   live: boolean | null
+  emotes: EmoteSettings
 }
 
 /** Main -> renderer, batched. */
@@ -160,6 +170,7 @@ export interface ChatApi {
   addSource(req: AddSourceRequest): Promise<string>
   removeSource(sourceId: string): Promise<void>
   setRate(sourceId: string, rate: number): Promise<void>
+  setEmoteSettings(sourceId: string, settings: EmoteSettings): Promise<void>
   openExternal(url: string): Promise<void>
   /** Returns an unsubscribe function. */
   onBatch(cb: (batch: ChatBatch) => void): () => void

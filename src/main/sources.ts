@@ -1,4 +1,5 @@
-import type { AddSourceRequest, Platform, SourceState } from '@shared/types'
+import type { AddSourceRequest, EmoteSettings, Platform, SourceState } from '@shared/types'
+import { DEFAULT_EMOTE_SETTINGS } from '@shared/types'
 import type { MessageBus } from './bus'
 import type { ChatProvider, ProviderEvents } from './providers/types'
 import { MockProvider } from './providers/mock'
@@ -46,10 +47,18 @@ export class SourceManager {
       platform: req.platform,
       label: req.label || req.identifier || req.platform,
       status: 'disconnected',
-      live: false
+      live: false,
+      emotes: { ...DEFAULT_EMOTE_SETTINGS }
     }
 
     const identifier = req.identifier?.toLowerCase()
+    // Restore saved switches so a channel keeps its preference across restarts.
+    if (identifier) {
+      const saved = config().getChannels().find(
+        (c) => c.platform === req.platform && c.login === identifier
+      )?.emotes
+      if (saved) state.emotes = { ...saved }
+    }
     const provider = this.createProvider(sourceId, req, state)
     this.entries.set(sourceId, { provider, state, identifier })
     this.onStateChange(this.list())
@@ -61,7 +70,7 @@ export class SourceManager {
       // Only remember channels that actually connected, so a typo is not
       // retried on every launch.
       if (req.platform === 'twitch' && identifier && state.status === 'connected') {
-        config().addChannel({ platform: 'twitch', login: identifier })
+        config().addChannel({ platform: 'twitch', login: identifier, emotes: state.emotes })
       }
     } catch (err) {
       state.status = 'error'
@@ -95,6 +104,18 @@ export class SourceManager {
       this.entries.delete(entry.state.id)
       this.bus.dropSource(entry.state.id)
       await entry.provider.disconnect().catch(() => undefined)
+    }
+    this.onStateChange(this.list())
+  }
+
+  setEmoteSettings(sourceId: string, settings: EmoteSettings): void {
+    const entry = this.entries.get(sourceId)
+    if (!entry) return
+    // Mutating the same object the provider's getter reads means the change
+    // applies to the very next message, with no reconnect.
+    entry.state.emotes = { ...settings }
+    if (entry.state.platform === 'twitch' && entry.identifier) {
+      config().setChannelEmotes('twitch', entry.identifier, entry.state.emotes)
     }
     this.onStateChange(this.list())
   }
@@ -152,9 +173,10 @@ export class SourceManager {
         // Anonymous by default so a channel can be added with no account at
         // all. Signing in is an optional upgrade: EventSub adds badge images
         // and a real live indicator.
+        const getEmotes = (): EmoteSettings => state.emotes
         return this.twitch.auth.isSignedIn()
-          ? new TwitchProvider(sourceId, { login }, emit, this.twitch)
-          : new TwitchIrcProvider(sourceId, { login }, emit, this.irc, this.seventv)
+          ? new TwitchProvider(sourceId, { login }, emit, this.twitch, getEmotes)
+          : new TwitchIrcProvider(sourceId, { login }, emit, this.irc, this.seventv, getEmotes)
       }
 
       case 'youtube':

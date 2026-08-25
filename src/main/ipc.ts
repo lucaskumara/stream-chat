@@ -9,6 +9,7 @@ export const IPC = {
   addSource: 'sources:add',
   removeSource: 'sources:remove',
   setRate: 'sources:set-rate',
+  setEmotes: 'sources:set-emotes',
   openExternal: 'shell:open-external',
 
   twitchAuthState: 'twitch:auth-state',
@@ -41,6 +42,18 @@ export function registerIpc(sources: SourceManager, auth: TwitchAuth): void {
       throw new Error('rate must be a finite number')
     }
     sources.setRate(sourceId, Math.min(Math.max(rate, 0), 2000))
+  })
+
+  ipcMain.handle(IPC.setEmotes, (_e, sourceId: unknown, settings: unknown) => {
+    if (typeof sourceId !== 'string') throw new Error('sourceId must be a string')
+    if (typeof settings !== 'object' || settings === null) {
+      throw new Error('settings must be an object')
+    }
+    const s = settings as Record<string, unknown>
+    sources.setEmoteSettings(sourceId, {
+      sevenTv: s.sevenTv !== false,
+      bttv: s.bttv !== false
+    })
   })
 
   ipcMain.handle(IPC.openExternal, async (_e, url: unknown) => {
@@ -77,6 +90,7 @@ export function unregisterIpc(): void {
     IPC.addSource,
     IPC.removeSource,
     IPC.setRate,
+    IPC.setEmotes,
     IPC.openExternal,
     IPC.twitchAuthState,
     IPC.twitchStartLogin,
