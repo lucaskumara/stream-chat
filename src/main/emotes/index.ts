@@ -87,7 +87,13 @@ export function applyEmotes(
         out.push({ kind: 'text', text: buffer })
         buffer = ''
       }
-      out.push({ kind: 'emote', name: emote.name, url: emote.url, srcSet: emote.srcSet })
+      out.push({
+        kind: 'emote',
+        name: emote.name,
+        url: emote.url,
+        srcSet: emote.srcSet,
+        provider: emote.provider
+      })
       replaced = true
     }
 

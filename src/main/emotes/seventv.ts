@@ -48,7 +48,13 @@ function toEmote(raw: ApiEmote): SevenTvEmote | null {
     .filter(Boolean)
     .join(', ')
 
-  return { name: raw.name, url: one, srcSet, animated: raw.data?.animated === true }
+  return {
+    name: raw.name,
+    url: one,
+    srcSet,
+    animated: raw.data?.animated === true,
+    provider: '7tv'
+  }
 }
 
 function index(set: ApiEmoteSet | undefined): Map<string, SevenTvEmote> {

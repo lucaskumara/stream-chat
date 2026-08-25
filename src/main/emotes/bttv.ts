@@ -24,7 +24,8 @@ function toEmote(raw: ApiEmote): ThirdPartyEmote | null {
     name: raw.code,
     url: at('1x'),
     srcSet: `${at('1x')} 1x, ${at('2x')} 2x, ${at('3x')} 3x`,
-    animated: raw.animated === true
+    animated: raw.animated === true,
+    provider: 'bttv'
   }
 }
 

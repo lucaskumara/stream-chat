@@ -84,6 +84,7 @@ export default function App(): React.ReactElement {
                 showTimestamps={showTimestamps}
                 search=""
                 messages={bySource[source.id] ?? []}
+                emoteSettings={source.emotes}
                 showPlatform={false}
                 header={<PaneHeader source={source} />}
               />

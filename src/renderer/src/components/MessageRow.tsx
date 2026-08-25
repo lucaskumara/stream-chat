@@ -1,5 +1,12 @@
 import { memo, useState } from 'react'
-import type { Badge as BadgeType, ChatMessage, Fragment, Platform } from '@shared/types'
+import type {
+  Badge as BadgeType,
+  ChatMessage,
+  EmoteProvider,
+  EmoteSettings,
+  Fragment,
+  Platform
+} from '@shared/types'
 import type { Decision } from '../rules'
 
 export const PLATFORM_COLOR: Record<Platform, string> = {
@@ -89,18 +96,40 @@ function BadgeView({ badge }: { badge: BadgeType }): React.ReactElement {
   )
 }
 
+/** A disabled provider renders as the original word, not a gap. */
+function isEmoteEnabled(
+  provider: EmoteProvider | undefined,
+  settings: EmoteSettings
+): boolean {
+  switch (provider) {
+    case '7tv':
+      return settings.sevenTv
+    case 'bttv':
+      return settings.bttv
+    default:
+      // Native platform emotes are not optional.
+      return true
+  }
+}
+
 function FragmentView({
   fragment,
+  emoteSettings,
   onOpenLink
 }: {
   fragment: Fragment
+  emoteSettings: EmoteSettings
   onOpenLink: (url: string) => void
 }): React.ReactElement {
   switch (fragment.kind) {
     case 'text':
       return <span>{fragment.text}</span>
     case 'emote':
-      return <Emote name={fragment.name} url={fragment.url} />
+      return isEmoteEnabled(fragment.provider, emoteSettings) ? (
+        <Emote name={fragment.name} url={fragment.url} />
+      ) : (
+        <span>{fragment.name}</span>
+      )
     case 'mention':
       return (
         <span className="rounded-sm bg-indigo-500/20 px-1 font-medium text-indigo-200">
@@ -126,6 +155,7 @@ export interface MessageRowProps {
   deleted: boolean
   showTimestamps: boolean
   showPlatform: boolean
+  emoteSettings: EmoteSettings
   onOpenLink: (url: string) => void
 }
 
@@ -135,6 +165,7 @@ function MessageRowImpl({
   deleted,
   showTimestamps,
   showPlatform,
+  emoteSettings,
   onOpenLink
 }: MessageRowProps): React.ReactElement {
   const highlight = decision.highlight
@@ -199,7 +230,11 @@ function MessageRowImpl({
 
         {msg.fragments.map((fragment, i) => (
           <span key={i}>
-            <FragmentView fragment={fragment} onOpenLink={onOpenLink} />{' '}
+            <FragmentView
+              fragment={fragment}
+              emoteSettings={emoteSettings}
+              onOpenLink={onOpenLink}
+            />{' '}
           </span>
         ))}
       </span>

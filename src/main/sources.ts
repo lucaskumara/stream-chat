@@ -173,10 +173,9 @@ export class SourceManager {
         // Anonymous by default so a channel can be added with no account at
         // all. Signing in is an optional upgrade: EventSub adds badge images
         // and a real live indicator.
-        const getEmotes = (): EmoteSettings => state.emotes
         return this.twitch.auth.isSignedIn()
-          ? new TwitchProvider(sourceId, { login }, emit, this.twitch, getEmotes)
-          : new TwitchIrcProvider(sourceId, { login }, emit, this.irc, this.seventv, getEmotes)
+          ? new TwitchProvider(sourceId, { login }, emit, this.twitch)
+          : new TwitchIrcProvider(sourceId, { login }, emit, this.irc, this.seventv)
       }
 
       case 'youtube':

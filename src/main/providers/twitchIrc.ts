@@ -1,4 +1,4 @@
-import type { EmoteSettings, Platform } from '@shared/types'
+import type { Platform } from '@shared/types'
 import type { ChatProvider, ProviderEvents } from './types'
 import type { IrcHub } from '../twitch/irc'
 import type { IrcMessage } from '../twitch/ircparse'
@@ -33,18 +33,16 @@ export class TwitchIrcProvider implements ChatProvider {
     private config: TwitchIrcConfig,
     private emit: ProviderEvents,
     private hub: IrcHub,
-    private emotes: ThirdPartyEmotes,
-    /** Read on every message so a toggle takes effect without reconnecting. */
-    private getEmoteSettings: () => EmoteSettings
+    private emotes: ThirdPartyEmotes
   ) {
     this.label = config.login
   }
 
   /** Channel emotes first, then 7TV globals. */
   private lookupEmote = (name: string): ReturnType<ThirdPartyEmotes['lookup']> =>
-    this.roomId
-      ? this.emotes.lookup('twitch', this.roomId, name, this.getEmoteSettings())
-      : undefined
+    // Always resolved, whatever the channel's switches say: fragments carry the
+    // provider so the renderer can hide one live and put it back again.
+    this.roomId ? this.emotes.lookup('twitch', this.roomId, name) : undefined
 
   /**
    * Every PRIVMSG and ROOMSTATE carries room-id, so the channel's numeric id

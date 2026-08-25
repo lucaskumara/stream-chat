@@ -76,7 +76,7 @@ function toFragments(fragments: TwitchFragment[]): Fragment[] {
       case 'emote': {
         if (!frag.emote) break
         const { url, srcSet } = emoteUrls(frag.emote.id, frag.emote.format)
-        out.push({ kind: 'emote', name: frag.text, url, srcSet })
+        out.push({ kind: 'emote', name: frag.text, url, srcSet, provider: 'native' })
         continue
       }
       case 'mention': {

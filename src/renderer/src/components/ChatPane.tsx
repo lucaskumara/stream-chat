@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { ChatMessage } from '@shared/types'
+import type { ChatMessage, EmoteSettings } from '@shared/types'
 import type { RuleEngine } from '../rules'
 import { bridge } from '../bridge'
 import { MessageRow } from './MessageRow'
@@ -16,6 +16,7 @@ export interface ChatPaneProps {
   showTimestamps: boolean
   showPlatform: boolean
   search: string
+  emoteSettings: EmoteSettings
   header: React.ReactNode
 }
 
@@ -27,6 +28,7 @@ export function ChatPane({
   showTimestamps,
   showPlatform,
   search,
+  emoteSettings,
   header
 }: ChatPaneProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -146,6 +148,7 @@ export function ChatPane({
                     deleted={deleted[msg.id] === true}
                     showTimestamps={showTimestamps}
                     showPlatform={showPlatform}
+                    emoteSettings={emoteSettings}
                     onOpenLink={openLink}
                   />
                 </div>

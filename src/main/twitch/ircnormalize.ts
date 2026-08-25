@@ -59,7 +59,7 @@ export function buildIrcFragments(text: string, emoteTag: string | undefined): F
 
     const name = chars.slice(span.start, end + 1).join('')
     const { url, srcSet } = emoteUrls(span.id)
-    out.push({ kind: 'emote', name, url, srcSet })
+    out.push({ kind: 'emote', name, url, srcSet, provider: 'native' })
     cursor = end + 1
   }
 

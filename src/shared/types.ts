@@ -5,9 +5,19 @@ export type Platform = 'twitch' | 'youtube' | 'kick' | 'mock'
  * Twitch/YouTube both hand us emote positions; re-deriving them by regex in the
  * UI would break on overlapping emote names and unicode offsets.
  */
+/** Which service supplied an emote, so the UI can hide one source live. */
+export type EmoteProvider = 'native' | '7tv' | 'bttv'
+
 export type Fragment =
   | { kind: 'text'; text: string }
-  | { kind: 'emote'; name: string; url: string; srcSet?: string }
+  | {
+      kind: 'emote'
+      /** The original word. Rendered as text when its provider is switched off. */
+      name: string
+      url: string
+      srcSet?: string
+      provider?: EmoteProvider
+    }
   | { kind: 'mention'; text: string; userId?: string }
   | { kind: 'link'; text: string; href: string }
 
