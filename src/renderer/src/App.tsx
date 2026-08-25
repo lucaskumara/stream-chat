@@ -6,6 +6,7 @@ import { useStore } from './store'
 import { ChatPane, useThroughput } from './components/ChatPane'
 import { PLATFORM_COLOR } from './components/MessageRow'
 import { RulesPanel } from './components/RulesPanel'
+import { ConnectionsPanel } from './components/ConnectionsPanel'
 import { Sidebar } from './components/Sidebar'
 
 function PaneHeader({ source }: { source: SourceState }): React.ReactElement {
@@ -44,12 +45,14 @@ function CombinedHeader(): React.ReactElement {
   )
 }
 
+type SidePanel = 'none' | 'rules' | 'connections'
+
 interface TopBarProps {
-  rulesOpen: boolean
-  toggleRules: () => void
+  panel: SidePanel
+  setPanel: (panel: SidePanel) => void
 }
 
-function TopBar({ rulesOpen, toggleRules }: TopBarProps): React.ReactElement {
+function TopBar({ panel, setPanel }: TopBarProps): React.ReactElement {
   const view = useStore((s) => s.view)
   const setView = useStore((s) => s.setView)
   const search = useStore((s) => s.search)
@@ -166,7 +169,10 @@ function TopBar({ rulesOpen, toggleRules }: TopBarProps): React.ReactElement {
         </span>
       </div>
 
-      {toggle(rulesOpen, 'rules', toggleRules)}
+      {toggle(panel === 'connections', 'connections', () =>
+        setPanel(panel === 'connections' ? 'none' : 'connections')
+      )}
+      {toggle(panel === 'rules', 'rules', () => setPanel(panel === 'rules' ? 'none' : 'rules'))}
     </header>
   )
 }
@@ -184,7 +190,7 @@ export default function App(): React.ReactElement {
   const showDeleted = useStore((s) => s.showDeleted)
   const showTimestamps = useStore((s) => s.showTimestamps)
 
-  const [rulesOpen, setRulesOpen] = useState(false)
+  const [panel, setPanel] = useState<SidePanel>('none')
   const fontSize = useStore((s) => s.fontSize)
 
   // One CSS variable drives every message-row size, so changing it re-styles
@@ -219,7 +225,7 @@ export default function App(): React.ReactElement {
 
   return (
     <div className="flex h-full flex-col">
-      <TopBar rulesOpen={rulesOpen} toggleRules={() => setRulesOpen((v) => !v)} />
+      <TopBar panel={panel} setPanel={setPanel} />
 
       <div className="flex min-h-0 flex-1">
         <Sidebar />
@@ -246,7 +252,8 @@ export default function App(): React.ReactElement {
           )}
         </main>
 
-        {rulesOpen && <RulesPanel engine={engine} />}
+        {panel === 'rules' && <RulesPanel engine={engine} />}
+        {panel === 'connections' && <ConnectionsPanel />}
       </div>
     </div>
   )

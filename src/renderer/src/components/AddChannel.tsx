@@ -3,6 +3,7 @@ import type { Platform } from '@shared/types'
 import { AUTO_CONNECT_COST, parseChannelInput } from '@shared/channel'
 import { bridge } from '../bridge'
 import { useStore } from '../store'
+import { TwitchSignIn } from './TwitchSignIn'
 
 /** Providers that actually exist. The rest are listed but explain themselves. */
 const READY: Record<Platform, boolean> = {
@@ -44,6 +45,10 @@ export function AddChannel(): React.ReactElement {
 
   const effectivePlatform = preview?.platform ?? platform
 
+  // Only ask for auth once the user has actually aimed at Twitch.
+  const needsTwitchAuth =
+    effectivePlatform === 'twitch' && input.trim() !== '' && auth.status !== 'signed-in'
+
   const submit = async (): Promise<void> => {
     setError(null)
     const parsed = parseChannelInput(input, platform)
@@ -59,7 +64,7 @@ export function AddChannel(): React.ReactElement {
       return
     }
     if (ref.platform === 'twitch' && auth.status !== 'signed-in') {
-      setError('Sign in to Twitch first.')
+      // Handled by the inline prompt below rather than an error string.
       return
     }
 
@@ -122,9 +127,17 @@ export function AddChannel(): React.ReactElement {
       </div>
 
       {preview && (
-        <div className="truncate text-[11px] text-slate-500">
-          <span className="text-slate-400">{preview.platform}</span> · {preview.value} ·{' '}
-          {AUTO_LABEL[AUTO_CONNECT_COST[preview.platform]]}
+        <div className="space-y-[2px]">
+          <div className="truncate text-[11px] text-slate-500">
+            <span className="text-slate-400">{preview.platform}</span> · {preview.value} ·{' '}
+            {AUTO_LABEL[AUTO_CONNECT_COST[preview.platform]]}
+          </div>
+          {preview.kind === 'youtube-video-id' && (
+            <div className="text-[11px] leading-relaxed text-amber-500/70">
+              That link names one broadcast. Add the @handle instead to follow the channel
+              across streams.
+            </div>
+          )}
         </div>
       )}
 
@@ -137,6 +150,12 @@ export function AddChannel(): React.ReactElement {
       {!READY[effectivePlatform] && (
         <div className="text-[11px] leading-relaxed text-amber-500/80">
           {PHASE_NOTE[effectivePlatform]}
+        </div>
+      )}
+
+      {needsTwitchAuth && (
+        <div className="rounded border border-[#2b323d] bg-[#0b0d10] p-2">
+          <TwitchSignIn reason="Twitch needs a one-time sign-in before it can read chat." />
         </div>
       )}
 

@@ -3,7 +3,6 @@ import type { Platform, SourceState, SourceStatus } from '@shared/types'
 import { bridge } from '../bridge'
 import { useStore } from '../store'
 import { PLATFORM_COLOR } from './MessageRow'
-import { TwitchAuthPanel } from './TwitchAuthPanel'
 import { AddChannel } from './AddChannel'
 
 const STATUS_COLOR: Record<SourceStatus, string> = {
@@ -163,8 +162,6 @@ export function Sidebar(): React.ReactElement {
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-[#232932] bg-[#0f1216]">
       <div className="chat-scroll flex-1 overflow-y-auto">
-        <TwitchAuthPanel />
-
         <div className="p-2">
           <div className="mb-[6px] text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
             Channels
@@ -172,7 +169,7 @@ export function Sidebar(): React.ReactElement {
           <div className="space-y-2">
             {sources.length === 0 && (
               <p className="text-[12px] leading-relaxed text-slate-600">
-                No channels yet. Sign in above, then add one by name or paste its link.
+                No channels yet. Add one below by name, or paste its link.
               </p>
             )}
             {sources.map((source) => (
