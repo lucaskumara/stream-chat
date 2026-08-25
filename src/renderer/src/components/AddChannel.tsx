@@ -2,8 +2,6 @@ import { useMemo, useState } from 'react'
 import type { Platform } from '@shared/types'
 import { AUTO_CONNECT_COST, parseChannelInput } from '@shared/channel'
 import { bridge } from '../bridge'
-import { useStore } from '../store'
-import { TwitchSignIn } from './TwitchSignIn'
 
 /** Providers that actually exist. The rest are listed but explain themselves. */
 const READY: Record<Platform, boolean> = {
@@ -30,7 +28,6 @@ const AUTO_LABEL: Record<'push' | 'polled' | 'none', string> = {
  * main process can reuse the same rules.
  */
 export function AddChannel(): React.ReactElement {
-  const auth = useStore((s) => s.twitchAuth)
   const [input, setInput] = useState('')
   const [platform, setPlatform] = useState<Platform>('twitch')
   const [error, setError] = useState<string | null>(null)
@@ -44,10 +41,6 @@ export function AddChannel(): React.ReactElement {
   }, [input, platform])
 
   const effectivePlatform = preview?.platform ?? platform
-
-  // Only ask for auth once the user has actually aimed at Twitch.
-  const needsTwitchAuth =
-    effectivePlatform === 'twitch' && input.trim() !== '' && auth.status !== 'signed-in'
 
   const submit = async (): Promise<void> => {
     setError(null)
@@ -63,11 +56,6 @@ export function AddChannel(): React.ReactElement {
       setError(PHASE_NOTE[ref.platform] ?? `${ref.platform} is not supported yet.`)
       return
     }
-    if (ref.platform === 'twitch' && auth.status !== 'signed-in') {
-      // Handled by the inline prompt below rather than an error string.
-      return
-    }
-
     setBusy(true)
     try {
       await bridge().api.addSource({
@@ -150,12 +138,6 @@ export function AddChannel(): React.ReactElement {
       {!READY[effectivePlatform] && (
         <div className="text-[11px] leading-relaxed text-amber-500/80">
           {PHASE_NOTE[effectivePlatform]}
-        </div>
-      )}
-
-      {needsTwitchAuth && (
-        <div className="rounded border border-[#2b323d] bg-[#0b0d10] p-2">
-          <TwitchSignIn reason="Twitch needs a one-time sign-in before it can read chat." />
         </div>
       )}
 

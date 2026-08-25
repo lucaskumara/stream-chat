@@ -4,6 +4,7 @@ import { bridge } from '../bridge'
 import { useStore } from '../store'
 import { PLATFORM_COLOR } from './MessageRow'
 import { AddChannel } from './AddChannel'
+import { TwitchSignIn } from './TwitchSignIn'
 
 const STATUS_COLOR: Record<SourceStatus, string> = {
   connected: '#22c55e',
@@ -159,22 +160,44 @@ function DevTools(): React.ReactElement {
 function TwitchModeLine(): React.ReactElement {
   const auth = useStore((s) => s.twitchAuth)
   const signedIn = auth.status === 'signed-in'
+  const [showSignIn, setShowSignIn] = useState(false)
 
   return (
-    <div className="flex items-center gap-1 border-t border-[#232932] px-2 py-[6px] text-[11px] text-slate-600">
-      <span className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ backgroundColor: '#9146ff' }} />
-      <span className="truncate">
-        {signedIn ? `twitch: ${auth.login}` : 'twitch: anonymous'}
-      </span>
-      {signedIn && (
-        <button
-          type="button"
-          onClick={() => void bridge().api.twitchSignOut()}
-          className="ml-auto shrink-0 cursor-pointer text-slate-600 underline underline-offset-2 hover:text-slate-400"
-          title="chat still works signed out; you lose badge images and the live indicator"
-        >
-          sign out
-        </button>
+    <div className="border-t border-[#232932] px-2 py-[6px]">
+      <div className="flex items-center gap-1 text-[11px] text-slate-600">
+        <span
+          className="h-[6px] w-[6px] shrink-0 rounded-full"
+          style={{ backgroundColor: '#9146ff' }}
+        />
+        <span className="truncate">
+          {signedIn ? `twitch: ${auth.login}` : 'twitch: anonymous'}
+        </span>
+
+        {signedIn ? (
+          <button
+            type="button"
+            onClick={() => void bridge().api.twitchSignOut()}
+            className="ml-auto shrink-0 cursor-pointer text-slate-600 underline underline-offset-2 hover:text-slate-400"
+            title="chat keeps working signed out; you lose badge images and the live dot"
+          >
+            sign out
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowSignIn((v) => !v)}
+            className="ml-auto shrink-0 cursor-pointer text-slate-600 underline underline-offset-2 hover:text-slate-400"
+            title="optional: adds badge images and a live indicator. Chat works without it."
+          >
+            {showSignIn ? 'cancel' : 'sign in'}
+          </button>
+        )}
+      </div>
+
+      {!signedIn && showSignIn && (
+        <div className="mt-[6px]">
+          <TwitchSignIn reason="Optional. Adds badge images and a live indicator." />
+        </div>
       )}
     </div>
   )
