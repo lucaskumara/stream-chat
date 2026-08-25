@@ -5,19 +5,10 @@ import { splitLinks } from '../text/links'
 const EMOTE_CDN = 'https://static-cdn.jtvnw.net/emoticons/v2'
 
 function emoteUrls(id: string): { url: string; srcSet: string } {
-  // IRC gives no format hint, so ask for the default and let Twitch pick.
   const at = (scale: string): string => `${EMOTE_CDN}/${id}/default/dark/${scale}`
   return { url: at('1.0'), srcSet: `${at('1.0')} 1x, ${at('2.0')} 2x, ${at('3.0')} 3x` }
 }
 
-/**
- * Builds fragments from the emote tag's positions.
- *
- * The offsets index CODE POINTS, so the text is split with [...text] first. A
- * message like "👨‍👩‍👧 Kappa" indexed as UTF-16 would slice mid-surrogate and
- * corrupt both the emote and the surrounding text — the exact failure the
- * fragment architecture exists to prevent.
- */
 export function buildIrcFragments(text: string, emoteTag: string | undefined): Fragment[] {
   const spans = parseEmoteTag(emoteTag)
   if (spans.length === 0) return splitLinks(text)
@@ -44,15 +35,6 @@ export function buildIrcFragments(text: string, emoteTag: string | undefined): F
   return out
 }
 
-/**
- * Badge *images* need the Helix endpoint, which requires auth, and the old
- * public badges.twitch.tv host is gone (it no longer resolves). Anonymous mode
- * therefore has only set names to work with.
- *
- * Rendering every set as a truncated string produces noise like "SUBCRY" and
- * "UMB" for cosmetic badges nobody needs, so only the ones that say something
- * about who is speaking are kept.
- */
 const BADGE_LABELS: Record<string, string> = {
   broadcaster: 'HOST',
   moderator: 'MOD',
@@ -75,7 +57,6 @@ function toBadges(tag: string | undefined): Badge[] {
   return out
 }
 
-/** USERNOTICE msg-id values worth surfacing distinctly in the feed. */
 function noticeKind(msgId: string | undefined): MessageKind {
   switch (msgId) {
     case 'sub':
@@ -100,7 +81,6 @@ export function normalizeIrcPrivmsg(msg: IrcMessage, sourceId: string): ChatMess
   const messageId = msg.tags['id'] ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
   const out: ChatMessage = {
-    // Same id shape as the EventSub path so moderation binds identically.
     id: `twitch:${sourceId}:${messageId}`,
     sourceId,
     platform: 'twitch',
@@ -134,7 +114,6 @@ export function normalizeIrcPrivmsg(msg: IrcMessage, sourceId: string): ChatMess
   return out
 }
 
-/** Subs, resubs, gifts, raids and announcements arrive as USERNOTICE. */
 export function normalizeIrcUsernotice(msg: IrcMessage, sourceId: string): ChatMessage | null {
   const systemMsg = msg.tags['system-msg']
   if (!systemMsg) return null

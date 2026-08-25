@@ -1,19 +1,13 @@
-/**
- * IRCv3 line parsing for Twitch's chat gateway. Kept pure and dependency-free
- * so it can be unit tested without a socket.
- */
-
 export interface IrcMessage {
   tags: Record<string, string>
-  /** Nick from the prefix, when present. */
+
   nick?: string
   command: string
   params: string[]
-  /** The trailing parameter (message text), if any. */
+
   trailing?: string
 }
 
-/** Tag values escape spaces, semicolons and CRLF per IRCv3. */
 function unescapeTag(value: string): string {
   let out = ''
   for (let i = 0; i < value.length; i++) {
@@ -60,7 +54,6 @@ export function parseIrcLine(line: string): IrcMessage | null {
     rest = rest.slice(end + 1)
   }
 
-  // Trailing parameter starts at the first " :" and runs to end of line.
   let trailing: string | undefined
   const trailingAt = rest.indexOf(' :')
   if (rest.startsWith(':')) {
@@ -83,19 +76,11 @@ export function parseIrcLine(line: string): IrcMessage | null {
 
 export interface EmoteSpan {
   id: string
-  /** Inclusive code-point offsets into the message text. */
+
   start: number
   end: number
 }
 
-/**
- * Parses the `emotes` tag: `25:0-4,12-16/1902:6-10`.
- *
- * Offsets index code points, not UTF-16 units, which is exactly the trap the
- * fragment design exists to avoid — a message containing an astral emoji would
- * slice apart mid-surrogate if indexed naively. Callers must split the text
- * with [...text] before applying these.
- */
 export function parseEmoteTag(tag: string | undefined): EmoteSpan[] {
   if (!tag) return []
   const spans: EmoteSpan[] = []
@@ -124,7 +109,6 @@ export interface ParsedBadge {
   version: string
 }
 
-/** Parses the `badges` tag: `moderator/1,subscriber/12`. */
 export function parseBadgeTag(tag: string | undefined): ParsedBadge[] {
   if (!tag) return []
   const out: ParsedBadge[] = []

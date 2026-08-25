@@ -1,7 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { ChatMessage, EmoteSettings } from '@shared/types'
-import type { RuleEngine } from '../rules'
 import { bridge } from '../bridge'
 import { MessageRow } from './MessageRow'
 
@@ -10,7 +9,6 @@ const ESTIMATED_ROW_PX = 26
 
 export interface ChatPaneProps {
   messages: ChatMessage[]
-  engine: RuleEngine
   deleted: Record<string, true>
   showDeleted: boolean
   showTimestamps: boolean
@@ -22,7 +20,6 @@ export interface ChatPaneProps {
 
 export function ChatPane({
   messages,
-  engine,
   deleted,
   showDeleted,
   showTimestamps,
@@ -34,13 +31,6 @@ export function ChatPane({
   const scrollRef = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState(true)
 
-  /**
-   * While the reader scrolls up we render a frozen snapshot instead of the live
-   * array. Appends alone would be harmless, but the ring buffer evicts from the
-   * front, which shifts every index and yanks the viewport out from under them.
-   * Freezing is also what the reader actually wants: it's the "chat paused"
-   * behaviour Chatterino and Twitch both have.
-   */
   const [frozen, setFrozen] = useState<ChatMessage[] | null>(null)
   const list = frozen ?? messages
 
@@ -50,7 +40,6 @@ export function ChatPane({
 
     for (const msg of list) {
       if (!showDeleted && deleted[msg.id]) continue
-      if (engine.evaluate(msg).hidden) continue
       if (
         needle !== '' &&
         !msg.plainText.toLowerCase().includes(needle) &&
@@ -62,7 +51,7 @@ export function ChatPane({
     }
 
     return out
-  }, [list, engine, deleted, showDeleted, search])
+  }, [list, deleted, showDeleted, search])
 
   const virtualizer = useVirtualizer({
     count: visible.length,
@@ -77,8 +66,6 @@ export function ChatPane({
     virtualizer.scrollToIndex(visible.length - 1, { align: 'end' })
   }, [virtualizer, visible.length])
 
-  // Follow the tail while pinned. Runs after layout so measured row heights
-  // from this render are already applied.
   useLayoutEffect(() => {
     if (pinned) scrollToBottom()
   }, [pinned, visible.length, scrollToBottom])
@@ -100,8 +87,6 @@ export function ChatPane({
     setPinned(true)
   }, [])
 
-  // Unread badge: locate where the frozen snapshot ended in the live array. If
-  // its tail has already been evicted, everything on screen is stale.
   const unread = useMemo(() => {
     if (!frozen || frozen.length === 0) return 0
     const tailId = frozen[frozen.length - 1]?.id
@@ -144,7 +129,6 @@ export function ChatPane({
                 >
                   <MessageRow
                     msg={msg}
-                    decision={engine.evaluate(msg)}
                     deleted={deleted[msg.id] === true}
                     showTimestamps={showTimestamps}
                     showPlatform={showPlatform}

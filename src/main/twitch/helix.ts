@@ -61,7 +61,6 @@ export class Helix {
         const parsed = JSON.parse(text) as { message?: string; error?: string }
         message = parsed.message || parsed.error || message
       } catch {
-        /* keep raw text */
       }
       throw new HelixError(message, res.status)
     }
@@ -69,7 +68,6 @@ export class Helix {
     return text ? (JSON.parse(text) as T) : (undefined as T)
   }
 
-  /** Resolve a channel name typed by the user. Returns null when it does not exist. */
   async getUserByLogin(login: string): Promise<HelixUser | null> {
     const clean = login.trim().toLowerCase().replace(/^@/, '')
     if (!/^[a-z0-9_]{1,25}$/.test(clean)) {
@@ -81,7 +79,6 @@ export class Helix {
     return data.data[0] ?? null
   }
 
-  /** True when the channel is broadcasting right now. */
   async isLive(userId: string): Promise<boolean> {
     const data = await this.request<{ data: unknown[] }>(
       `/streams?user_id=${encodeURIComponent(userId)}`
@@ -128,10 +125,6 @@ export class Helix {
   }
 }
 
-/**
- * Badge images are per-channel plus a global fallback, and both are static for
- * long stretches, so they are fetched once per channel and cached.
- */
 export class BadgeCache {
   private global: Map<string, Map<string, BadgeVersion>> | null = null
   private perChannel = new Map<string, Map<string, Map<string, BadgeVersion>>>()
@@ -155,7 +148,6 @@ export class BadgeCache {
         this.perChannel.set(broadcasterId, this.index(await this.helix.getChannelBadges(broadcasterId)))
       }
     } catch (err) {
-      // Badges are cosmetic; never let them block a chat connection.
       console.warn('[twitch] badge load failed:', err)
     }
   }

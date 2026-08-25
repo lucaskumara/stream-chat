@@ -20,16 +20,11 @@ export const IPC = {
   twitchStartLogin: 'twitch:start-login',
   twitchSignOut: 'twitch:sign-out',
 
-  // main -> renderer
   batch: 'chat:batch',
   sourceState: 'sources:state',
   twitchAuth: 'twitch:auth'
 } as const
 
-/**
- * The renderer is untrusted by construction (it renders remote chat content),
- * so every handler validates its arguments rather than trusting the preload.
- */
 export function registerIpc(sources: SourceManager, auth: TwitchAuth): void {
   registerSourceHandlers(sources)
   registerShellHandlers()
@@ -106,14 +101,10 @@ function parseEmoteSettings(value: unknown): EmoteSettings {
     throw new Error('settings must be an object')
   }
   const record = value as Record<string, unknown>
-  // Absent means enabled, so an older renderer cannot silently disable emotes.
+
   return { sevenTv: record.sevenTv !== false, bttv: record.bttv !== false }
 }
 
-/**
- * Chat messages carry arbitrary user-supplied links. Only ever hand plain web
- * URLs to the OS — never file:, and never a custom protocol handler.
- */
 function parseWebUrl(value: unknown): string {
   let parsed: URL
   try {

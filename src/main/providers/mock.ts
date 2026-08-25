@@ -3,21 +3,13 @@ import { MOCK_PLATFORMS, makeMockMessage, pick } from '@shared/mockdata'
 import type { ChatProvider, ProviderEvents } from './types'
 
 export interface MockConfig {
-  /** Messages per second across all simulated chatters. */
   rate?: number
   platform?: Platform
   label?: string
 }
 
-/** How many recent messages to retain for reply/timeout targets. */
 const RECENT_WINDOW = 40
 
-/**
- * Generates synthetic traffic so the UI can be built and load-tested before any
- * OAuth flow exists. Rate is tunable at runtime up to the burst levels a large
- * channel produces, and it emits the moderation events the hide/delete UI
- * depends on so those paths are exercised without a real moderator.
- */
 export class MockProvider implements ChatProvider {
   readonly platform: Platform
   readonly label: string
@@ -45,8 +37,7 @@ export class MockProvider implements ChatProvider {
     this.emit.live(true)
 
     this.startTicker()
-    // Moderation is rare relative to chat, so it gets its own slow timer rather
-    // than a probability roll on every message.
+
     this.modTimer = setInterval(() => this.emitModeration(), 7000)
   }
 
@@ -59,7 +50,6 @@ export class MockProvider implements ChatProvider {
     this.emit.status('disconnected')
   }
 
-  /** Live rate change for load testing; no reconnect required. */
   setRate(rate: number): void {
     this.rate = Math.max(0, rate)
     if (this.timer) {
@@ -71,8 +61,6 @@ export class MockProvider implements ChatProvider {
   private startTicker(): void {
     if (this.rate <= 0) return
 
-    // Above ~50/sec a 1-message-per-tick timer hits setInterval's floor, so
-    // emit in bursts on a fixed tick instead of shrinking the interval.
     const tickMs = 50
     const perTick = Math.max(1, Math.round((this.rate * tickMs) / 1000))
     const intervalMs = this.rate >= 20 ? tickMs : Math.round(1000 / this.rate)

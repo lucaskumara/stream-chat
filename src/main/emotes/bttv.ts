@@ -11,15 +11,14 @@ interface ApiEmote {
 }
 
 interface ApiChannel {
-  /** Emotes uploaded by this channel. */
   channelEmotes?: ApiEmote[]
-  /** Emotes the channel has adopted from BTTV's shared library. */
+
   sharedEmotes?: ApiEmote[]
 }
 
 function toEmote(raw: ApiEmote): ThirdPartyEmote | null {
   if (!raw.id || !raw.code) return null
-  // BTTV serves webp at every scale regardless of the source imageType.
+
   const at = (scale: string): string => `${CDN}/${raw.id}/${scale}.webp`
   return {
     name: raw.code,
@@ -39,13 +38,6 @@ function index(list: ApiEmote[]): Map<string, ThirdPartyEmote> {
   return map
 }
 
-/**
- * BetterTTV emotes. Still worth having despite 7TV's dominance: some large
- * channels have no 7TV set at all and hundreds of BTTV emotes, and without
- * this their chat renders as bare words.
- *
- * Twitch only — BTTV keys channels by Twitch user id.
- */
 export class BttvEmotes {
   private global: Map<string, ThirdPartyEmote> | null = null
   private byChannel = new Map<string, Map<string, ThirdPartyEmote>>()
@@ -67,7 +59,7 @@ export class BttvEmotes {
       const data = await fetchOptionalJson<ApiChannel>(
         `${API}/cached/users/twitch/${encodeURIComponent(twitchId)}`
       )
-      // A channel with no BTTV account caches empty so we stop asking.
+
       this.byChannel.set(
         twitchId,
         index([...(data?.channelEmotes ?? []), ...(data?.sharedEmotes ?? [])])

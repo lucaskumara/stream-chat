@@ -4,7 +4,6 @@ import { splitLinks } from '../text/links'
 
 const EMOTE_CDN = 'https://static-cdn.jtvnw.net/emoticons/v2'
 
-/** Twitch fragment shapes we care about, from channel.chat.message v1. */
 interface TwitchFragment {
   type: 'text' | 'cheermote' | 'emote' | 'mention'
   text: string
@@ -32,7 +31,6 @@ export interface TwitchChatEvent {
 }
 
 function emoteUrls(id: string, formats: string[] | undefined): { url: string; srcSet: string } {
-  // Animated where offered, so BTTV-style moving emotes still move.
   const format = formats?.includes('animated') ? 'animated' : 'static'
   const at = (scale: string): string => `${EMOTE_CDN}/${id}/${format}/dark/${scale}`
   return {
@@ -61,7 +59,6 @@ function toFragments(fragments: TwitchFragment[]): Fragment[] {
         continue
       }
       case 'cheermote': {
-        // Rendered as text; the bit total is surfaced via `monetary` instead.
         out.push({ kind: 'text', text: frag.text })
         continue
       }
@@ -109,7 +106,6 @@ export function normalizeChatMessage(
   badges: BadgeCache
 ): ChatMessage {
   const msg: ChatMessage = {
-    // Must match the id the moderation path composes, or deletions won't bind.
     id: `twitch:${sourceId}:${event.message_id}`,
     sourceId,
     platform: 'twitch',
@@ -120,8 +116,7 @@ export function normalizeChatMessage(
     badges: toBadges(event.badges, event.broadcaster_user_id, badges),
     fragments: toFragments(event.message.fragments ?? []),
     plainText: event.message.text ?? '',
-    // EventSub carries no per-message timestamp in the payload, so receipt time
-    // is the honest value here.
+
     timestamp: Date.now()
   }
 

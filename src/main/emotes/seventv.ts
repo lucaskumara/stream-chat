@@ -4,7 +4,6 @@ import { fetchOptionalJson } from '../net/fetchJson'
 const API = 'https://7tv.io/v3'
 const CDN_SCALES = ['1x', '2x', '3x'] as const
 
-/** 7TV names its YouTube platform GOOGLE, not "youtube". */
 export type SevenTvPlatform = 'twitch' | 'kick' | 'google'
 
 export type SevenTvEmote = ThirdPartyEmote
@@ -15,7 +14,6 @@ interface ApiFile {
 }
 
 interface ApiEmote {
-  /** Channel-specific alias; may differ from the emote's canonical name. */
   name: string
   data?: {
     animated?: boolean
@@ -31,11 +29,9 @@ function toEmote(raw: ApiEmote): SevenTvEmote | null {
   const host = raw.data?.host
   if (!raw.name || !host?.url) return null
 
-  // host.url is protocol-relative, e.g. //cdn.7tv.app/emote/<id>
   const base = host.url.startsWith('//') ? `https:${host.url}` : host.url
   const available = new Set((host.files ?? []).map((f) => f.name))
 
-  // webp is universally present and far smaller than gif for animated emotes.
   const pick = (scale: string): string | null =>
     available.has(`${scale}.webp`) ? `${base}/${scale}.webp` : null
 
@@ -62,17 +58,12 @@ function index(set: ApiEmoteSet | undefined): Map<string, SevenTvEmote> {
   const map = new Map<string, SevenTvEmote>()
   for (const raw of set?.emotes ?? []) {
     const emote = toEmote(raw)
-    // Names are matched case-sensitively, the way 7TV itself does it.
+
     if (emote) map.set(emote.name, emote)
   }
   return map
 }
 
-/**
- * Fetches and caches 7TV emote sets. Entirely unauthenticated — the only input
- * is the channel's platform id, which anonymous IRC already hands us in the
- * room-id tag, so this needs no sign-in and no API key.
- */
 export class SevenTvEmotes {
   private global: Map<string, SevenTvEmote> | null = null
   private byChannel = new Map<string, Map<string, SevenTvEmote>>()
@@ -84,7 +75,6 @@ export class SevenTvEmotes {
     this.global = index(set ?? undefined)
   }
 
-  /** `channelId` is the platform's own id: Twitch room-id, Kick numeric id, YouTube UC…. */
   async loadChannel(platform: SevenTvPlatform, channelId: string): Promise<void> {
     const key = `${platform}:${channelId}`
     if (this.byChannel.has(key)) return
@@ -97,7 +87,7 @@ export class SevenTvEmotes {
       const user = await fetchOptionalJson<{ emote_set?: ApiEmoteSet }>(
         `${API}/users/${platform}/${encodeURIComponent(channelId)}`
       )
-      // A channel with no 7TV account caches as empty so we stop asking.
+
       this.byChannel.set(key, index(user?.emote_set))
       this.inFlight.delete(key)
     })()
@@ -106,7 +96,6 @@ export class SevenTvEmotes {
     return task
   }
 
-  /** Channel emotes win over global, matching 7TV's own precedence. */
   lookup(platform: SevenTvPlatform, channelId: string, name: string): SevenTvEmote | undefined {
     return (
       this.byChannel.get(`${platform}:${channelId}`)?.get(name) ?? this.global?.get(name)

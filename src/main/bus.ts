@@ -3,18 +3,8 @@ import type { ChatBatch, ChatMessage, ModerationEvent } from '@shared/types'
 
 const FLUSH_INTERVAL_MS = 100
 
-/**
- * Hard cap on a single flush. If the renderer stalls (devtools open, a long GC)
- * the buffer must not grow without bound — chat is a live feed, so dropping the
- * oldest surplus is the right failure mode.
- */
 const MAX_BUFFERED_MESSAGES = 2000
 
-/**
- * Buffers messages and ships them to the renderer on a fixed tick. A busy
- * channel produces tens of messages per second and one IPC call per message
- * saturates the renderer with structured-clone work.
- */
 export class MessageBus {
   private messages: ChatMessage[] = []
   private moderation: ModerationEvent[] = []
@@ -51,7 +41,6 @@ export class MessageBus {
     this.moderation.push(evt)
   }
 
-  /** Discard anything still queued for a source that has been removed. */
   dropSource(sourceId: string): void {
     this.messages = this.messages.filter((m) => m.sourceId !== sourceId)
     this.moderation = this.moderation.filter((m) => m.sourceId !== sourceId)

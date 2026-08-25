@@ -1,12 +1,5 @@
 import type { Badge, ChatMessage, Fragment, MessageKind, Platform } from './types'
 
-/**
- * Pure synthetic-traffic generator. Lives in shared/ because two callers need
- * exactly the same output: the main-process MockProvider, and the renderer's
- * browser dev harness (see renderer/src/bridge.ts). Keeping one implementation
- * means load-testing in a browser tab measures the same shapes Electron sees.
- */
-
 export const MOCK_PLATFORMS: Platform[] = ['twitch', 'youtube', 'kick']
 
 const NAMES = [
@@ -105,9 +98,9 @@ function rollKind(): MessageKind {
 export interface MockMessageOptions {
   sourceId: string
   platform: Platform
-  /** Monotonic per-source counter; keeps ids unique and ordering debuggable. */
+
   seq: number
-  /** Recent messages, used to occasionally build a realistic reply. */
+
   recent?: ChatMessage[]
 }
 

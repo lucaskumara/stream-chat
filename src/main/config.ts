@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 export interface StoredTwitchTokens {
   accessToken: string
   refreshToken: string
-  /** Epoch ms. Refreshed a little early; see TwitchAuth.getAccessToken. */
+
   expiresAt: number
   scopes: string[]
   userId: string
@@ -15,7 +15,7 @@ export interface StoredTwitchTokens {
 
 export interface StoredChannel {
   platform: 'twitch'
-  /** Lowercased login name, the stable identifier. */
+
   login: string
   emotes?: { sevenTv: boolean; bttv: boolean }
 }
@@ -23,7 +23,6 @@ export interface StoredChannel {
 interface PersistedShape {
   version: 1
   twitch?: {
-    /** base64 of safeStorage-encrypted JSON. Never plaintext on disk. */
     tokensEnc?: string
   }
   channels?: StoredChannel[]
@@ -31,16 +30,10 @@ interface PersistedShape {
 
 const EMPTY: PersistedShape = { version: 1 }
 
-/**
- * Small hand-rolled settings file rather than electron-store: v11 of that
- * package is ESM-only, and this build emits CJS for the main process. Tokens
- * are encrypted with the OS keychain (DPAPI on Windows) and the plaintext never
- * touches disk.
- */
 class Config {
   private path: string
   private data: PersistedShape
-  /** Used when the OS has no encryption backend — session-only, never written. */
+
   private memoryTokens: StoredTwitchTokens | null = null
 
   constructor() {
@@ -63,7 +56,7 @@ class Config {
   private write(): void {
     try {
       mkdirSync(dirname(this.path), { recursive: true })
-      // Write-then-rename so a crash mid-write can't truncate the real file.
+
       const tmp = `${this.path}.tmp`
       writeFileSync(tmp, JSON.stringify(this.data, null, 2), 'utf8')
       renameSync(tmp, this.path)
@@ -72,7 +65,6 @@ class Config {
     }
   }
 
-  /** Build-time constant, overridable by env for testing. Never user input. */
   getClientId(): string | undefined {
     return process.env['TWITCH_CLIENT_ID'] || BUILT_IN_TWITCH_CLIENT_ID || undefined
   }
@@ -86,7 +78,6 @@ class Config {
       const json = safeStorage.decryptString(Buffer.from(enc, 'base64'))
       return JSON.parse(json) as StoredTwitchTokens
     } catch (err) {
-      // Usually means a different OS user or machine wrote them.
       console.warn('[config] token decrypt failed, treating as signed out:', err)
       return null
     }
@@ -101,8 +92,6 @@ class Config {
     }
 
     if (!safeStorage.isEncryptionAvailable()) {
-      // Refuse to write credentials in the clear. The session still works; the
-      // user just signs in again next launch.
       console.warn('[config] OS encryption unavailable — tokens kept in memory only')
       this.memoryTokens = tokens
       return
@@ -147,7 +136,6 @@ class Config {
 
 let instance: Config | null = null
 
-/** Lazy so it is never constructed before app.getPath('userData') is valid. */
 export function config(): Config {
   return (instance ??= new Config())
 }

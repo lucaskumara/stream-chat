@@ -1,7 +1,6 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import type { SourceState } from '@shared/types'
 import { bridge } from './bridge'
-import { createRuleEngine } from './rules'
 import { useStore } from './store'
 import { ChatPane } from './components/ChatPane'
 import { PLATFORM_COLOR } from './components/MessageRow'
@@ -24,11 +23,6 @@ function PaneHeader({ source }: { source: SourceState }): React.ReactElement {
   )
 }
 
-/**
- * MVP shell: channels on the left, one chat pane each. The combined view,
- * filter box and rule editor are deliberately not mounted yet — the goal is
- * chat arriving reliably before layout features are worth tuning.
- */
 export default function App(): React.ReactElement {
   const sources = useStore((s) => s.sources)
   const setSources = useStore((s) => s.setSources)
@@ -39,10 +33,6 @@ export default function App(): React.ReactElement {
   const showDeleted = useStore((s) => s.showDeleted)
   const showTimestamps = useStore((s) => s.showTimestamps)
   const fontSize = useStore((s) => s.fontSize)
-
-  // No rules UI yet, but the engine stays in the render path so scrollback
-  // styling works the moment rules come back.
-  const engine = useMemo(() => createRuleEngine([]), [])
 
   useEffect(() => {
     document.documentElement.style.setProperty('--chat-font-size', `${fontSize}px`)
@@ -58,7 +48,6 @@ export default function App(): React.ReactElement {
     void api
       .twitchAuthState()
       .then(setTwitchAuth)
-      // Auth state is optional context; the browser harness has none.
       .catch((error) => console.debug('[auth] state unavailable:', error))
 
     return () => {
@@ -82,7 +71,6 @@ export default function App(): React.ReactElement {
             {sources.map((source) => (
               <ChatPane
                 key={source.id}
-                engine={engine}
                 deleted={deleted}
                 showDeleted={showDeleted}
                 showTimestamps={showTimestamps}

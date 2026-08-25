@@ -14,14 +14,6 @@ import { MOCK_PLATFORMS, makeMockMessage, pick } from '@shared/mockdata'
 
 export type BridgeMode = 'electron' | 'browser'
 
-/**
- * In Electron the preload injects window.api. Opened directly in a browser tab
- * there is no preload, so we stand up an in-page simulator with the same
- * contract and the same 100ms batching cadence. That makes the UI profileable
- * in browser devtools, which is far better tooling for a virtualized list under
- * load than Electron's inspector. Message *content* comes from the shared
- * generator, so only the transport differs from the real thing.
- */
 export function getBridge(): { api: ChatApi; mode: BridgeMode } {
   if (window.api) return { api: window.api, mode: 'electron' }
   return { api: createBrowserBridge(), mode: 'browser' }
@@ -62,8 +54,6 @@ function createBrowserBridge(): ChatApi {
     for (const sim of sources.values()) {
       if (sim.state.status !== 'connected') continue
 
-      // Carry the fractional remainder so low rates stay accurate instead of
-      // rounding to zero on every tick.
       sim.accumulator += sim.rate * elapsed
       const count = Math.floor(sim.accumulator)
       sim.accumulator -= count
@@ -89,7 +79,6 @@ function createBrowserBridge(): ChatApi {
     batchListeners.forEach((cb) => cb(batch))
   }, FLUSH_INTERVAL_MS)
 
-  // Occasional moderation so the delete / timeout / clear paths are exercised.
   setInterval(() => {
     for (const sim of sources.values()) {
       if (sim.state.status !== 'connected' || sim.recent.length === 0) continue
@@ -181,8 +170,6 @@ function createBrowserBridge(): ChatApi {
       return () => sourceListeners.delete(cb)
     },
 
-    // Real auth needs the main process (OS keychain, no CORS). In a browser tab
-    // the harness reports a fixed signed-out state rather than pretending.
     async twitchAuthState(): Promise<TwitchAuthState> {
       return { status: 'not-configured', error: 'Twitch auth requires the Electron app.' }
     },
@@ -192,7 +179,6 @@ function createBrowserBridge(): ChatApi {
     },
 
     async twitchSignOut(): Promise<void> {
-      /* nothing to sign out of in the browser harness */
     },
 
     onTwitchAuth() {
@@ -203,7 +189,6 @@ function createBrowserBridge(): ChatApi {
 
 let cached: { api: ChatApi; mode: BridgeMode } | null = null
 
-/** Process-wide singleton; the preload has already run by the time this is hit. */
 export function bridge(): { api: ChatApi; mode: BridgeMode } {
   return (cached ??= getBridge())
 }

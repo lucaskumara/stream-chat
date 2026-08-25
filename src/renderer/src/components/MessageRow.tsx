@@ -7,7 +7,6 @@ import type {
   Fragment,
   Platform
 } from '@shared/types'
-import type { Decision } from '../rules'
 
 export const PLATFORM_COLOR: Record<Platform, string> = {
   twitch: '#9146ff',
@@ -24,11 +23,6 @@ const KIND_LABEL: Partial<Record<ChatMessage['kind'], string>> = {
   system: 'SYS'
 }
 
-/**
- * Platform-chosen name colours are picked against each platform's own
- * background and some are unreadably dark on ours, so lift anything below a
- * legibility floor rather than dropping the user's colour entirely.
- */
 function readableColor(hex: string | undefined): string {
   if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return '#9aa4b2'
 
@@ -70,8 +64,6 @@ function Emote({ name, url }: { name: string; url: string }): React.ReactElement
 function BadgeView({ badge }: { badge: BadgeType }): React.ReactElement {
   const [failed, setFailed] = useState(false)
 
-  // Mock sources and unresolved sets have no image; the short title is the
-  // fallback rather than the default.
   if (!badge.url || failed) {
     return (
       <span
@@ -96,7 +88,6 @@ function BadgeView({ badge }: { badge: BadgeType }): React.ReactElement {
   )
 }
 
-/** A disabled provider renders as the original word, not a gap. */
 function isEmoteEnabled(
   provider: EmoteProvider | undefined,
   settings: EmoteSettings
@@ -107,7 +98,7 @@ function isEmoteEnabled(
     case 'bttv':
       return settings.bttv
     default:
-      // Native platform emotes are not optional.
+
       return true
   }
 }
@@ -151,7 +142,6 @@ function FragmentView({
 
 export interface MessageRowProps {
   msg: ChatMessage
-  decision: Decision
   deleted: boolean
   showTimestamps: boolean
   showPlatform: boolean
@@ -161,28 +151,20 @@ export interface MessageRowProps {
 
 function MessageRowImpl({
   msg,
-  decision,
   deleted,
   showTimestamps,
   showPlatform,
   emoteSettings,
   onOpenLink
 }: MessageRowProps): React.ReactElement {
-  const highlight = decision.highlight
   const kindLabel = KIND_LABEL[msg.kind]
 
   return (
     <div
       className={[
         'px-2 py-[3px] text-[length:var(--chat-font-size)] leading-snug break-words',
-        highlight ? 'border-l-2' : 'border-l-2 border-l-transparent',
         deleted ? 'opacity-40' : ''
       ].join(' ')}
-      style={
-        highlight
-          ? { borderLeftColor: highlight, backgroundColor: `${highlight}1f` }
-          : undefined
-      }
     >
       {msg.replyTo && (
         <div className="truncate pl-1 text-[0.82em] text-slate-500">
@@ -244,8 +226,4 @@ function MessageRowImpl({
   )
 }
 
-/**
- * Messages are immutable, so a shallow compare here is what keeps a 50 msg/sec
- * feed from re-rendering the entire visible window on every batch.
- */
 export const MessageRow = memo(MessageRowImpl)

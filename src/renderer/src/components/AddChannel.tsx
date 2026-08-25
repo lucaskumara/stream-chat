@@ -3,7 +3,6 @@ import type { Platform } from '@shared/types'
 import { AUTO_CONNECT_COST, parseChannelInput } from '@shared/channel'
 import { bridge } from '../bridge'
 
-/** Providers that actually exist. The rest are listed but explain themselves. */
 const READY: Record<Platform, boolean> = {
   twitch: true,
   youtube: false,
@@ -22,18 +21,12 @@ const AUTO_LABEL: Record<'push' | 'polled' | 'none', string> = {
   none: 'synthetic traffic'
 }
 
-/**
- * One box for every platform. Accepts a pasted channel/video URL, a bare name
- * plus the platform dropdown, or `twitch:name`. Parsing lives in shared/ so the
- * main process can reuse the same rules.
- */
 export function AddChannel(): React.ReactElement {
   const [input, setInput] = useState('')
   const [platform, setPlatform] = useState<Platform>('twitch')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // Live feedback as they type, so a pasted link visibly resolves.
   const preview = useMemo(() => {
     if (input.trim() === '') return null
     const parsed = parseChannelInput(input, platform)

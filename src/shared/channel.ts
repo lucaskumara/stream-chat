@@ -1,10 +1,5 @@
 import type { Platform } from './types'
 
-/**
- * How a channel was named. The three platforms are not symmetric: Twitch and
- * Kick attach chat to a *channel*, while YouTube attaches it to a *live video*,
- * so a YouTube reference can be either a channel or a specific broadcast.
- */
 export type ChannelRefKind =
   | 'twitch-login'
   | 'youtube-handle'
@@ -15,9 +10,9 @@ export type ChannelRefKind =
 export interface ChannelRef {
   platform: Platform
   kind: ChannelRefKind
-  /** Canonical identifier: lowercased login/slug, or the exact YouTube id. */
+
   value: string
-  /** What to show before the provider resolves a display name. */
+
   label: string
 }
 
@@ -25,7 +20,7 @@ export interface ParseResult {
   ok: boolean
   ref?: ChannelRef
   error?: string
-  /** True when the text is a bare name and the caller must supply a platform. */
+
   needsPlatform?: boolean
 }
 
@@ -35,10 +30,8 @@ const YOUTUBE_CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/
 const YOUTUBE_HANDLE = /^@[A-Za-z0-9._-]{3,30}$/
 const YOUTUBE_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
 
-/** `twitch:name` / `twitch/name`, handy for typing without the dropdown. */
 const PLATFORM_PREFIX = /^(twitch|youtube|kick)\s*[:/]\s*(.+)$/i
 
-/** Anything with a dot before a letter is treated as a URL rather than a name. */
 const LOOKS_LIKE_URL = /^[a-z]+\.[a-z]|^http/i
 
 function ok(platform: Platform, kind: ChannelRefKind, value: string): ParseResult {
@@ -50,7 +43,6 @@ function fail(error: string): ParseResult {
 }
 
 function parseTwitchUrl(segments: string[]): ParseResult {
-  // /popout/<login>/chat and /<login>/... both appear in pasted links.
   const login = (segments[0] === 'popout' ? segments[1] : segments[0])?.toLowerCase()
   if (!login) return fail('That Twitch link has no channel name in it.')
   if (!TWITCH_LOGIN.test(login)) return fail(`"${login}" is not a valid Twitch channel.`)
@@ -64,7 +56,6 @@ function parseKickUrl(segments: string[]): ParseResult {
   return ok('kick', 'kick-slug', slug)
 }
 
-/** Chat lives on a video, so a watch link is the most precise thing to get. */
 function parseYouTubeUrl(url: URL, segments: string[], isShortLink: boolean): ParseResult {
   if (isShortLink) {
     const videoId = segments[0]
@@ -90,7 +81,6 @@ function parseYouTubeUrl(url: URL, segments: string[], isShortLink: boolean): Pa
   return fail('Could not find a channel or video in that YouTube link.')
 }
 
-/** Returns null when the text is not a URL we recognise, so callers can retry. */
 function parseUrl(raw: string): ParseResult | null {
   let url: URL
   try {
@@ -112,7 +102,6 @@ function parseUrl(raw: string): ParseResult | null {
   return null
 }
 
-/** A YouTube handle or channel id identifies itself without a platform hint. */
 function parseSelfDescribingName(name: string): ParseResult | null {
   if (YOUTUBE_CHANNEL_ID.test(name)) return ok('youtube', 'youtube-channel-id', name)
   if (name.startsWith('@') && YOUTUBE_HANDLE.test(name)) {
@@ -145,11 +134,6 @@ function parseBareName(name: string, platform: Platform): ParseResult {
   }
 }
 
-/**
- * Single entry point for the "add a channel" box. Accepts a pasted URL, a
- * bare name, or `platform:name`. When a bare name is ambiguous the caller is
- * told to supply the platform rather than being guessed at.
- */
 export function parseChannelInput(input: string, platformHint?: Platform): ParseResult {
   const raw = input.trim()
   if (raw === '') return fail('Enter a channel name or paste a link.')
@@ -174,7 +158,6 @@ export function parseChannelInput(input: string, platformHint?: Platform): Parse
   return parseBareName(raw, platformHint)
 }
 
-/** Where auto-connect is free versus quota-metered, for honest UI labelling. */
 export const AUTO_CONNECT_COST: Record<Platform, 'push' | 'polled' | 'none'> = {
   twitch: 'push',
   kick: 'push',

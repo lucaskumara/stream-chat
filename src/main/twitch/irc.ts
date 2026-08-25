@@ -4,20 +4,11 @@ import { reconnectDelayMs } from '../net/backoff'
 
 const IRC_URL = 'wss://irc-ws.chat.twitch.tv:443'
 
-/** Twitch closes idle sockets; it PINGs us, but we watch for silence too. */
 const SILENCE_TIMEOUT_MS = 6 * 60 * 1000
 
 export type IrcHandler = (msg: IrcMessage) => void
 export type IrcStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
-/**
- * Anonymous read-only connection to Twitch chat. Logging in as `justinfan<n>`
- * with no password is the long-standing way to read chat without an account,
- * which is what lets a channel be added by name with no sign-in at all.
- *
- * One socket serves every channel, the same shape as EventSubHub: joins are
- * cheap, and a reconnect re-joins everything from one place.
- */
 export class IrcHub {
   private ws: WebSocket | null = null
   private channels = new Map<string, IrcHandler>()
@@ -34,7 +25,7 @@ export class IrcHub {
 
     if (!this.ws) {
       await this.connect()
-      return // connect() joins everything once registered
+      return
     }
     if (this.ws.readyState === WebSocket.OPEN) this.send(`JOIN #${channel}`)
   }
@@ -58,8 +49,6 @@ export class IrcHub {
       const socket = new WebSocket(IRC_URL)
       this.ws = socket
 
-      // Every handler ignores a socket that is no longer the active one, so a
-      // superseded connection cannot trigger reconnect logic on its way out.
       socket.on('open', () => {
         if (this.ws !== socket) return
         this.registerAnonymously(socket)
@@ -87,12 +76,6 @@ export class IrcHub {
     })
   }
 
-  /**
-   * Logging in as justinfan<n> with no password is the long-standing way to
-   * read chat without an account. Tags carry colour, badges, emote positions
-   * and message ids; commands carry CLEARCHAT / CLEARMSG, which message hiding
-   * depends on.
-   */
   private registerAnonymously(socket: WebSocket): void {
     const anonymousNick = `justinfan${Math.floor(Math.random() * 80000 + 1000)}`
     socket.send('CAP REQ :twitch.tv/tags twitch.tv/commands')
@@ -119,7 +102,6 @@ export class IrcHub {
   }
 
   private dispatch(msg: IrcMessage): void {
-    // Channel name is the first parameter for the commands we care about.
     const target = msg.params[0]
     if (!target || !target.startsWith('#')) return
     this.channels.get(target.slice(1))?.(msg)

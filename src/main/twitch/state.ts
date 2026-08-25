@@ -1,10 +1,6 @@
 import type { TwitchAuthState } from '@shared/types'
 import type { TwitchAuth } from './auth'
 
-/**
- * Derives the renderer-facing auth state from the auth object. Kept separate so
- * both the IPC handler and the push notifier report exactly the same shape.
- */
 export function buildAuthState(auth: TwitchAuth): TwitchAuthState {
   if (!auth.getClientId()) return { status: 'not-configured' }
 

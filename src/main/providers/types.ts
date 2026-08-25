@@ -7,14 +7,10 @@ export interface ProviderEvents {
   live(live: boolean | null): void
 }
 
-/**
- * One instance per connected channel. Implementations own their own reconnect
- * logic — a dropped Twitch socket must not tear down YouTube.
- */
 export interface ChatProvider {
   readonly sourceId: string
   readonly platform: Platform
-  /** Mutable: providers may resolve a nicer display name during connect. */
+
   label: string
   connect(): Promise<void>
   disconnect(): Promise<void>

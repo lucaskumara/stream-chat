@@ -33,8 +33,6 @@ const auth = new TwitchAuth(broadcastTwitchAuth)
 const helix = new Helix(auth)
 const badges = new BadgeCache(helix)
 const hub = new EventSubHub(helix, (status, error) => {
-  // Surfaced through the console for now; per-source status already reflects
-  // connection health in the UI.
   if (status === 'error') console.warn('[eventsub]', error)
 })
 
@@ -74,8 +72,6 @@ function createWindow(): BrowserWindow {
 
   window.on('ready-to-show', () => window.show())
 
-  // Chat contains arbitrary user links. Nothing opens inside the app: links go
-  // to the OS browser, and in-app navigation away from the bundle is refused.
   window.webContents.setWindowOpenHandler(({ url }) => {
     void openExternalSafely(url)
     return { action: 'deny' }
@@ -104,12 +100,9 @@ async function openExternalSafely(url: string): Promise<void> {
       await shell.openExternal(parsed.toString())
     }
   } catch {
-    /* malformed URL from chat content — ignore */
   }
 }
 
-// A second instance would race the first for the same window and, later, the
-// same token store. Focus the existing window instead.
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -122,7 +115,6 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     app.setAppUserModelId('com.lucaskumara.streamchat')
 
-    // Warm the global set so common emotes resolve on the very first message.
     void seventv.loadGlobals()
 
     registerIpc(sources, auth)
@@ -130,11 +122,9 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow = createWindow()
     bus.attach(mainWindow)
 
-    // Reconnect saved Twitch channels once the renderer is listening, so the
-    // first status updates are not dropped on the floor.
     mainWindow.webContents.once('did-finish-load', () => {
       broadcastTwitchAuth()
-      // Saved channels reconnect whether or not the user ever signed in.
+
       void sources.restoreSaved()
     })
 

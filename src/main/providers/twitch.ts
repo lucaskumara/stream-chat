@@ -9,7 +9,6 @@ import { ignoreTeardownFailure } from '../lifecycle'
 import type { SubscriptionRequest } from '../twitch/eventsub'
 
 export interface TwitchProviderConfig {
-  /** Lowercased channel login, as typed by the user. */
   login: string
 }
 
@@ -21,18 +20,6 @@ export interface TwitchDeps {
   seventv: ThirdPartyEmotes
 }
 
-/**
- * One channel's chat. Subscribes to chat plus the moderation events the hide
- * feature needs, and to stream.online/offline so the channel reconnects itself
- * when the broadcaster goes live.
- *
- * Reconnect and session handling live in EventSubHub; this class only owns the
- * lifecycle of its own subscriptions.
- */
-/**
- * Reading any channel's chat needs only user:read:chat on our own account — no
- * moderator status — which is what makes "add a channel by name" work.
- */
 function buildSubscriptions(broadcasterId: string, viewerId: string): SubscriptionRequest[] {
   const chatCondition = { broadcaster_user_id: broadcasterId, user_id: viewerId }
   const streamCondition = { broadcaster_user_id: broadcasterId }
@@ -89,15 +76,12 @@ export class TwitchProvider implements ChatProvider {
       this.registered = true
       this.emit.status('connected')
 
-      // Subscriptions persist while the channel is offline, so chat simply
-      // starts flowing when they go live.
       this.emit.live(await this.deps.helix.isLive(channel.id))
     } catch (error) {
       this.emit.status('error', error instanceof Error ? error.message : String(error))
     }
   }
 
-  /** Resolves the login to a channel and warms its cosmetics. Null if missing. */
   private async resolveChannel(): Promise<{ id: string } | null> {
     const user = await this.deps.helix.getUserByLogin(this.config.login)
     if (!user) {
@@ -108,7 +92,6 @@ export class TwitchProvider implements ChatProvider {
     this.label = user.display_name || user.login
     this.broadcasterId = user.id
 
-    // Cosmetic: never allowed to fail a connection.
     await this.deps.badges.load(user.id)
     void this.deps.seventv.loadChannel('twitch', user.id)
 
@@ -164,7 +147,7 @@ export class TwitchProvider implements ChatProvider {
     this.emit.moderation({
       type: 'delete-message',
       sourceId: this.sourceId,
-      // Must match how normalizeChatMessage composes ids.
+
       messageId: `twitch:${this.sourceId}:${messageId}`
     })
   }

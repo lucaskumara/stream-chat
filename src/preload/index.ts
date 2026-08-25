@@ -24,12 +24,6 @@ const IPC = {
   twitchAuth: 'twitch:auth'
 } as const
 
-/**
- * The only surface the renderer gets. No ipcRenderer passthrough: every call is
- * a named method so the renderer can never reach a channel this file doesn't
- * list. Subscriptions return an unsubscribe function so React effects can clean
- * up without leaking listeners across hot reloads.
- */
 const api: ChatApi = {
   listSources: (): Promise<SourceState[]> => ipcRenderer.invoke(IPC.listSources),
 

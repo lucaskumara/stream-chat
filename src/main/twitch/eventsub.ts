@@ -5,7 +5,6 @@ import { ignoreTeardownFailure } from '../lifecycle'
 
 const DEFAULT_URL = 'wss://eventsub.wss.twitch.tv/ws'
 
-/** Twitch sends keepalives on a timer; missing several means the socket is dead. */
 const KEEPALIVE_GRACE_MS = 15_000
 
 export interface SubscriptionRequest {
@@ -20,7 +19,7 @@ interface Registration {
   id: string
   requests: SubscriptionRequest[]
   handler: EventHandler
-  /** Twitch-side subscription ids for the current session. */
+
   remoteIds: string[]
 }
 
@@ -35,15 +34,6 @@ interface WelcomeMessage {
 
 type HubStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
-/**
- * One WebSocket shared by every Twitch channel. EventSub ties subscriptions to
- * a session id, so a reconnect invalidates all of them and they must be
- * recreated — centralising that here means a channel provider never has to
- * think about session lifecycle.
- *
- * Isolation still holds where it matters: this hub is Twitch-only, so a dropped
- * socket here cannot disturb YouTube or Kick.
- */
 export class EventSubHub {
   private ws: WebSocket | null = null
   private sessionId: string | null = null
@@ -60,7 +50,6 @@ export class EventSubHub {
     private onStatus: (status: HubStatus, error?: string) => void
   ) {}
 
-  /** Adds a channel's subscriptions. Connects the socket on first use. */
   async register(
     id: string,
     requests: SubscriptionRequest[],
@@ -70,7 +59,7 @@ export class EventSubHub {
 
     if (!this.ws) {
       await this.connect()
-      return // connect() subscribes everything once the welcome arrives
+      return
     }
     if (this.sessionId) await this.subscribeFor(this.registrations.get(id) as Registration)
   }
@@ -88,7 +77,6 @@ export class EventSubHub {
       )
     )
 
-    // Nothing left to listen for — drop the socket rather than idle on it.
     if (this.registrations.size === 0) this.shutdown()
   }
 
@@ -116,8 +104,6 @@ export class EventSubHub {
       })
 
       ws.on('close', () => {
-        // A superseded socket (session_reconnect handed us a new one) must not
-        // trigger reconnect logic on its way out.
         if (this.ws !== ws) return
         this.clearKeepalive()
         if (this.closing) return
@@ -135,8 +121,6 @@ export class EventSubHub {
       return
     }
 
-    // keepalive_timeout only appears in session_welcome, so retain whatever was
-    // negotiated rather than reverting to the default on every later message.
     const negotiated = message.payload?.session?.keepalive_timeout_seconds
     if (typeof negotiated === 'number' && negotiated > 0) this.keepaliveSeconds = negotiated
     this.armKeepalive()
@@ -172,7 +156,6 @@ export class EventSubHub {
     resolveConnect()
   }
 
-  /** Fans an event out to whichever channel registered for that broadcaster. */
   private onNotification(message: WelcomeMessage): void {
     const subscriptionType = message.payload.subscription?.type
     const event = message.payload.event
@@ -189,7 +172,6 @@ export class EventSubHub {
     }
   }
 
-  /** Twitch asks us to move; the old socket stays valid until we have the new one. */
   private async onReconnectRequested(message: WelcomeMessage): Promise<void> {
     const nextUrl = message.payload.session?.reconnect_url
     if (!nextUrl) return
@@ -202,8 +184,6 @@ export class EventSubHub {
     this.clearKeepalive()
     const ms = this.keepaliveSeconds * 1000 + KEEPALIVE_GRACE_MS
     this.keepaliveTimer = setTimeout(() => {
-      // Silence past the keepalive window means the socket is gone even though
-      // no close frame arrived — a common failure on flaky connections.
       this.ws?.terminate()
     }, ms)
   }
@@ -235,7 +215,6 @@ export class EventSubHub {
     const sessionId = this.sessionId
     if (!sessionId) return
 
-    // A reconnect invalidated the previous ids; Twitch drops them server-side.
     reg.remoteIds = []
 
     for (const req of reg.requests) {
@@ -249,7 +228,7 @@ export class EventSubHub {
         reg.remoteIds.push(id)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        // One failed subscription (e.g. a scope gap) should not sink the rest.
+
         console.warn(`[eventsub] ${req.type} failed:`, message)
         this.setStatus('error', `${req.type}: ${message}`)
       }

@@ -20,7 +20,7 @@ function SourceRow({ source }: { source: SourceState }): React.ReactElement {
   const [rate, setRate] = useState(5)
 
   const isMock = source.platform === 'mock'
-  // BTTV keys channels by Twitch user id, so it has nothing to offer elsewhere.
+
   const supportsBttv = source.platform === 'twitch'
 
   const setEmotes = (patch: Partial<EmoteSettings>): void => {

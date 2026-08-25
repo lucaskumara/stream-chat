@@ -2,15 +2,8 @@ import { config, type StoredTwitchTokens } from '../config'
 
 const ID_BASE = 'https://id.twitch.tv/oauth2'
 
-/**
- * user:read:chat is what EventSub's channel.chat.* subscriptions require when
- * authorising as a user. It is enough to read ANY channel's chat — moderator
- * status is only needed for app access tokens — which is what lets the UI add a
- * channel by name after a single sign-in.
- */
 export const SCOPES = ['user:read:chat'] as const
 
-/** Refresh this far before real expiry so a request never races the deadline. */
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
 
 export interface DeviceCodePrompt {
@@ -62,7 +55,7 @@ async function postForm<T>(path: string, params: Record<string, string>): Promis
 
   if (!res.ok) {
     const rec = body as { message?: string; error?: string; error_description?: string }
-    // Device-flow polling relies on reading these codes, so surface them raw.
+
     throw new TwitchAuthError(
       rec.message || rec.error_description || rec.error || `${res.status}`
     )
@@ -71,11 +64,6 @@ async function postForm<T>(path: string, params: Record<string, string>): Promis
   return body as T
 }
 
-/**
- * Device Code Flow. Chosen over an authorization-code loopback because a
- * desktop public client has no safe place for a client secret, and DCF still
- * returns refresh tokens.
- */
 export class TwitchAuth {
   private pollTimer: NodeJS.Timeout | null = null
   private refreshInFlight: Promise<string> | null = null
@@ -94,14 +82,9 @@ export class TwitchAuth {
     return config().getTokens() !== null
   }
 
-  /**
-   * Kicks off the flow and returns the code to show the user. Polling continues
-   * in the background; completion is reported through onState.
-   */
   async startDeviceFlow(): Promise<DeviceCodePrompt> {
     const clientId = this.getClientId()
     if (!clientId) {
-      // A build problem, not something the user can fix from the UI.
       throw new TwitchAuthError('This build has no Twitch Client ID compiled in.')
     }
 
@@ -113,7 +96,7 @@ export class TwitchAuth {
     })
 
     const expiresAt = Date.now() + res.expires_in * 1000
-    // Twitch's documented floor is 5s; never poll faster than it asks.
+
     const intervalMs = Math.max(res.interval, 5) * 1000
 
     this.poll(clientId, res.device_code, expiresAt, intervalMs)
@@ -153,9 +136,8 @@ export class TwitchAuth {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
 
-        if (/authorization_pending|pending/i.test(msg)) return // expected: keep waiting
+        if (/authorization_pending|pending/i.test(msg)) return
         if (/slow_down/i.test(msg)) {
-          // Back off and reschedule at the slower rate.
           this.cancelPolling()
           intervalMs += 5000
           this.pollTimer = setInterval(() => void tick(), intervalMs)
@@ -214,11 +196,6 @@ export class TwitchAuth {
     return (await res.json()) as ValidateResponse
   }
 
-  /**
-   * Single source of truth for a usable token. Concurrent callers share one
-   * refresh; without that, several EventSub subscriptions starting at once
-   * would each spend the refresh token and invalidate each other.
-   */
   async getAccessToken(): Promise<string> {
     const tokens = config().getTokens()
     if (!tokens) throw new TwitchAuthError('Not signed in to Twitch.')
@@ -247,7 +224,7 @@ export class TwitchAuth {
       config().setTokens({
         ...tokens,
         accessToken: res.access_token,
-        // Twitch may or may not rotate the refresh token; keep the old one if not.
+
         refreshToken: res.refresh_token || tokens.refreshToken,
         expiresAt: Date.now() + res.expires_in * 1000
       })
@@ -255,8 +232,6 @@ export class TwitchAuth {
       this.onState()
       return res.access_token
     } catch (err) {
-      // A dead refresh token is unrecoverable — force a clean re-auth rather
-      // than leaving every provider retrying against a token that cannot work.
       config().setTokens(null)
       this.failure = 'Twitch session expired. Sign in again.'
       this.onState()
