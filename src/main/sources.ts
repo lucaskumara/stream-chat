@@ -5,7 +5,7 @@ import { MockProvider } from './providers/mock'
 import { TwitchProvider, type TwitchDeps } from './providers/twitch'
 import { TwitchIrcProvider } from './providers/twitchIrc'
 import type { IrcHub } from './twitch/irc'
-import type { SevenTvEmotes } from './emotes/seventv'
+import type { ThirdPartyEmotes } from './emotes'
 import { config } from './config'
 
 interface Entry {
@@ -31,7 +31,7 @@ export class SourceManager {
     private onStateChange: (states: SourceState[]) => void,
     private twitch: TwitchDeps,
     private irc: IrcHub,
-    private seventv: SevenTvEmotes
+    private seventv: ThirdPartyEmotes
   ) {}
 
   list(): SourceState[] {

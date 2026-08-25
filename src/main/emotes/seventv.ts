@@ -1,4 +1,4 @@
-import type { Fragment } from '@shared/types'
+import type { ThirdPartyEmote } from './types'
 
 const API = 'https://7tv.io/v3'
 const CDN_SCALES = ['1x', '2x', '3x'] as const
@@ -6,12 +6,7 @@ const CDN_SCALES = ['1x', '2x', '3x'] as const
 /** 7TV names its YouTube platform GOOGLE, not "youtube". */
 export type SevenTvPlatform = 'twitch' | 'kick' | 'google'
 
-export interface SevenTvEmote {
-  name: string
-  url: string
-  srcSet: string
-  animated: boolean
-}
+export type SevenTvEmote = ThirdPartyEmote
 
 interface ApiFile {
   name: string
@@ -129,53 +124,4 @@ export class SevenTvEmotes {
   forget(platform: SevenTvPlatform, channelId: string): void {
     this.byChannel.delete(`${platform}:${channelId}`)
   }
-}
-
-/**
- * Replaces whole words in TEXT fragments with 7TV emotes.
- *
- * Runs only over text the platform has already finished with, so native emotes,
- * mentions and links are never re-scanned. Matching is whole-token and
- * case-sensitive: substring matching would turn "GIGACHAD" inside a longer word
- * into an image, and lowercasing would collide distinct emote names.
- */
-export function applySevenTv(
-  fragments: Fragment[],
-  lookup: (name: string) => SevenTvEmote | undefined
-): Fragment[] {
-  const out: Fragment[] = []
-
-  for (const fragment of fragments) {
-    if (fragment.kind !== 'text') {
-      out.push(fragment)
-      continue
-    }
-
-    // Capturing split keeps the original spacing intact for the rebuild.
-    const parts = fragment.text.split(/(\s+)/)
-    let buffer = ''
-    let replaced = false
-
-    for (const part of parts) {
-      const emote = part !== '' && !/^\s+$/.test(part) ? lookup(part) : undefined
-      if (!emote) {
-        buffer += part
-        continue
-      }
-      if (buffer !== '') {
-        out.push({ kind: 'text', text: buffer })
-        buffer = ''
-      }
-      out.push({ kind: 'emote', name: emote.name, url: emote.url, srcSet: emote.srcSet })
-      replaced = true
-    }
-
-    if (buffer !== '') out.push({ kind: 'text', text: buffer })
-    // Nothing matched: keep the original object so referential equality holds.
-    if (!replaced && buffer === fragment.text) {
-      out[out.length - 1] = fragment
-    }
-  }
-
-  return out
 }

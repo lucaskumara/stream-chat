@@ -8,7 +8,7 @@ import { TwitchAuth } from './twitch/auth'
 import { BadgeCache, Helix } from './twitch/helix'
 import { EventSubHub } from './twitch/eventsub'
 import { IrcHub } from './twitch/irc'
-import { SevenTvEmotes } from './emotes/seventv'
+import { ThirdPartyEmotes } from './emotes'
 import { buildAuthState } from './twitch/state'
 
 const isDev = !app.isPackaged
@@ -42,7 +42,7 @@ const irc = new IrcHub((status, error) => {
   if (status === 'error') console.warn('[irc]', error)
 })
 
-const seventv = new SevenTvEmotes()
+const seventv = new ThirdPartyEmotes()
 
 const sources = new SourceManager(
   bus,
@@ -123,7 +123,7 @@ if (!app.requestSingleInstanceLock()) {
     app.setAppUserModelId('com.lucaskumara.streamchat')
 
     // Warm the global set so common emotes resolve on the very first message.
-    void seventv.loadGlobal()
+    void seventv.loadGlobals()
 
     registerIpc(sources, auth)
 

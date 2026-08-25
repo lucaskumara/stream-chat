@@ -3,7 +3,7 @@ import type { ChatProvider, ProviderEvents } from './types'
 import type { IrcHub } from '../twitch/irc'
 import type { IrcMessage } from '../twitch/ircparse'
 import { normalizeIrcPrivmsg, normalizeIrcUsernotice } from '../twitch/ircnormalize'
-import { applySevenTv, type SevenTvEmotes } from '../emotes/seventv'
+import { applyEmotes, type ThirdPartyEmotes } from '../emotes'
 
 export interface TwitchIrcConfig {
   login: string
@@ -33,14 +33,14 @@ export class TwitchIrcProvider implements ChatProvider {
     private config: TwitchIrcConfig,
     private emit: ProviderEvents,
     private hub: IrcHub,
-    private seventv: SevenTvEmotes
+    private emotes: ThirdPartyEmotes
   ) {
     this.label = config.login
   }
 
   /** Channel emotes first, then 7TV globals. */
-  private lookupEmote = (name: string): ReturnType<SevenTvEmotes['lookup']> =>
-    this.roomId ? this.seventv.lookup('twitch', this.roomId, name) : undefined
+  private lookupEmote = (name: string): ReturnType<ThirdPartyEmotes['lookup']> =>
+    this.roomId ? this.emotes.lookup('twitch', this.roomId, name) : undefined
 
   /**
    * Every PRIVMSG and ROOMSTATE carries room-id, so the channel's numeric id
@@ -49,7 +49,7 @@ export class TwitchIrcProvider implements ChatProvider {
   private ensureEmotes(roomId: string | undefined): void {
     if (!roomId || this.roomId === roomId) return
     this.roomId = roomId
-    void this.seventv.loadChannel('twitch', roomId)
+    void this.emotes.loadChannel('twitch', roomId)
   }
 
   async connect(): Promise<void> {
@@ -82,7 +82,7 @@ export class TwitchIrcProvider implements ChatProvider {
         this.ensureEmotes(msg.tags['room-id'])
         const chat = normalizeIrcPrivmsg(msg, this.sourceId)
         if (chat) {
-          chat.fragments = applySevenTv(chat.fragments, this.lookupEmote)
+          chat.fragments = applyEmotes(chat.fragments, this.lookupEmote)
           this.emit.message(chat)
         }
         return
@@ -92,7 +92,7 @@ export class TwitchIrcProvider implements ChatProvider {
         this.ensureEmotes(msg.tags['room-id'])
         const notice = normalizeIrcUsernotice(msg, this.sourceId)
         if (notice) {
-          notice.fragments = applySevenTv(notice.fragments, this.lookupEmote)
+          notice.fragments = applyEmotes(notice.fragments, this.lookupEmote)
           this.emit.message(notice)
         }
         return

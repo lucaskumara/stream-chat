@@ -4,7 +4,7 @@ import type { TwitchAuth } from '../twitch/auth'
 import type { BadgeCache, Helix } from '../twitch/helix'
 import type { EventSubHub } from '../twitch/eventsub'
 import { normalizeChatMessage, type TwitchChatEvent } from '../twitch/normalize'
-import { applySevenTv, type SevenTvEmotes } from '../emotes/seventv'
+import { applyEmotes, type ThirdPartyEmotes } from '../emotes'
 
 export interface TwitchProviderConfig {
   /** Lowercased channel login, as typed by the user. */
@@ -16,7 +16,7 @@ export interface TwitchDeps {
   helix: Helix
   hub: EventSubHub
   badges: BadgeCache
-  seventv: SevenTvEmotes
+  seventv: ThirdPartyEmotes
 }
 
 /**
@@ -128,7 +128,7 @@ export class TwitchProvider implements ChatProvider {
         )
         const broadcasterId = this.broadcasterId
         if (broadcasterId) {
-          chat.fragments = applySevenTv(chat.fragments, (name) =>
+          chat.fragments = applyEmotes(chat.fragments, (name) =>
             this.deps.seventv.lookup('twitch', broadcasterId, name)
           )
         }
