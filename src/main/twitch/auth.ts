@@ -86,15 +86,6 @@ export class TwitchAuth {
     return config().getClientId()
   }
 
-  setClientId(clientId: string): void {
-    config().setClientId(clientId)
-    // A different application means any existing grant is meaningless.
-    config().setTokens(null)
-    this.cancelPolling()
-    this.failure = null
-    this.onState()
-  }
-
   getTokens(): StoredTwitchTokens | null {
     return config().getTokens()
   }
@@ -110,10 +101,8 @@ export class TwitchAuth {
   async startDeviceFlow(): Promise<DeviceCodePrompt> {
     const clientId = this.getClientId()
     if (!clientId) {
-      throw new TwitchAuthError(
-        'No Twitch Client ID set. Register an application at https://dev.twitch.tv/console/apps ' +
-          '(OAuth Redirect URL http://localhost, Client Type: Public) and paste its Client ID.'
-      )
+      // A build problem, not something the user can fix from the UI.
+      throw new TwitchAuthError('This build has no Twitch Client ID compiled in.')
     }
 
     this.cancelPolling()

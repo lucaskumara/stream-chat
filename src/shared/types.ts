@@ -97,7 +97,13 @@ export interface AddSourceRequest {
   identifier?: string
 }
 
-export type TwitchAuthStatus = 'no-client-id' | 'signed-out' | 'pending' | 'signed-in' | 'error'
+/** 'not-configured' means the build lacks a Client ID — a packaging fault. */
+export type TwitchAuthStatus =
+  | 'not-configured'
+  | 'signed-out'
+  | 'pending'
+  | 'signed-in'
+  | 'error'
 
 export interface TwitchAuthState {
   status: TwitchAuthStatus
@@ -158,7 +164,6 @@ export interface ChatApi {
 
   /* ---- Twitch auth ---- */
   twitchAuthState(): Promise<TwitchAuthState>
-  twitchSetClientId(clientId: string): Promise<TwitchAuthState>
   twitchStartLogin(): Promise<DeviceCodePrompt>
   twitchSignOut(): Promise<void>
   /** Returns an unsubscribe function. */

@@ -6,7 +6,7 @@ import type { TwitchAuth } from './auth'
  * both the IPC handler and the push notifier report exactly the same shape.
  */
 export function buildAuthState(auth: TwitchAuth): TwitchAuthState {
-  if (!auth.getClientId()) return { status: 'no-client-id' }
+  if (!auth.getClientId()) return { status: 'not-configured' }
 
   const tokens = auth.getTokens()
   if (tokens) {

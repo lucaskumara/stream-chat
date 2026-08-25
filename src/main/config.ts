@@ -1,4 +1,5 @@
 import { app, safeStorage } from 'electron'
+import { BUILT_IN_TWITCH_CLIENT_ID } from './twitch/clientId'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
@@ -21,7 +22,6 @@ export interface StoredChannel {
 interface PersistedShape {
   version: 1
   twitch?: {
-    clientId?: string
     /** base64 of safeStorage-encrypted JSON. Never plaintext on disk. */
     tokensEnc?: string
   }
@@ -71,14 +71,9 @@ class Config {
     }
   }
 
+  /** Build-time constant, overridable by env for testing. Never user input. */
   getClientId(): string | undefined {
-    // An env var wins, which keeps a dev client id out of the settings file.
-    return process.env['TWITCH_CLIENT_ID'] || this.data.twitch?.clientId
-  }
-
-  setClientId(clientId: string): void {
-    this.data.twitch = { ...this.data.twitch, clientId: clientId.trim() }
-    this.write()
+    return process.env['TWITCH_CLIENT_ID'] || BUILT_IN_TWITCH_CLIENT_ID || undefined
   }
 
   getTokens(): StoredTwitchTokens | null {

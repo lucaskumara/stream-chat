@@ -176,11 +176,7 @@ function createBrowserBridge(): ChatApi {
     // Real auth needs the main process (OS keychain, no CORS). In a browser tab
     // the harness reports a fixed signed-out state rather than pretending.
     async twitchAuthState(): Promise<TwitchAuthState> {
-      return { status: 'no-client-id', error: 'Twitch auth requires the Electron app.' }
-    },
-
-    async twitchSetClientId(): Promise<TwitchAuthState> {
-      throw new Error('Twitch auth requires the Electron app.')
+      return { status: 'not-configured', error: 'Twitch auth requires the Electron app.' }
     },
 
     async twitchStartLogin(): Promise<DeviceCodePrompt> {

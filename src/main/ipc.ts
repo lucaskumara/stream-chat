@@ -12,7 +12,6 @@ export const IPC = {
   openExternal: 'shell:open-external',
 
   twitchAuthState: 'twitch:auth-state',
-  twitchSetClientId: 'twitch:set-client-id',
   twitchStartLogin: 'twitch:start-login',
   twitchSignOut: 'twitch:sign-out',
 
@@ -64,18 +63,6 @@ export function registerIpc(sources: SourceManager, auth: TwitchAuth): void {
 
   ipcMain.handle(IPC.twitchAuthState, () => buildAuthState(auth))
 
-  ipcMain.handle(IPC.twitchSetClientId, (_e, clientId: unknown) => {
-    if (typeof clientId !== 'string') throw new Error('clientId must be a string')
-    const trimmed = clientId.trim()
-    // Twitch client ids are 30 lowercase alphanumerics; catching a bad paste
-    // here gives a far clearer error than a 401 six calls later.
-    if (!/^[a-z0-9]{20,40}$/i.test(trimmed)) {
-      throw new Error('That does not look like a Twitch Client ID (30 alphanumeric characters).')
-    }
-    auth.setClientId(trimmed)
-    return buildAuthState(auth)
-  })
-
   ipcMain.handle(IPC.twitchStartLogin, async () => auth.startDeviceFlow())
 
   ipcMain.handle(IPC.twitchSignOut, async () => {
@@ -92,7 +79,6 @@ export function unregisterIpc(): void {
     IPC.setRate,
     IPC.openExternal,
     IPC.twitchAuthState,
-    IPC.twitchSetClientId,
     IPC.twitchStartLogin,
     IPC.twitchSignOut
   ]) {

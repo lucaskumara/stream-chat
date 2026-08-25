@@ -15,7 +15,6 @@ const IPC = {
   setRate: 'sources:set-rate',
   openExternal: 'shell:open-external',
   twitchAuthState: 'twitch:auth-state',
-  twitchSetClientId: 'twitch:set-client-id',
   twitchStartLogin: 'twitch:start-login',
   twitchSignOut: 'twitch:sign-out',
   batch: 'chat:batch',
@@ -61,9 +60,6 @@ const api: ChatApi = {
   },
 
   twitchAuthState: (): Promise<TwitchAuthState> => ipcRenderer.invoke(IPC.twitchAuthState),
-
-  twitchSetClientId: (clientId: string): Promise<TwitchAuthState> =>
-    ipcRenderer.invoke(IPC.twitchSetClientId, clientId),
 
   twitchStartLogin: (): Promise<DeviceCodePrompt> => ipcRenderer.invoke(IPC.twitchStartLogin),
 
