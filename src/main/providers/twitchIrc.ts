@@ -39,9 +39,10 @@ export class TwitchIrcProvider implements ChatProvider {
       await this.hub.join(this.config.login, (msg) => this.handle(msg))
       this.joined = true
       this.emit.status('connected')
-      // Without Helix there is no cheap liveness check. Staying joined is
-      // equivalent in practice: messages simply start when they go live.
-      this.emit.live(false)
+      // Anonymous IRC carries no liveness signal, and chat traffic is not one:
+      // offline channels still have active chat. Report unknown rather than
+      // guess.
+      this.emit.live(null)
     } catch (err) {
       this.emit.status('error', err instanceof Error ? err.message : String(err))
     }
@@ -52,7 +53,7 @@ export class TwitchIrcProvider implements ChatProvider {
       this.hub.part(this.config.login)
       this.joined = false
     }
-    this.emit.live(false)
+    this.emit.live(null)
     this.emit.status('disconnected')
   }
 
@@ -60,11 +61,7 @@ export class TwitchIrcProvider implements ChatProvider {
     switch (msg.command) {
       case 'PRIVMSG': {
         const chat = normalizeIrcPrivmsg(msg, this.sourceId)
-        if (chat) {
-          this.emit.message(chat)
-          // First message proves the channel is actually streaming to chat.
-          this.emit.live(true)
-        }
+        if (chat) this.emit.message(chat)
         return
       }
 

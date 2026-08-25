@@ -71,8 +71,12 @@ export interface SourceState {
   status: SourceStatus
   /** Populated when status is 'error'. */
   error?: string
-  /** True when the channel is currently broadcasting. */
-  live: boolean
+  /**
+   * True/false when the transport can actually tell, null when it cannot.
+   * Anonymous Twitch has no liveness signal — chat flows whether or not the
+   * channel is broadcasting — so guessing from traffic would be a lie.
+   */
+  live: boolean | null
 }
 
 /** Main -> renderer, batched. */

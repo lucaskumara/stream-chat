@@ -16,7 +16,9 @@ function PaneHeader({ source }: { source: SourceState }): React.ReactElement {
         style={{ backgroundColor: PLATFORM_COLOR[source.platform] }}
       />
       <span className="truncate text-[14px] font-medium text-slate-200">{source.label}</span>
-      {source.live && <span className="shrink-0 text-[11px] text-red-400">LIVE</span>}
+      {source.live === true && (
+        <span className="shrink-0 text-[11px] text-red-400">LIVE</span>
+      )}
       <span className="ml-auto shrink-0 text-[12px] tabular-nums text-slate-600">{count}</span>
     </div>
   )
