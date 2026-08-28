@@ -5,6 +5,7 @@ import { ArrowDownOutlined } from '@ant-design/icons'
 import type { ChatMessage } from '@shared/types'
 import { bridge } from '../bridge'
 import { INK } from '../theme'
+import { ChatPaneBar } from './ChatPaneBar'
 import { MessageRow } from './MessageRow'
 
 const PIN_THRESHOLD_PX = 40
@@ -17,6 +18,8 @@ export interface ChatPaneProps {
   showTimestamps: boolean
   showPlatform: boolean
   search: string
+  onSearch: (needle: string) => void
+  onClear: () => void
 }
 
 export function ChatPane({
@@ -25,7 +28,9 @@ export function ChatPane({
   showDeleted,
   showTimestamps,
   showPlatform,
-  search
+  search,
+  onSearch,
+  onClear
 }: ChatPaneProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState(true)
@@ -174,6 +179,14 @@ export function ChatPane({
           </Button>
         )}
       </div>
+
+      <ChatPaneBar
+        search={search}
+        matches={visible.length}
+        total={list.length}
+        onSearch={onSearch}
+        onClear={onClear}
+      />
     </div>
   )
 }

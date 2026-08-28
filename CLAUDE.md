@@ -543,9 +543,30 @@ control calls `toggleSplit`, which adds or removes that chat alongside the other
 refuses to empty the set. An earlier version treated click as "focus" and wiped the split,
 so clicking the second of two open chats hid both — that is the bug the no-op guard exists
 to prevent. `setSources` reconciles: drops dead ids, jumps to a genuinely new channel, seeds
-the first source on cold start. Panes render bare inside a `Splitter`; there is no per-pane
-header, because the tab strip already names every open channel and columns map left to right
-onto tab order.
+the first source on cold start. Panes render inside a `Splitter` with no per-pane *header* —
+the tab strip already names every open channel and columns map left to right onto tab order —
+but each pane does carry a `ChatPaneBar` along its bottom edge (see "The pane bar").
+
+**The pane bar is per source, and its state lives in the store, not the pane.**
+`ChatPaneBar` sits along the bottom of every `ChatPane` and does two things: filters that
+pane by message text or author name, and clears that pane's history. Both are keyed by
+`sourceId` — `store.search[sourceId]` and `clearSource(sourceId)` — because `App` renders a
+different tree for one pane than for several, so a pane *remounts* when the split changes
+and local `useState` would silently drop the search. `forgetSource` deletes the search entry
+alongside the messages.
+
+Filtering happens in `ChatPane`, not the store: `visible` is derived from the message list
+each render, so clearing the search restores everything instantly and the ring buffer keeps
+filling behind the filter. Clearing history is the destructive one — it empties
+`bySource[sourceId]`, exactly what the `clear-chat` moderation event already does — so it is
+the one control in the app behind a confirm. That is a deliberate exception to the "no
+confirmation" rule the tab `×` follows: re-adding a channel costs nothing, but discarded
+messages are gone.
+
+**Anchor pane-bar popovers `topRight`.** The bar sits at the bottom-right of a pane, so a
+`Popconfirm` at the default placement opens past the window's right edge, where it is both
+clipped and *unclickable* — the confirm button lands outside the viewport and the click
+misses. Measured before the fix: the popover spanned x 1172-1692 in a 1440px window.
 
 **antd marks one tab active; the app has several open.** `activeKey` is `visibleIds[0]`
 purely to satisfy antd. Every open tab additionally gets a `tab-shown` class (applied in
@@ -879,8 +900,8 @@ browser-style tab strip, and the OS frame was replaced by `TitleBar`. The twelve
 strip has to keep live in "Tabs, split groups and dragging" — read them there rather than
 here, since this paragraph has drifted from the code twice already. `MessageRow` stays
 hand-written for the reasons in "Renderer UI", and Tailwind is still in the tree for the
-chat rows. There is no per-pane header and no tab-bar extra slot: the tab strip carries
-status, and "clear this pane" does not exist.
+chat rows. There is still no per-pane header and no tab-bar extra slot — the tab strip
+carries status — but each pane now has a bottom bar that searches and clears it.
 
 Next: polish — settings persistence, sending messages back, auto-update. The store already carries `showDeleted`, `showTimestamps` and `fontSize` with
 **no UI bound to them** — an antd `Popover` of `Switch`es and a `Slider` hung off the tab

@@ -19,6 +19,8 @@ interface ChatState {
 
   deleted: Record<string, true>
 
+  search: Record<string, string>
+
   showDeleted: boolean
   showTimestamps: boolean
   capacity: number
@@ -33,6 +35,8 @@ interface ChatState {
   showSource: (sourceId: string) => void
   toggleSplit: (sourceId: string) => void
   ingest: (batch: ChatBatch) => void
+  setSearch: (sourceId: string, needle: string) => void
+  clearSource: (sourceId: string) => void
   forgetSource: (sourceId: string) => void
 }
 
@@ -50,6 +54,7 @@ export const useStore = create<ChatState>()((set) => ({
   visibleIds: [],
   groups: [],
   deleted: {},
+  search: {},
 
   showDeleted: true,
   showTimestamps: true,
@@ -188,13 +193,31 @@ export const useStore = create<ChatState>()((set) => ({
       return { bySource, deleted }
     }),
 
+  setSearch: (sourceId, needle) =>
+    set((s) => {
+      if (s.search[sourceId] === needle) return s
+
+      return { search: { ...s.search, [sourceId]: needle } }
+    }),
+
+  clearSource: (sourceId) =>
+    set((s) => {
+      if (!s.bySource[sourceId]?.length) return s
+
+      return { bySource: { ...s.bySource, [sourceId]: [] } }
+    }),
+
   forgetSource: (sourceId) =>
     set((s) => {
       const bySource = { ...s.bySource }
       delete bySource[sourceId]
 
+      const search = { ...s.search }
+      delete search[sourceId]
+
       return {
         bySource,
+        search,
         visibleIds: s.visibleIds.filter((id) => id !== sourceId),
         groups: pruneGroups(s.groups, (id) => id !== sourceId)
       }

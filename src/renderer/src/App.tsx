@@ -19,6 +19,9 @@ export default function App(): React.ReactElement {
   const reorderSources = useStore((s) => s.reorderSources)
   const bySource = useStore((s) => s.bySource)
   const deleted = useStore((s) => s.deleted)
+  const search = useStore((s) => s.search)
+  const setSearch = useStore((s) => s.setSearch)
+  const clearSource = useStore((s) => s.clearSource)
   const showDeleted = useStore((s) => s.showDeleted)
   const showTimestamps = useStore((s) => s.showTimestamps)
   const fontSize = useStore((s) => s.fontSize)
@@ -97,7 +100,9 @@ export default function App(): React.ReactElement {
                 deleted={deleted}
                 showDeleted={showDeleted}
                 showTimestamps={showTimestamps}
-                search=""
+                search={search[panes[0].id] ?? ''}
+                onSearch={(needle) => setSearch(panes[0].id, needle)}
+                onClear={() => clearSource(panes[0].id)}
                 messages={bySource[panes[0].id] ?? []}
                 showPlatform={false}
               />
@@ -109,7 +114,9 @@ export default function App(): React.ReactElement {
                       deleted={deleted}
                       showDeleted={showDeleted}
                       showTimestamps={showTimestamps}
-                      search=""
+                      search={search[source.id] ?? ''}
+                      onSearch={(needle) => setSearch(source.id, needle)}
+                      onClear={() => clearSource(source.id)}
                       messages={bySource[source.id] ?? []}
                       showPlatform={false}
                     />
