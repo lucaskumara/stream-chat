@@ -58,6 +58,7 @@ interface DraggableTabProps extends React.HTMLAttributes<HTMLDivElement> {
   shown: boolean
   carryX?: number
   nudgeX?: number
+  settling: boolean
   mark?: GroupMark
 }
 
@@ -132,6 +133,7 @@ function DraggableTab({
   shown,
   carryX,
   nudgeX,
+  settling,
   mark,
   children,
   ...props
@@ -149,7 +151,12 @@ function DraggableTab({
       shifted !== undefined
         ? `translate3d(${shifted}px, 0, 0)`
         : CSS.Translate.toString(transform),
-    transition: isDragging || carried ? 'none' : nudgeX !== undefined ? NUDGE : transition,
+    transition:
+      isDragging || carried || settling
+        ? 'none'
+        : nudgeX !== undefined
+          ? NUDGE
+          : transition,
     zIndex: isDragging || carried ? 2 : undefined,
     cursor: isDragging || carried ? 'grabbing' : 'pointer',
     ...(mark ? { '--group-color': mark.color } : {})
@@ -247,6 +254,7 @@ export function ChannelTabs({
     rest: { id: string; left: number; width: number }[]
   } | null>(null)
   const shift = useRef(0)
+  const resting = useRef<Map<string, { left: number; right: number }> | null>(null)
 
   const clampToStrip: Modifier = ({ transform }) => {
     const held = bounds.current
@@ -255,6 +263,12 @@ export function ChannelTabs({
     return { ...transform, x: Math.min(Math.max(transform.x, held.min), held.max) }
   }
   const [carry, setCarry] = useState<{ active: string; members: string[]; dx: number } | null>(null)
+  const [settling, setSettling] = useState(false)
+
+  const landInstantly = (): void => {
+    setSettling(true)
+    requestAnimationFrame(() => requestAnimationFrame(() => setSettling(false)))
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: DRAG_THRESHOLD_PX } })
@@ -351,12 +365,22 @@ export function ChannelTabs({
     return own
   }
 
-  const snapOutOfRun = (from: number, to: number): number => {
+  const snapOutOfRun = (from: number, to: number, dx: number): number => {
     const run = runAt(to)
     if (!run) return to
     if (from >= run.start && from <= run.end) return to
 
-    return from > to ? run.start : run.end
+    const rects = resting.current
+    const dragged = rects?.get(ids[from])
+    const head = rects?.get(ids[run.start])
+    const tail = rects?.get(ids[run.end])
+
+    if (!dragged || !head || !tail) return from > to ? run.start : run.end
+
+    const lands = (dragged.left + dragged.right) / 2 + dx < (head.left + tail.right) / 2
+    if (lands === from < run.start) return from
+
+    return lands ? run.start : run.end
   }
 
   const soloBounds = (sourceId: string): { min: number; max: number } | null => {
@@ -427,6 +451,15 @@ export function ChannelTabs({
 
     if (!held || !held.includes(dragged)) {
       bounds.current = soloBounds(dragged)
+
+      resting.current = new Map(
+        ids.flatMap((id) => {
+          const rect = blockExtent([id])
+
+          return rect ? [[id, rect] as const] : []
+        })
+      )
+
       return
     }
 
@@ -470,11 +503,12 @@ export function ChannelTabs({
     })
   }
 
-  const dragEnd = ({ active, over }: DragEndEvent): void => {
+  const dragEnd = ({ active, over, delta }: DragEndEvent): void => {
     const handle = grip.current
     grip.current = null
     bounds.current = null
     setCarry(null)
+    landInstantly()
 
     const held = handle ? groups.find((members) => members.includes(handle)) : undefined
     if (held) {
@@ -490,7 +524,10 @@ export function ChannelTabs({
     const to = ids.indexOf(String(over.id))
     if (from === -1 || to === -1) return
 
-    onReorder(contiguousOrder(arrayMove(ids, from, snapOutOfRun(from, to)), groups))
+    const landing = snapOutOfRun(from, to, delta.x)
+    if (landing === from) return
+
+    onReorder(contiguousOrder(arrayMove(ids, from, landing), groups))
   }
 
   const renderTabBar: TabsProps['renderTabBar'] = (barProps, DefaultTabBar) => (
@@ -505,6 +542,7 @@ export function ChannelTabs({
         grip.current = null
         bounds.current = null
         setCarry(null)
+        landInstantly()
       }}
     >
       <SortableContext items={ids} strategy={blockStrategy}>
@@ -523,6 +561,7 @@ export function ChannelTabs({
                     : undefined
                 }
                 nudgeX={nudges.get(key)}
+                settling={settling}
                 mark={marks.get(key)}
                 key={key}
               >

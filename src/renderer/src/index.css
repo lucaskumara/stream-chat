@@ -111,16 +111,20 @@ body {
    bar is 3px but the hit area is the whole 14px of leading space, because that
    space is what reads as "grab the group". */
 .tab-grip {
+  position: relative;
   width: 20px;
   height: 20px;
   margin-left: -7px;
-  border-radius: 3px;
-  background:
-    linear-gradient(var(--group-color), var(--group-color)) left 6px center / 2px 12px no-repeat,
-    linear-gradient(var(--group-color), var(--group-color)) left 11px center / 2px 12px no-repeat;
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: grab;
   transition: opacity 0.12s;
+}
+.tab-grip::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 2px solid var(--group-color);
+  border-radius: 3px;
 }
 .tab-grip:hover {
   opacity: 1;
