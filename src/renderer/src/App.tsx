@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Empty, Flex, Layout, Modal, Splitter } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { Plus } from 'lucide-react'
 import type { SourceState } from '@shared/types'
 import { bridge } from './bridge'
 import { useStore } from './store'
@@ -84,7 +84,7 @@ export default function App(): React.ReactElement {
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description="No channels yet. Add one by name, or paste its link."
           >
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
+            <Button type="primary" icon={<Plus size={16} />} onClick={() => setAdding(true)}>
               Add a channel
             </Button>
           </Empty>

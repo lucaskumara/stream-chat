@@ -1,6 +1,6 @@
 import { cloneElement, memo, useCallback, useMemo, useRef, useState } from 'react'
 import { Badge, Flex, Tabs, Tooltip } from 'antd'
-import { SplitCellsOutlined } from '@ant-design/icons'
+import { Ellipsis, Pin, Plus, X } from 'lucide-react'
 import type { BadgeProps, TabsProps } from 'antd'
 import {
   DndContext,
@@ -368,7 +368,7 @@ const TabLabel = memo(function TabLabel({
             if (!inert) onSplit(source.id)
           }}
         >
-          <SplitCellsOutlined />
+          <Pin size={16} />
         </span>
       </Tooltip>
     </Flex>
@@ -674,6 +674,9 @@ export function ChannelTabs({
         onChange={showSource}
         onEdit={edit}
         items={items}
+        addIcon={<Plus size={16} />}
+        removeIcon={<X size={16} />}
+        moreIcon={<Ellipsis size={16} />}
         renderTabBar={renderTabBar}
       />
     </div>

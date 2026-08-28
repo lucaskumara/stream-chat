@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo } from 'react'
 import { Button, Popconfirm, Select, Typography } from 'antd'
-import { ClearOutlined, SearchOutlined } from '@ant-design/icons'
+import { Search, Trash2 } from 'lucide-react'
 import { INK } from '../theme'
 import { termLabel } from '../search'
 
@@ -67,8 +67,8 @@ function ChatPaneBarImpl({
         options={options}
         searchValue={draft}
         tokenSeparators={[',']}
-        suffixIcon={<SearchOutlined style={{ opacity: 0.45 }} />}
-        placeholder="search this chat — text, or author:name"
+        suffixIcon={<Search size={16} style={{ opacity: 0.45 }} />}
+        placeholder="Search"
         title={SYNTAX_HINT}
         className="chat-pane-search"
         style={{ flex: 1, minWidth: 0 }}
@@ -98,7 +98,7 @@ function ChatPaneBarImpl({
         <Button
           type="text"
           className="chat-pane-clear"
-          icon={<ClearOutlined />}
+          icon={<Trash2 size={16} />}
           disabled={total === 0}
           title={total === 0 ? 'Nothing to clear' : 'Clear this chat'}
           aria-label="Clear this chat"

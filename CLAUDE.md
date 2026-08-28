@@ -727,9 +727,18 @@ platform dropdown needs a `mousedown` dispatched on `.ant-select-content` — a 
 `.click()` does not open it. Selectors copied from antd v5 answers return `null` silently.
 
 **antd is a devDependency, not a dependency.** The renderer is bundled (no
-`externalizeDepsPlugin` on that target), so it belongs beside `react` and `zustand`. Only
-main-process packages that stay external — `electron-store`, `ws`, `youtubei.js` — are real
-dependencies.
+`externalizeDepsPlugin` on that target), so it belongs beside `react`, `zustand` and
+`lucide-react`. Only main-process packages that stay external — `electron-store`, `ws`,
+`youtubei.js` — are real dependencies.
+
+**Icons are lucide, and antd's own glyphs have to be overridden to keep it that way.**
+`lucide-react` is the only icon import in the tree; `@ant-design/icons` is no longer a direct
+dependency, though antd still pulls it transitively for internals we do not reach. Three antd
+components draw glyphs of their own unless told otherwise, and `Tabs` is where they all live:
+`addIcon`, `removeIcon` and `moreIcon`. Miss one and a single antd glyph sits among the lucide
+set at a different weight — the tab `+` and `×` are adjacent, so a mismatch there is obvious.
+Lucide defaults to 24px, so every usage passes `size={16}` to match the 1rem text. Check with
+`document.querySelectorAll('.anticon').length` in the running app: it should be **0**.
 
 **Every text size is 1rem or 1.25rem, against a root pinned at 16px.** `index.css` sets
 `html { font-size: 16px }` so the rem is not at the mercy of a browser default, and the whole

@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button, Empty, Flex } from 'antd'
-import { ArrowDownOutlined } from '@ant-design/icons'
+import { ArrowDown } from 'lucide-react'
 import type { ChatMessage } from '@shared/types'
 import { bridge } from '../bridge'
 import { INK } from '../theme'
@@ -185,7 +185,7 @@ export function ChatPane({
             type="primary"
             shape="round"
             size="small"
-            icon={<ArrowDownOutlined />}
+            icon={<ArrowDown size={16} />}
             onClick={resume}
             style={{
               position: 'absolute',
