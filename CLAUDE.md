@@ -531,6 +531,35 @@ purely to satisfy antd. Every open tab additionally gets a `tab-shown` class (ap
 `renderTabBar`) whose CSS mimics the active look, so the strip reflects what is on screen
 rather than what was clicked last.
 
+### Tabs, split groups and dragging
+
+The tab strip is the app's navigation and the most intricate code in the renderer. These are
+the rules it has to keep, in the order they were asked for; everything below them is how each
+one is enforced.
+
+1. **Tabs are the whole navigation.** `+` opens the add-channel modal, `×` removes a channel
+   with no confirmation — re-adding costs nothing, so a confirm step is pure friction.
+2. **A visible chat is already open.** Clicking its tab does nothing; only a hidden tab
+   changes what is on screen.
+3. **The split control opens a chat beside the others**, and panes run left to right in tab
+   order.
+4. **Two or more chats on screen are remembered as a group.** Clicking any member restores
+   the whole arrangement, so leaving a group to look at something else and coming back is
+   free.
+5. **A group is one unbroken run wearing one coloured band** — bright while it is on screen,
+   dimmed while it is only remembered, and a different colour per group.
+6. **Tabs slide horizontally along the strip**, pushing their neighbours aside as they go, and
+   a tab dragged past the last one lands at the end.
+7. **A group is dragged as a block**, by the grip on its leftmost member — a filled square in
+   the group's colour — and the real tabs travel, not a stand-in.
+8. **A grouped tab dragged by its own body stays inside its run**, and must not appear to move
+   at all in a direction it cannot go.
+9. **Nothing that is not a member may land inside a run.** A foreign tab crossing a group
+   steps the whole run aside as one unit and lands on whichever side it ended up on.
+10. **Dragging one group over another moves that one as a unit too** — it must not come apart.
+11. **Nothing jumps after release, and the strip never changes height.**
+12. **Membership changes only through the split control**, never by dragging.
+
 **Split groups are saved, and `groups` is the second half of the model.** `store.groups` is
 a list of member sets; whenever the visible set reaches two, it is saved as one. A tab
 belongs to at most one group, so splitting it into a new arrangement pulls it out of its old
@@ -552,10 +581,8 @@ band rather than a mark per tab, full opacity for the group on screen and dimmed
 merely remembered. Colours come from the group's index, not a hash, so two groups can never
 collide. A non-contiguous group would draw as two disconnected bands and read as two groups.
 
-### Tab dragging
-
-Six separate bugs live here, all of them invisible until the pointer moves. Read this before
-touching `ChannelTabs`.
+Six separate faults live in the drag itself, all of them invisible until the pointer moves.
+Read these before touching `ChannelTabs`.
 
 **It is dnd-kit, not HTML5 drag.** Native `draggable` gives a floating ghost and ignores
 drops outside a tab. `renderTabBar` wraps the bar in `DndContext` + `SortableContext` and
@@ -600,6 +627,18 @@ reorder land in the same commit, but the transition then animates each element o
 slot — traced frame by frame, a neighbour sat at `x=0` during the drag, jumped to `574` one
 frame after release, then slid back to `0` over ~200ms. `landInstantly` turns transitions off
 for one frame so tabs are simply already where they belong.
+
+**The strip is measured once per drag, never per frame.** `measureTabs()` reads every
+`.ant-tabs-tab[data-node-key]` into a `Map<id, Span>` in one pass at `onDragStart`, and the
+clamp, the neighbour units and the drop maths all derive from that single snapshot. The shape
+this code had first asked the DOM one question at a time — roughly `2N` `querySelector` calls
+per drag start — and any rect read later is the crawling-bounds fault above waiting to happen.
+
+**A drag re-renders the whole strip on every pointer move**, so everything derived from
+`sources` and `groups` is memoised: the id list, group ownership, each tab's run, the band
+marks and the `items` array, with `TabLabel` behind `memo` and stable callbacks. Without that,
+every frame rebuilt one `TabLabel` per tab — each with two `Tooltip`s and a `Badge` — and the
+sorting strategy walked every group for every tab to find its run.
 
 **The tab height is pinned.** antd re-measures the bar as tabs reorder and can settle a row
 taller, so the whole strip jumped 28px to 33px purely from moving a tab. Both arrangements
@@ -832,6 +871,16 @@ script must live inside the repo, not the scratchpad, or `import 'ws'` will not 
 
 There is **no browser-only mode any more.** `bridge.ts` is a thin `window.api` accessor that
 throws outside Electron; the in-page simulator went with the mock platform.
+
+**Drive the tab strip only with the app window focused.** Learned the hard way: while the
+Electron window is occluded, `Input.dispatchMouseEvent` stops being acknowledged part-way
+through a drag — the driver hangs while a *second* CDP client's `Runtime.evaluate` still
+answers instantly — and antd's leave animations never finish, so a dismissed `Modal` leaves
+its `.ant-modal-wrap` in the DOM where it silently swallows every later click, which reads as
+"the app ignores clicks". Raise the window with Win32 `SetForegroundWindow` on the Electron
+process (`Page.bringToFront` is not enough), and run **one scenario per node process** — a
+long-lived driver accumulates the stall. A driver killed mid-drag also leaves the pointer
+button logically held, so start each run with a stray `mouseReleased`.
 
 The three YouTube resolve outcomes are all worth exercising, and each has a stable probe: a
 live channel with chat (`@LofiGirl`), a real channel that is not streaming (`@Google` -> the
