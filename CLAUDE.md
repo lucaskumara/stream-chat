@@ -563,10 +563,15 @@ the one control in the app behind a confirm. That is a deliberate exception to t
 confirmation" rule the tab `×` follows: re-adding a channel costs nothing, but discarded
 messages are gone.
 
-**Anchor pane-bar popovers `topRight`.** The bar sits at the bottom-right of a pane, so a
-`Popconfirm` at the default placement opens past the window's right edge, where it is both
-clipped and *unclickable* — the confirm button lands outside the viewport and the click
-misses. Measured before the fix: the popover spanned x 1172-1692 in a 1440px window.
+**Anchor pane-bar popovers `topRight`, and give them a `minWidth`.** Two separate faults,
+both invisible until the popover actually opens. The bar sits at the bottom-right of a pane,
+so a `Popconfirm` at the default placement opens past the window's right edge, where it is
+both clipped and *unclickable* — the confirm button lands outside the viewport and the click
+misses (measured: x 1172-1692 in a 1440px window). And antd sizes the popover to its
+*content*, so a short title like "Are you sure?" collapses it to 144px, leaving `Cancel` and
+`Clear` (57px + 47px) wedged edge to edge in a 120px row. `styles={{ root: { minWidth: 200 } }}`
+gives the buttons slack. A long `description` masks both faults by making the popover wide —
+which is how the first version looked fine until the text was shortened.
 
 **antd marks one tab active; the app has several open.** `activeKey` is `visibleIds[0]`
 purely to satisfy antd. Every open tab additionally gets a `tab-shown` class (applied in

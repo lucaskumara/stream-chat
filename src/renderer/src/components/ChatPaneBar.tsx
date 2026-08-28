@@ -59,6 +59,7 @@ function ChatPaneBarImpl({
         okButtonProps={{ danger: true }}
         onConfirm={onClear}
         disabled={total === 0}
+        styles={{ root: { minWidth: 200 } }}
       >
         <Button
           size="small"
