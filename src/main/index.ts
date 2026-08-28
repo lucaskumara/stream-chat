@@ -125,8 +125,6 @@ if (!app.requestSingleInstanceLock()) {
 
     mainWindow.webContents.once('did-finish-load', () => {
       broadcastTwitchAuth()
-
-      void sources.restoreSaved()
     })
 
     mainWindow.on('closed', () => {

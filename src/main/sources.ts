@@ -7,18 +7,7 @@ import {
   type PlatformServices
 } from './chat'
 import { MissingChannelError } from './chat/channel'
-import { config, type StoredChannel, type StoredPlatform } from './config'
 import { ignoreTeardownFailure } from './lifecycle'
-
-const MAX_RESTORED_SOURCES = 20
-
-const PERSISTED_PLATFORMS: StoredPlatform[] = ['twitch', 'youtube', 'kick']
-
-const PERSISTABLE_STATUSES = new Set(['connected', 'offline'])
-
-function persistedPlatform(platform: Platform): StoredPlatform | null {
-  return PERSISTED_PLATFORMS.find((candidate) => candidate === platform) ?? null
-}
 
 function normalizeIdentifier(
   platform: Platform,
@@ -33,8 +22,6 @@ function normalizeIdentifier(
 interface Entry {
   watcher: ChatWatcher
   state: SourceState
-
-  identifier?: string
 }
 
 export class SourceManager {
@@ -63,17 +50,16 @@ export class SourceManager {
       this.services
     )
 
-    this.entries.set(sourceId, { watcher, state, identifier })
+    this.entries.set(sourceId, { watcher, state })
     this.onStateChange(this.list())
 
     try {
       await watcher.connect()
 
       if (watcher.label) state.label = watcher.label
-      this.rememberIfConnected(request, identifier, state)
     } catch (error) {
       if (error instanceof MissingChannelError) {
-        await this.discard(sourceId)
+        await this.remove(sourceId)
         throw error
       }
 
@@ -86,16 +72,6 @@ export class SourceManager {
   }
 
   async remove(sourceId: string): Promise<void> {
-    const entry = this.entries.get(sourceId)
-    if (!entry) return
-
-    const persisted = persistedPlatform(entry.state.platform)
-    if (persisted && entry.identifier) config().removeChannel(persisted, entry.identifier)
-
-    await this.discard(sourceId)
-  }
-
-  private async discard(sourceId: string): Promise<void> {
     const entry = this.entries.get(sourceId)
     if (!entry) return
 
@@ -133,29 +109,7 @@ export class SourceManager {
     for (const [sourceId, entry] of pending) reordered.set(sourceId, entry)
 
     this.entries = reordered
-    config().setChannels(this.reorderedChannels())
     this.onStateChange(this.list())
-  }
-
-  async restoreSaved(): Promise<void> {
-    for (const channel of config().getChannels()) {
-      if (this.entries.size >= MAX_RESTORED_SOURCES) break
-
-      const already = [...this.entries.values()].some(
-        (entry) => entry.state.platform === channel.platform && entry.identifier === channel.login
-      )
-      if (already) continue
-
-      try {
-        await this.add({
-          platform: channel.platform,
-          label: channel.login,
-          identifier: channel.login
-        })
-      } catch (error) {
-        console.warn('[sources] skipping saved channel', channel.login, error)
-      }
-    }
   }
 
   async disconnectAll(): Promise<void> {
@@ -190,38 +144,5 @@ export class SourceManager {
       label: request.label || request.identifier || request.platform,
       status: 'disconnected'
     }
-  }
-
-  private rememberIfConnected(
-    request: AddSourceRequest,
-    identifier: string | undefined,
-    state: SourceState
-  ): void {
-    const platform = persistedPlatform(request.platform)
-    if (!platform || !identifier) return
-    if (!PERSISTABLE_STATUSES.has(state.status)) return
-
-    config().addChannel({ platform, login: identifier })
-  }
-
-  private reorderedChannels(): StoredChannel[] {
-    const saved = config().getChannels()
-    const ordered: StoredChannel[] = []
-
-    for (const entry of this.entries.values()) {
-      const platform = persistedPlatform(entry.state.platform)
-      if (!platform || !entry.identifier) continue
-
-      const match = saved.find(
-        (channel) => channel.platform === platform && channel.login === entry.identifier
-      )
-      if (match && !ordered.includes(match)) ordered.push(match)
-    }
-
-    for (const channel of saved) {
-      if (!ordered.includes(channel)) ordered.push(channel)
-    }
-
-    return ordered
   }
 }

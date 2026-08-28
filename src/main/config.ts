@@ -13,20 +13,11 @@ export interface StoredTwitchTokens {
   login: string
 }
 
-export type StoredPlatform = 'twitch' | 'youtube' | 'kick'
-
-export interface StoredChannel {
-  platform: StoredPlatform
-
-  login: string
-}
-
 interface PersistedShape {
   version: 1
   twitch?: {
     tokensEnc?: string
   }
-  channels?: StoredChannel[]
 }
 
 const EMPTY: PersistedShape = { version: 1 }
@@ -47,7 +38,7 @@ class Config {
       if (!existsSync(this.path)) return { ...EMPTY }
       const parsed = JSON.parse(readFileSync(this.path, 'utf8')) as PersistedShape
       if (parsed?.version !== 1) return { ...EMPTY }
-      return parsed
+      return { version: 1, twitch: parsed.twitch }
     } catch (err) {
       console.warn('[config] unreadable, starting fresh:', err)
       return { ...EMPTY }
@@ -100,29 +91,6 @@ class Config {
 
     const enc = safeStorage.encryptString(JSON.stringify(tokens)).toString('base64')
     this.data.twitch = { ...this.data.twitch, tokensEnc: enc }
-    this.write()
-  }
-
-  getChannels(): StoredChannel[] {
-    return this.data.channels ?? []
-  }
-
-  addChannel(channel: StoredChannel): void {
-    const existing = this.getChannels()
-    if (existing.some((c) => c.platform === channel.platform && c.login === channel.login)) return
-    this.data.channels = [...existing, channel]
-    this.write()
-  }
-
-  setChannels(channels: StoredChannel[]): void {
-    this.data.channels = channels
-    this.write()
-  }
-
-  removeChannel(platform: StoredPlatform, login: string): void {
-    this.data.channels = this.getChannels().filter(
-      (c) => !(c.platform === platform && c.login === login)
-    )
     this.write()
   }
 }

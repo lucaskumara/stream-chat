@@ -172,11 +172,9 @@ throws `MissingChannelError` on a terminal lookup, `SourceManager.add` catches e
 one, discards the entry it had already inserted and rethrows so the modal shows the reason
 and no dead tab is left behind. `unreachable` and `offline` keep the tab and retry, which is
 why the catch cannot simply reject on any connect failure — a network blip while adding
-`@LofiGirl` must not read as "no such channel". Two places have to swallow the same error:
-`scheduleAttach`, because a later re-resolve can go `missing` (a channel deleted mid-run) and
-the status event has already reported it, and `restoreSaved`, or one deleted saved channel
-aborts the whole startup restore loop. `restoreSaved` deliberately leaves the saved entry in
-`config.json` — a wrong `missing` would otherwise quietly delete the user's channel.
+`@LofiGirl` must not read as "no such channel". `scheduleAttach` has to swallow the same
+error, because a later re-resolve can go `missing` (a channel deleted mid-run) and the status
+event has already reported it.
 
 **The renderer has to strip Electron's IPC wrapper before showing an error.**
 `ipcRenderer.invoke` rejects with `Error invoking remote method 'sources:add': Error: …`, so
@@ -424,15 +422,11 @@ no messages arrive*, because the continuation token and tracking params dominate
 That is ~78KB/s decompressed at 12 channels. Cost scales with poll rate × channel count, not
 with chat volume, so halving the poll rate halves the bill.
 
-Two existing limits matter at scale: `restoreSaved()` caps at 20 sources, and it resolves
-channels **sequentially** (`await this.add(...)` in a loop), so each saved YouTube channel adds
-~1.3s to startup before the next one connects.
-
 Providers self-stagger because each schedules its next poll after its own response returns.
 
-**Jitter the offline recheck.** `restoreSaved()` adds every saved channel at startup, so
-without jitter all offline channels would re-resolve in lockstep every 120s, each pulling
-~130KB. Resolve is ~130KB on the wire gzipped (1.2MB raw), not free.
+**Jitter the offline recheck.** Without jitter, several offline channels added together
+would re-resolve in lockstep every 120s, each pulling ~130KB. Resolve is ~130KB on the wire
+gzipped (1.2MB raw), not free.
 
 **Resolving the handle is also the existence check, and the only place a name is
 learned.** `resolveURL('/@handle/live')` answers a browse endpoint carrying
@@ -456,8 +450,7 @@ than "our URL is wrong", and it survives any test that only checks one handle. E
 handle body, keep the `@` literal.
 
 **YouTube identifiers are case-sensitive.** `UCSJ4gkVC6NrvII8umztf0Ow` and an 11-char video id
-both break when lowercased, so `SourceManager` lowercases identifiers for Twitch only. Saved
-channels round-trip through `config.json` with their case intact.
+both break when lowercased, so `SourceManager` lowercases identifiers for Twitch only.
 
 **YouTube author badges are member badges or nothing.** `LiveChatAuthorBadge` carries
 `custom_thumbnail` (a member badge, `tooltip: "Member (5 years)"`, thumbnails at 16px and
@@ -593,8 +586,8 @@ a list of member sets; whenever the visible set reaches two, it is saved as one.
 belongs to at most one group, so splitting it into a new arrangement pulls it out of its old
 one, and a group that drops to a single member dissolves. `showSource` restores a whole
 group when you click any member, which is the point: leaving a group to look at something
-else and coming back must not cost you the arrangement. Groups are **session-only** — unlike
-tab order, they are not written to `config.json`.
+else and coming back must not cost you the arrangement. Groups are **session-only**, like
+every other piece of app state now that channels are no longer persisted.
 
 **Groups are always contiguous, and `contiguousOrder` is the only thing enforcing it.**
 Every reorder passes through it; it re-emits a group's members together at the position of
@@ -674,13 +667,10 @@ carried identical classes and identical inner content, so nothing here caused it
 costs a coupling: change the tab font size or padding and the `height` in `index.css` has to
 move with it.
 
-**Reordering must only ever permute what is already saved.** `SourceManager.reorder`
-rewrites `config.channels` through `reorderedChannels()`, which sorts the *existing* saved
-list into entry order and appends anything unmatched. An earlier version rebuilt the list
-from live entries filtered by `PERSISTABLE_STATUSES`, which **silently deleted a saved
-channel** that happened to still be `connecting` when the user dragged a tab — and the
-anonymous display-name lookup below made Twitch slow enough to resolve that this was easy to
-hit. A reorder is not the place to decide what is worth persisting.
+**`SourceManager.reorder` permutes the live entry map and nothing else.** Main's entry order
+is what `list()` broadcasts, so it has to track the strip or the next `sources:changed` would
+snap the tabs back. Nothing about it touches disk — see "Nothing is persisted but the Twitch
+token" below.
 
 **antd v6 renamed DOM internals, which breaks CDP driver scripts.**
 `.ant-select-selector` is now `.ant-select-content` and `.ant-select-selection-item` is
@@ -746,6 +736,18 @@ fallback. `MessageRow` still uses the dot: that path renders per message inside 
 virtualizer, where an `img` per row would cost real time.
 
 ### Main process
+
+**Nothing is persisted but the Twitch token.** `config.json` holds `version` and the
+encrypted `twitch.tokensEnc`, and that is the whole file. Channels are deliberately *not*
+saved: the app opens empty every launch and every channel on screen was added this session.
+An earlier build restored saved channels at startup, which meant `config.json` accumulated a
+plaintext list of the user's channel names — and a name that stopped resolving was pinned
+there forever, because refusing to delete on a `missing` lookup was the only way to stop a
+Twitch outage from eating a real channel. Removing persistence removed that whole class of
+problem rather than tuning it. `Config.read()` therefore projects onto the fields it knows
+(`{ version: 1, twitch }`), so a `channels` array left by an older build is dropped on load
+instead of being written back out. Do not reintroduce channel persistence without asking —
+it is a privacy decision, not an oversight.
 
 **`electron-store` v11 is ESM-only** and this build emits CJS for main, hence the hand-rolled
 `config.ts`. Tokens are encrypted with `safeStorage` (DPAPI on Windows). If no encryption
@@ -884,10 +886,10 @@ Next: polish — settings persistence, sending messages back, auto-update. The s
 **no UI bound to them** — an antd `Popover` of `Switch`es and a `Slider` hung off the tab
 strip is the obvious home when settings persistence lands.
 
-Channel order persists through the `sources:reorder` IPC call and survives restarts; split
-groups do not — they live in the zustand store and reset when the app closes.
+Nothing survives a restart. The app opens with no channels every time, by design — see
+"Nothing is persisted but the Twitch token".
 
-Deliberately not done yet: no settings persistence beyond channels and their order, no
+Deliberately not done yet: no persistence of any kind beyond the Twitch token, no
 message sending,
 `electron-builder` has no config block, and CSP keeps `script-src 'unsafe-inline'` because
 the dev server injects the React Refresh preamble (tighten to a nonce when packaging).
@@ -950,7 +952,7 @@ live channel with chat (`@LofiGirl`), a real channel that is not streaming (`@Go
 retryable `offline`), and a handle that does not exist (-> the terminal `error`).
 
 **Do not clear the user's channels in a test probe.** Add and remove your own test channel
-instead; wiping `listSources()` deletes their saved channels from `config.json`.
+instead — the app starts empty, so anything on screen is something the user just added.
 
 ## Conventions
 
