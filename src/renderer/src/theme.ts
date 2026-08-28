@@ -2,15 +2,15 @@ import { theme } from 'antd'
 import type { ThemeConfig } from 'antd'
 
 export const INK = {
-  app: '#0b0d10',
-  chat: '#12151a',
-  card: '#171b22',
-  raised: '#1f242d',
-  chrome: '#0f1216',
-  line: '#232932'
+  app: '#0d0d0d',
+  chat: '#141414',
+  card: '#1c1c1c',
+  raised: '#242424',
+  chrome: '#101010',
+  line: '#272727'
 }
 
-const PRIMARY = '#6366f1'
+const PRIMARY = '#5c5c5c'
 
 export const chatTheme: ThemeConfig = {
   algorithm: theme.darkAlgorithm,
@@ -25,9 +25,9 @@ export const chatTheme: ThemeConfig = {
     colorBorder: INK.line,
     colorBorderSecondary: INK.line,
 
-    colorText: '#d7dce3',
-    colorTextSecondary: '#9aa4b2',
-    colorTextTertiary: '#79838f',
+    colorText: '#e3e3e3',
+    colorTextSecondary: '#a1a1a1',
+    colorTextTertiary: '#7a7a7a',
 
     fontFamily: "ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif",
     fontSize: 13,
@@ -40,14 +40,14 @@ export const chatTheme: ThemeConfig = {
       bodyBg: INK.chat
     },
     Empty: {
-      colorTextDescription: '#6b7686'
+      colorTextDescription: '#6b6b6b'
     },
     Tabs: {
       horizontalMargin: '0',
       cardBg: INK.app,
-      itemColor: '#9aa4b2',
-      itemSelectedColor: '#e6ebf2',
-      itemHoverColor: '#e6ebf2'
+      itemColor: '#a1a1a1',
+      itemSelectedColor: '#ededed',
+      itemHoverColor: '#ededed'
     }
   }
 }

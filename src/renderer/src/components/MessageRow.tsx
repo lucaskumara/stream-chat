@@ -36,7 +36,7 @@ const DEFAULT_NAME_COLORS = [
 const LUMINANCE_FLOOR = 0.4
 
 function readableColor(hex: string): string {
-  if (!/^#[0-9a-f]{6}$/i.test(hex)) return '#9aa4b2'
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return '#a1a1a1'
 
   const channels = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16))
 
@@ -73,7 +73,7 @@ function formatTime(ts: number): string {
 
 function Emote({ name, url }: { name: string; url: string }): React.ReactElement {
   const [failed, setFailed] = useState(false)
-  if (failed) return <span className="text-indigo-300">{name}</span>
+  if (failed) return <span className="text-neutral-300">{name}</span>
   return (
     <img
       src={url}
@@ -94,7 +94,7 @@ function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
     return (
       <span
         title={badge.label}
-        className="mr-1 rounded-sm bg-slate-600/40 px-1 text-[0.7em] font-semibold tracking-wide text-slate-300 uppercase"
+        className="mr-1 rounded-sm bg-neutral-700/60 px-1 text-[0.7em] font-semibold tracking-wide text-neutral-300 uppercase"
       >
         {badge.label.slice(0, 3)}
       </span>
@@ -129,7 +129,7 @@ function FragmentView({
       return <Emote name={fragment.name} url={fragment.url} />
     case 'mention':
       return (
-        <span className="rounded-sm bg-indigo-500/20 px-1 font-medium text-indigo-200">
+        <span className="rounded-sm bg-neutral-600/40 px-1 font-medium text-neutral-100">
           {fragment.text}
         </span>
       )
@@ -137,7 +137,7 @@ function FragmentView({
       return (
         <button
           type="button"
-          className="cursor-pointer text-sky-400 underline underline-offset-2 hover:text-sky-300"
+          className="cursor-pointer text-neutral-200 underline underline-offset-2 hover:text-white"
           onClick={() => onOpenLink(fragment.href)}
         >
           {fragment.text}
@@ -171,14 +171,14 @@ function MessageRowImpl({
       ].join(' ')}
     >
       {msg.replyTo && (
-        <div className="truncate pl-1 text-[0.82em] text-slate-500">
+        <div className="truncate pl-1 text-[0.82em] text-neutral-500">
           ↳ replying to {msg.replyTo.authorName}: {msg.replyTo.excerpt}
         </div>
       )}
 
       <span className={deleted ? 'line-through' : undefined}>
         {showTimestamps && (
-          <span className="mr-1 text-[0.82em] text-slate-600 tabular-nums">
+          <span className="mr-1 text-[0.82em] text-neutral-500 tabular-nums">
             {formatTime(msg.timestamp)}
           </span>
         )}
@@ -204,7 +204,7 @@ function MessageRowImpl({
         <span className="font-semibold" style={{ color: nameColor(msg) }}>
           {msg.authorDisplayName ?? msg.authorName}
         </span>
-        <span className="text-slate-500">: </span>
+        <span className="text-neutral-500">: </span>
 
         {msg.monetary && (
           <span className="mr-1 rounded-sm bg-emerald-500/20 px-1 text-[0.8em] font-semibold text-emerald-300">
@@ -221,7 +221,7 @@ function MessageRowImpl({
         ))}
       </span>
 
-      {deleted && <span className="ml-1 text-[0.75em] text-slate-500">(deleted)</span>}
+      {deleted && <span className="ml-1 text-[0.75em] text-neutral-500">(deleted)</span>}
     </div>
   )
 }

@@ -12,11 +12,11 @@
   --color-kick: #53fc18;
   --color-mock: #64748b;
 
-  --color-ink-900: #0b0d10;
-  --color-ink-800: #12151a;
-  --color-ink-700: #171b22;
-  --color-ink-600: #1f242d;
-  --color-ink-500: #2b323d;
+  --color-ink-900: #0d0d0d;
+  --color-ink-800: #141414;
+  --color-ink-700: #1c1c1c;
+  --color-ink-600: #242424;
+  --color-ink-500: #333333;
 }
 
 :root {
@@ -35,7 +35,7 @@ body,
 body {
   margin: 0;
   background: var(--color-ink-900);
-  color: #d7dce3;
+  color: #e3e3e3;
   font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   overflow: hidden;
@@ -55,11 +55,11 @@ body {
 }
 .tab-split:hover {
   opacity: 1;
-  background: #2b323d;
+  background: #2a2a2a;
 }
 .tab-split-on {
   opacity: 1;
-  color: #818cf8;
+  color: #ededed;
 }
 .tab-split-inert {
   opacity: 0.3;
@@ -74,10 +74,10 @@ body {
    are styled to match the active one so the tab strip reflects what is on
    screen rather than which tab was clicked last. */
 .ant-tabs-tab.tab-shown {
-  background: #171b22;
+  background: #1c1c1c;
 }
 .ant-tabs-tab.tab-shown .ant-tabs-tab-btn {
-  color: #e6ebf2;
+  color: #ededed;
 }
 
 /* Chat scrollers get a thin, low-contrast bar so a fast-moving list doesn't
