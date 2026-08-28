@@ -251,7 +251,7 @@ export function ChannelTabs({
   const layout = useRef<{
     left: number
     width: number
-    rest: { id: string; left: number; width: number }[]
+    rest: { ids: string[]; left: number; width: number }[]
   } | null>(null)
   const shift = useRef(0)
   const resting = useRef<Map<string, { left: number; right: number }> | null>(null)
@@ -407,7 +407,33 @@ export function ChannelTabs({
     return passed
   }
 
-  const passedNeighbours = (dx: number): { id: string; width: number }[] => {
+  const neighbourUnits = (
+    carried: string[]
+  ): { ids: string[]; left: number; width: number }[] => {
+    const units: { ids: string[]; left: number; width: number }[] = []
+
+    for (const id of ids) {
+      if (carried.includes(id)) continue
+
+      const rect = blockExtent([id])
+      if (!rect) continue
+
+      const group = groups.find((members) => members.includes(id))
+      const open = units[units.length - 1]
+
+      if (group && open && group.includes(open.ids[open.ids.length - 1])) {
+        open.ids.push(id)
+        open.width = rect.right - open.left
+        continue
+      }
+
+      units.push({ ids: [id], left: rect.left, width: rect.right - rect.left })
+    }
+
+    return units
+  }
+
+  const passedNeighbours = (dx: number): { ids: string[]; width: number }[] => {
     const placed = layout.current
     if (!placed || dx === 0) return []
 
@@ -423,8 +449,11 @@ export function ChannelTabs({
 
   if (carry && layout.current) {
     const aside = carry.dx > 0 ? -layout.current.width : layout.current.width
+    const passed = new Set(passedNeighbours(carry.dx).flatMap((unit) => unit.ids))
 
-    for (const tab of passedNeighbours(carry.dx)) nudges.set(tab.id, aside)
+    for (const unit of layout.current.rest) {
+      for (const id of unit.ids) nudges.set(id, passed.has(id) ? aside : 0)
+    }
   }
 
   const dropWholeGroup = (group: string[]): void => {
@@ -432,10 +461,14 @@ export function ChannelTabs({
     if (!placed) return
 
     const dx = shift.current
-    const behind = placed.rest.filter((tab) => tab.left < placed.left)
+    const behind = placed.rest.filter((unit) => unit.left < placed.left)
 
-    const at = behind.length + passedNeighbours(dx).length * (dx > 0 ? 1 : -1)
-    const rest = placed.rest.map((tab) => tab.id)
+    const index = behind.length + passedNeighbours(dx).length * (dx > 0 ? 1 : -1)
+    const at = placed.rest
+      .slice(0, index)
+      .reduce((count, unit) => count + unit.ids.length, 0)
+
+    const rest = placed.rest.flatMap((unit) => unit.ids)
     const members = ids.filter((id) => group.includes(id))
 
     const next = [...rest.slice(0, at), ...members, ...rest.slice(at)]
@@ -474,15 +507,7 @@ export function ChannelTabs({
       ? {
           left: block.left,
           width: block.right - block.left + TAB_GUTTER_PX,
-          rest: ids
-            .filter((id) => !held.includes(id))
-            .map((id) => {
-              const rect = document
-                .querySelector(`.ant-tabs-tab[data-node-key="${id}"]`)
-                ?.getBoundingClientRect()
-
-              return { id, left: rect?.left ?? 0, width: rect?.width ?? 0 }
-            })
+          rest: neighbourUnits(held)
         }
       : null
 
