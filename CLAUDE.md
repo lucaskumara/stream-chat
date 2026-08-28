@@ -522,21 +522,90 @@ control calls `toggleSplit`, which adds or removes that chat alongside the other
 refuses to empty the set. An earlier version treated click as "focus" and wiped the split,
 so clicking the second of two open chats hid both — that is the bug the no-op guard exists
 to prevent. `setSources` reconciles: drops dead ids, jumps to a genuinely new channel, seeds
-the first source on cold start. One pane renders bare; two or more render inside a
-`Splitter` **with** per-pane headers, since the tab strip cannot name them all.
+the first source on cold start. Panes render bare inside a `Splitter`; there is no per-pane
+header, because the tab strip already names every open channel and columns map left to right
+onto tab order.
 
 **antd marks one tab active; the app has several open.** `activeKey` is `visibleIds[0]`
 purely to satisfy antd. Every open tab additionally gets a `tab-shown` class (applied in
 `renderTabBar`) whose CSS mimics the active look, so the strip reflects what is on screen
 rather than what was clicked last.
 
-**Tab drag-and-drop is dnd-kit, not HTML5 drag.** Native `draggable` gives a floating ghost
-image and drops outside a tab do nothing. `renderTabBar` wraps the bar in `DndContext` +
-`SortableContext` (`horizontalListSortingStrategy`, `restrictToHorizontalAxis`) and clones
-each tab node with `useSortable`'s ref/listeners — tabs slide and push their neighbours
-aside, and `closestCenter` resolves a release past the last tab to the end rather than
-nowhere. `PointerSensor` needs an `activationConstraint` distance (5px) or the sensor
-swallows plain clicks and tabs stop selecting.
+**Split groups are saved, and `groups` is the second half of the model.** `store.groups` is
+a list of member sets; whenever the visible set reaches two, it is saved as one. A tab
+belongs to at most one group, so splitting it into a new arrangement pulls it out of its old
+one, and a group that drops to a single member dissolves. `showSource` restores a whole
+group when you click any member, which is the point: leaving a group to look at something
+else and coming back must not cost you the arrangement. Groups are **session-only** — unlike
+tab order, they are not written to `config.json`.
+
+**Groups are always contiguous, and `contiguousOrder` is the only thing enforcing it.**
+Every reorder passes through it; it re-emits a group's members together at the position of
+the first one. That single pass buys both drag rules without either being coded separately:
+a member dragged outside its run is pulled back, and a foreign tab dropped inside a run is
+pushed out. Membership therefore only ever changes through the split control, never by
+dragging.
+
+**A group wears one band, and the band is the whole reason contiguity matters.** Grouped
+tabs get a coloured bar across their top edge, bridging the 2px gutter so a run reads as one
+band rather than a mark per tab, full opacity for the group on screen and dimmed for one
+merely remembered. Colours come from the group's index, not a hash, so two groups can never
+collide. A non-contiguous group would draw as two disconnected bands and read as two groups.
+
+### Tab dragging
+
+Six separate bugs live here, all of them invisible until the pointer moves. Read this before
+touching `ChannelTabs`.
+
+**It is dnd-kit, not HTML5 drag.** Native `draggable` gives a floating ghost and ignores
+drops outside a tab. `renderTabBar` wraps the bar in `DndContext` + `SortableContext` and
+clones each tab node with `useSortable`'s ref/listeners. `PointerSensor` needs an
+`activationConstraint` distance (5px) or the sensor swallows plain clicks and tabs stop
+selecting.
+
+**The dragged thing must carry no transition.** `useSortable` hands the same transition
+string to every tab including the one under the pointer, which makes it ease toward the
+cursor instead of tracking it. Only the tabs being pushed aside should animate.
+
+**Bounds are frozen at `onDragStart`; never measure inside the modifier.** A modifier runs on
+every pointer move, so `getBoundingClientRect` there reads positions that the drag is itself
+transforming — the limits crawl underneath the pointer and the tab sticks partway. All three
+cases share one shape, a moving span against a limit: a grip drag moves the whole block
+within the tab strip, a grouped tab moves within its own run, an ungrouped tab moves within
+the strip. A group's clamp must measure the **block**, not the grabbed tab, or the group gets
+a tab's worth of extra slack per extra member.
+
+**A group is dragged by the grip on its leftmost member, and the real tabs move.** An earlier
+attempt rendered a `DragOverlay` imitation, which inherited none of antd's styling and looked
+wrong. Members instead take the same clamped `translate3d` as the pointer, so they are the
+actual tabs travelling together.
+
+**Group drops are decided by the block, not by `over`.** dnd-kit picks the drop target from
+the grabbed tab's centre, which at full travel is still nearest its own neighbour — so a
+group could never reach the end of the strip. `dropWholeGroup` instead counts how many
+neighbours the block has swept past, using each one's width and a half-width threshold.
+
+**Neighbours are units, not tabs.** A whole run steps aside at once; walking individual tabs
+makes the group being dragged over come apart exactly like the group being dragged used to.
+While a group is in hand, every other tab is given an explicit offset, zero included, so
+nothing is left following the sorting strategy alongside tabs following the pointer. The
+same units decide the drop index, so the preview and the result cannot disagree.
+
+**A foreign tab lands on the side it ended up on.** Choosing from the direction of travel
+sends it to the far side of the group every time; compare its final centre to the run's
+midpoint instead, and treat a drag that ends on its own side as a no-op.
+
+**Suppress transitions for the settling frame.** Clearing the drag offsets and committing the
+reorder land in the same commit, but the transition then animates each element out of its old
+slot — traced frame by frame, a neighbour sat at `x=0` during the drag, jumped to `574` one
+frame after release, then slid back to `0` over ~200ms. `landInstantly` turns transitions off
+for one frame so tabs are simply already where they belong.
+
+**The tab height is pinned.** antd re-measures the bar as tabs reorder and can settle a row
+taller, so the whole strip jumped 28px to 33px purely from moving a tab. Both arrangements
+carried identical classes and identical inner content, so nothing here caused it. The pin
+costs a coupling: change the tab font size or padding and the `height` in `index.css` has to
+move with it.
 
 **Reordering must only ever permute what is already saved.** `SourceManager.reorder`
 rewrites `config.channels` through `reorderedChannels()`, which sorts the *existing* saved
@@ -558,8 +627,22 @@ main-process packages that stay external — `electron-store`, `ws`, `youtubei.j
 dependencies.
 
 **The theme is one object, not scattered inline styles.** `theme.ts` maps the ink palette
-onto antd tokens and exports `INK` for the few places that still need a raw hex (pane header
-chrome, chat background, the sidebar divider). Reach for a token before a hex.
+onto antd tokens and exports `INK` for the few places that still need a raw hex (the tab
+strip's background and border, the chat background). Reach for a token before a hex.
+
+**The palette is deliberately hueless.** `INK` runs `#0d0d0d` to `#272727` with R=G=B, and
+`colorPrimary` is a mid grey rather than an accent. It started as a cool blue-grey and read
+as a blue app rather than a black one: every surface measured about 215 degrees of hue, from
+the app background at `rgb(11, 13, 16)` to secondary text at `rgb(154, 164, 178)`. antd's
+dark algorithm derives its whole neutral ramp from `colorBgBase`, so a single tinted seed
+propagates to every border, surface and text tone. Group bands are the one intentional
+colour in the chrome. Author name colours are content, not chrome, and are left alone.
+
+**Platform dots are the sites' favicons, except in message rows.** `PlatformIcon` loads
+`favicon.ico` from each platform and falls back to the old coloured dot on error, so a dead
+favicon cannot leave a blank tab. `PLATFORM_COLOR` lives there now because it is the
+fallback. `MessageRow` still uses the dot: that path renders per message inside the
+virtualizer, where an `img` per row would cost real time.
 
 ### Main process
 
@@ -696,10 +779,14 @@ right extra slot. `MessageRow` stays hand-written for the reasons in "Renderer U
 Tailwind is still in the tree for the chat rows.
 
 Next: polish — settings persistence, sending messages back, auto-update. The store already carries `showDeleted`, `showTimestamps` and `fontSize` with
-**no UI bound to them** — an antd `Popover` of `Switch`es and a `Slider` in the tab bar's
-right extra slot is the obvious home when settings persistence lands.
+**no UI bound to them** — an antd `Popover` of `Switch`es and a `Slider` hung off the tab
+strip is the obvious home when settings persistence lands.
 
-Deliberately not done yet: no settings persistence beyond channels, no message sending,
+Channel order persists through the `sources:reorder` IPC call and survives restarts; split
+groups do not — they live in the zustand store and reset when the app closes.
+
+Deliberately not done yet: no settings persistence beyond channels and their order, no
+message sending,
 `electron-builder` has no config block, and CSP keeps `script-src 'unsafe-inline'` because
 the dev server injects the React Refresh preamble (tighten to a nonce when packaging).
 YouTube super-chats and memberships are **not** mapped at all — see the YouTube invariant on
