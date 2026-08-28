@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { App as AntApp, Button, Empty, Flex, Layout, Modal, Splitter } from 'antd'
+import { Button, Empty, Flex, Layout, Modal, Splitter } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import type { SourceState } from '@shared/types'
 import { bridge } from './bridge'
@@ -9,8 +9,6 @@ import { ChannelTabs } from './components/ChannelTabs'
 import { ChatPane } from './components/ChatPane'
 
 export default function App(): React.ReactElement {
-  const { modal } = AntApp.useApp()
-
   const sources = useStore((s) => s.sources)
   const visibleIds = useStore((s) => s.visibleIds)
   const setSources = useStore((s) => s.setSources)
@@ -51,19 +49,10 @@ export default function App(): React.ReactElement {
 
   const remove = useCallback(
     (source: SourceState) => {
-      modal.confirm({
-        title: `Remove ${source.label}?`,
-        content: 'The channel is dropped from your saved list and its messages are discarded.',
-        okText: 'Remove',
-        okButtonProps: { danger: true },
-        cancelText: 'Keep',
-        onOk: async () => {
-          await bridge().api.removeSource(source.id)
-          forgetSource(source.id)
-        }
-      })
+      void bridge().api.removeSource(source.id)
+      forgetSource(source.id)
     },
-    [modal, forgetSource]
+    [forgetSource]
   )
 
   const reorder = useCallback(
