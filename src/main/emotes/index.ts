@@ -6,15 +6,19 @@ import type { ThirdPartyEmote } from './types'
 export type { ThirdPartyEmote } from './types'
 export type { SevenTvPlatform } from './seventv'
 
+export interface EmoteBinding {
+  platform: SevenTvPlatform
+
+  channelId: string
+}
+
 export class ThirdPartyEmotes {
   private seventv = new SevenTvEmotes()
   private bttv = new BttvEmotes()
 
-  async loadGlobals(): Promise<void> {
-    await Promise.all([this.seventv.loadGlobal(), this.bttv.loadGlobal()])
-  }
+  async load(binding: EmoteBinding): Promise<void> {
+    const { platform, channelId } = binding
 
-  async loadChannel(platform: SevenTvPlatform, channelId: string): Promise<void> {
     await Promise.all([
       this.seventv.loadChannel(platform, channelId),
 
@@ -22,27 +26,17 @@ export class ThirdPartyEmotes {
     ])
   }
 
-  lookup(
-    platform: SevenTvPlatform,
-    channelId: string,
-    name: string,
-    enabled: { sevenTv: boolean; bttv: boolean } = { sevenTv: true, bttv: true }
-  ): ThirdPartyEmote | undefined {
-    if (enabled.sevenTv) {
-      const hit = this.seventv.lookup(platform, channelId, name)
-      if (hit) return hit
-    }
-    if (enabled.bttv && platform === 'twitch') return this.bttv.lookup(channelId, name)
-    return undefined
-  }
+  lookup(binding: EmoteBinding, name: string): ThirdPartyEmote | undefined {
+    const { platform, channelId } = binding
 
-  counts(platform: SevenTvPlatform, channelId: string): { seventv: number; bttv: number } {
-    return {
-      seventv: this.seventv.count(platform, channelId),
-      bttv: platform === 'twitch' ? this.bttv.count(channelId) : 0
-    }
+    return (
+      this.seventv.lookup(platform, channelId, name) ??
+      (platform === 'twitch' ? this.bttv.lookup(channelId, name) : undefined)
+    )
   }
 }
+
+export const thirdPartyEmotes = new ThirdPartyEmotes()
 
 export function applyEmotes(
   fragments: Fragment[],

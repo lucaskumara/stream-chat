@@ -1,7 +1,7 @@
 import WebSocket from "ws";
 import type { Badge, ChatMessage, Fragment, MessageKind } from "@shared/types";
 import { reconnectDelayMs } from "../../backoff";
-import { messageId, type ChatFeed, type FeedSink } from "../../watcher";
+import { messageId, withEmotes, type ChatFeed, type FeedSink } from "../../watcher";
 import { splitLinks } from "../../links";
 import { ignoreTeardownFailure } from "../../../lifecycle";
 import type { TwitchAuth } from "../../../twitch/auth";
@@ -497,10 +497,13 @@ export class TwitchEventSubFeed implements ChatFeed {
 
   private publishMessage(event: Record<string, unknown>): void {
     this.sink.message(
-      normalizeChatMessage(
-        event as unknown as TwitchChatEvent,
-        this.sourceId,
-        this.channel.login,
+      withEmotes(
+        normalizeChatMessage(
+          event as unknown as TwitchChatEvent,
+          this.sourceId,
+          this.channel.login,
+        ),
+        this.channel,
       ),
     );
   }

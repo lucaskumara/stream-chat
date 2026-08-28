@@ -173,21 +173,37 @@ at the bottom of `chat/watcher.ts`. Every feed and every moderation event routes
 Moderation events bind to messages by that id; hand-building the string is how deletions
 silently stop working.
 
-### Emotes (currently unwired)
+### Emotes
 
-**`src/main/emotes/` is intact but has zero importers.** 7TV, BTTV, `ThirdPartyEmotes` and
-`applyEmotes` are all still there and still correct; nothing calls them. This was deliberate
-— emotes are coming back, and the module survives so restoring them is a wiring job rather
-than a rewrite.
+**Third-party emotes hang off `Channel.emotes`, and that is the whole seam.** A channel
+returns an `EmoteBinding { platform, channelId }` or `null`; `BaseChatWatcher.open` fires
+`thirdPartyEmotes.load(binding)` on connect, and each feed wraps its outgoing message in
+`withEmotes(message, channel)` from `chat/watcher.ts`. `thirdPartyEmotes` is a module
+singleton, the same shape Kick's socket and YouTube's `Innertube` use, so no watcher gained
+a constructor argument. A platform that cannot supply an id returns `null` and simply gets
+no third-party emotes.
 
-**Native emotes still work.** Each platform's own emotes (Twitch's emote tags, Kick's
-`[emote:id:name]` tokens, YouTube's `is_custom_emoji` runs) are parsed in that platform's
-`toFragments` and render as images. Only the *third-party* layer is disconnected.
+**The binding id is not the channel id you already have, on any platform.** 7TV keys Twitch
+by the numeric **user id** — which the anonymous path did not carry until `resolveChannel`
+started asking GQL for `user(login:){id displayName}` in one query. YouTube is keyed by the
+`UC…` id (`info.basic_info.channel_id`), Kick by `user_id` from the channel payload, not by
+`channel.id` and not by `chatroom.id`. Each subclass owns that mapping in its `emotes`
+getter.
 
-To reconnect: add an `onChannelResolved(channel)` hook to `BaseChatWatcher` for the
-`loadChannel` call, put an `EmoteBinding { platform, channelId }` on each platform's
-`Channel` subclass, and call `applyEmotes` in each feed's publish path. The invariants below
-are the instructions for doing it.
+**`applyEmotes` runs last, over text fragments only.** Native emotes and links are already
+carved out by then, so it walks whitespace-separated tokens in the remaining text and cannot
+disturb an emote or link fragment. Order matters: running it earlier would let a 7TV name
+swallow part of a URL.
+
+**A 404 from 7TV means the channel has no set, not that emotes are broken.** Measured:
+`theburntpeanut` has none on Kick, Lofi Girl none on YouTube, while `xqc` has 966 on Kick and
+`theburntpeanut` 259 on Twitch. `loadChannel` always loads the global set first, so a
+channel with no set of its own still resolves the 45 global 7TV emotes. BTTV 404s the same
+way for a channel with none.
+
+**Native emotes are separate and always worked.** Each platform's own emotes (Twitch's emote
+tags, Kick's `[emote:id:name]` tokens, YouTube's `is_custom_emoji` runs) are parsed in that
+platform's `toFragments`. The third-party layer is additive.
 
 **Matching is whole-token and case-sensitive.** Substring matching turns `GIGACHAD` inside a
 longer word into an image; case folding collides distinct emote names.
@@ -198,14 +214,17 @@ easy to confuse. Valid platform values: `TWITCH, DISCORD, GOOGLE, KICK`.
 
 **7TV keys Kick by `user_id`, not by channel id.** `7tv.io/v3/users/kick/668` is a 404 for xQc;
 `.../kick/676` is the emote set. Both numbers sit in the same payload and both look plausible,
-so the wrong one reads as "this channel has no 7TV emotes". Kick's `channel.ts` no longer
-carries `userId` — it will need adding back.
+so the wrong one reads as "this channel has no 7TV emotes". `KickChannel` carries `userId`
+for exactly this.
 
 **BTTV is Twitch-only** and keys channels by Twitch user id. It is still worth having — some
 large channels have zero 7TV emotes and hundreds of BTTV ones.
 
-**`ThirdPartyEmotes.lookup`'s `enabled` parameter is dead** — no caller ever passed it, because
-filtering happened at draw time in `MessageRow`. Drop it on the way back in.
+**`ThirdPartyEmotes` takes a binding, not loose arguments.** `load(binding)` and
+`lookup(binding, name)` replaced the old `loadChannel(platform, channelId)` /
+`lookup(platform, channelId, name, enabled)` pair. The `enabled` filter and `counts()` were
+dead on arrival — no caller ever used them, because filtering happened at draw time in
+`MessageRow` — and went with the rewiring.
 
 ### Twitch
 
@@ -665,8 +684,9 @@ store cap; it exercised the DOM, not the 500-message ring.
 Badges and author colours are **back** on all three platforms, resolved in main and verified
 against live chat in the running app (70 badge images, zero broken; 27 distinct name
 colours). Deliberately removed, in that order: live-state reporting; then
-the mock platform and the in-browser simulator; then the third-party emote wiring (the
-module itself is kept — see "Emotes (currently unwired)").
+the mock platform and the in-browser simulator; then the third-party emote wiring, which is
+now **back** — 7TV and BTTV resolve through `Channel.emotes`, verified live at 17 emote
+images in one screen of a busy Twitch chat, none broken.
 
 The renderer chrome was rebuilt on **Ant Design v6**, then the sidebar was replaced by a
 browser-style tab strip: one tab per channel, `+` opens the add-channel `Modal`, `×`
@@ -675,8 +695,7 @@ alongside the active one. Status, held count and "clear this pane" live in the t
 right extra slot. `MessageRow` stays hand-written for the reasons in "Renderer UI", and
 Tailwind is still in the tree for the chat rows.
 
-Next: reconnect emotes, then polish — settings persistence, sending messages back,
-auto-update. The store already carries `showDeleted`, `showTimestamps` and `fontSize` with
+Next: polish — settings persistence, sending messages back, auto-update. The store already carries `showDeleted`, `showTimestamps` and `fontSize` with
 **no UI bound to them** — an antd `Popover` of `Switch`es and a `Slider` in the tab bar's
 right extra slot is the obvious home when settings persistence lands.
 

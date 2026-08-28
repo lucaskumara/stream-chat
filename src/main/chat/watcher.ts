@@ -5,6 +5,7 @@ import type {
   SourceStatus,
 } from "@shared/types";
 import type { Channel, ChannelLookup, RetryPolicy } from "./channel";
+import { applyEmotes, thirdPartyEmotes } from "../emotes";
 
 export abstract class BaseChatWatcher<
   TChannel extends Channel,
@@ -101,6 +102,9 @@ export abstract class BaseChatWatcher<
 
   private open(channel: TChannel): void {
     this.rename(channel.displayName);
+
+    const binding = channel.emotes;
+    if (binding) void thirdPartyEmotes.load(binding);
 
     this.feed = this.createFeed(channel, this.sink);
     void this.feed.start();
@@ -269,4 +273,16 @@ export function messageId(
   nativeId: string,
 ): string {
   return `${platform}:${sourceId}:${nativeId}`;
+}
+
+export function withEmotes(message: ChatMessage, channel: Channel): ChatMessage {
+  const binding = channel.emotes;
+  if (!binding) return message;
+
+  return {
+    ...message,
+    fragments: applyEmotes(message.fragments, (name) =>
+      thirdPartyEmotes.lookup(binding, name),
+    ),
+  };
 }

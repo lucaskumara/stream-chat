@@ -1,10 +1,12 @@
 import type { Badge, Platform } from '@shared/types'
 import { Channel, type ChannelLookup } from '../../channel'
+import type { EmoteBinding } from '../../../emotes'
 
 const API = 'https://kick.com/api/v2'
 
 interface ApiChannel {
   slug?: string
+  user_id?: number
   chatroom?: { id?: number }
   user?: { username?: string }
   subscriber_badges?: { months?: number; badge_image?: { src?: string } }[]
@@ -21,9 +23,16 @@ export class KickChannel extends Channel {
   constructor(
     displayName: string,
     readonly chatroomId: number,
+    readonly userId: number,
     private readonly subscriberBadges: SubscriberBadge[]
   ) {
     super(displayName)
+  }
+
+  get emotes(): EmoteBinding | null {
+    if (!this.userId) return null
+
+    return { platform: 'kick', channelId: String(this.userId) }
   }
 
   static fromApi(raw: ApiChannel, requestedSlug: string): KickChannel | null {
@@ -44,7 +53,12 @@ export class KickChannel extends Channel {
 
     tiers.sort((a, b) => a.months - b.months)
 
-    return new KickChannel(raw.user?.username ?? raw.slug ?? requestedSlug, chatroomId, tiers)
+    return new KickChannel(
+      raw.user?.username ?? raw.slug ?? requestedSlug,
+      chatroomId,
+      raw.user_id ?? 0,
+      tiers
+    )
   }
 
   get room(): string {

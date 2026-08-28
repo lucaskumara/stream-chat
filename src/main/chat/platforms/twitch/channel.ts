@@ -2,9 +2,10 @@ import type { Platform } from '@shared/types'
 import { Channel, type ChannelLookup } from '../../channel'
 import type { TwitchAuth } from '../../../twitch/auth'
 import type { Helix } from '../../../twitch/helix'
+import type { EmoteBinding } from '../../../emotes'
 import { twitchGql } from './gql'
 
-const DISPLAY_NAME_QUERY = 'query($login:String!){user(login:$login){displayName}}'
+const IDENTITY_QUERY = 'query($login:String!){user(login:$login){id displayName}}'
 
 export class TwitchChannel extends Channel {
   readonly platform: Platform = 'twitch'
@@ -15,6 +16,12 @@ export class TwitchChannel extends Channel {
     readonly broadcasterId: string
   ) {
     super(displayName)
+  }
+
+  get emotes(): EmoteBinding | null {
+    if (!this.broadcasterId) return null
+
+    return { platform: 'twitch', channelId: this.broadcasterId }
   }
 }
 
@@ -30,9 +37,11 @@ export async function resolveChannel(
   }
 
   if (!auth.isSignedIn()) {
+    const identity = await anonymousIdentity(login)
+
     return {
       state: 'ok',
-      channel: new TwitchChannel(await anonymousDisplayName(login), login, '')
+      channel: new TwitchChannel(identity.displayName, login, identity.id)
     }
   }
 
@@ -58,15 +67,17 @@ export async function resolveChannel(
   }
 }
 
-async function anonymousDisplayName(login: string): Promise<string> {
+async function anonymousIdentity(
+  login: string
+): Promise<{ id: string; displayName: string }> {
   try {
-    const data = await twitchGql<{ user?: { displayName?: string } | null }>(
-      DISPLAY_NAME_QUERY,
+    const data = await twitchGql<{ user?: { id?: string; displayName?: string } | null }>(
+      IDENTITY_QUERY,
       { login }
     )
 
-    return data?.user?.displayName || login
+    return { id: data?.user?.id ?? '', displayName: data?.user?.displayName || login }
   } catch {
-    return login
+    return { id: '', displayName: login }
   }
 }

@@ -1,5 +1,6 @@
 import type { Platform } from "@shared/types";
 import { Channel, type ChannelLookup } from "../../channel";
+import type { EmoteBinding } from "../../../emotes";
 import { innertube } from "./connection";
 
 const CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/;
@@ -13,8 +14,15 @@ export class YouTubeChannel extends Channel {
   constructor(
     displayName: string,
     readonly continuation: string,
+    readonly channelId: string,
   ) {
     super(displayName);
+  }
+
+  get emotes(): EmoteBinding | null {
+    if (!this.channelId) return null;
+
+    return { platform: "google", channelId: this.channelId };
   }
 }
 
@@ -116,7 +124,11 @@ async function inspectStream(
 
   return {
     state: "ok",
-    channel: new YouTubeChannel(info.basic_info.author ?? "", continuation),
+    channel: new YouTubeChannel(
+      info.basic_info.author ?? "",
+      continuation,
+      info.basic_info.channel_id ?? "",
+    ),
   };
 }
 

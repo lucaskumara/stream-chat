@@ -1,9 +1,14 @@
 import type { Platform } from "@shared/types";
+import type { EmoteBinding } from "../emotes";
 
 export abstract class Channel {
   abstract readonly platform: Platform;
 
   constructor(readonly displayName: string) {}
+
+  get emotes(): EmoteBinding | null {
+    return null;
+  }
 }
 
 export type ChannelLookup<TChannel extends Channel> =

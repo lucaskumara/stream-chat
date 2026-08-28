@@ -14,6 +14,7 @@ import {
   type ChatFeed,
   type FeedSink,
   type PollResult,
+  withEmotes,
 } from "../../watcher";
 import type { ChannelLookup, RetryPolicy } from "../../channel";
 import { splitLinks } from "../../links";
@@ -87,7 +88,7 @@ class YouTubeChatFeed extends PollingFeed {
 
   constructor(
     private readonly sourceId: string,
-    channel: YouTubeChannel,
+    private readonly channel: YouTubeChannel,
     sink: FeedSink,
   ) {
     super(sink);
@@ -164,7 +165,7 @@ class YouTubeChatFeed extends PollingFeed {
       this.seen.add(item.id);
 
       const message = toChatMessage(item, this.sourceId);
-      if (message) messages.push(message);
+      if (message) messages.push(withEmotes(message, this.channel));
     }
 
     return {

@@ -1,6 +1,6 @@
 import type { Badge, ChatMessage, Fragment, MessageKind } from "@shared/types";
 import { RoomSocket } from "../../socket";
-import { messageId, type ChatFeed, type FeedSink } from "../../watcher";
+import { messageId, withEmotes, type ChatFeed, type FeedSink } from "../../watcher";
 import { splitLinks } from "../../links";
 import { twitchBadges } from "./badges";
 import type { TwitchChannel } from "./channel";
@@ -383,7 +383,7 @@ export class TwitchIrcFeed implements ChatFeed {
       this.sourceId,
       this.channel.login,
     );
-    if (chat) this.sink.message(chat);
+    if (chat) this.sink.message(withEmotes(chat, this.channel));
   }
 
   private publishNotice(message: IrcMessage): void {
@@ -392,7 +392,7 @@ export class TwitchIrcFeed implements ChatFeed {
       this.sourceId,
       this.channel.login,
     );
-    if (notice) this.sink.message(notice);
+    if (notice) this.sink.message(withEmotes(notice, this.channel));
   }
 
   private publishDeletion(message: IrcMessage): void {

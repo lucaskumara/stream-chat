@@ -4,6 +4,7 @@ import {
   messageId,
   type ChatFeed,
   type FeedSink,
+  withEmotes,
 } from "../../watcher";
 import type { ChannelLookup, RetryPolicy } from "../../channel";
 import { splitLinks } from "../../links";
@@ -120,7 +121,7 @@ class KickChatFeed implements ChatFeed {
 
   private publishMessage(event: ChatMessageEvent): void {
     const message = toChatMessage(event, this.sourceId, this.channel);
-    if (message) this.sink.message(message);
+    if (message) this.sink.message(withEmotes(message, this.channel));
   }
 
   private publishDeletion(event: MessageDeletedEvent): void {
