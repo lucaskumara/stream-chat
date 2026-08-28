@@ -1,14 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Alert, Badge, Button, Flex, Input, Select, Space, Typography } from 'antd'
 import type { Platform } from '@shared/types'
-import { AUTO_CONNECT_COST, parseChannelInput } from '@shared/channel'
+import { parseChannelInput } from '@shared/channel'
 import { bridge } from '../bridge'
 import { PLATFORM_COLOR } from './MessageRow'
-
-const AUTO_LABEL: Record<'push' | 'polled', string> = {
-  push: 'auto-connects when live (push, no polling)',
-  polled: 'rechecked every 2 min while the channel is offline'
-}
 
 const PLATFORM_OPTIONS: { value: Platform; label: React.ReactNode }[] = (
   ['twitch', 'youtube', 'kick'] as Platform[]
@@ -91,7 +86,7 @@ export function AddChannel({ onAdded }: AddChannelProps): React.ReactElement {
       {preview ? (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           <Typography.Text style={{ fontSize: 12 }}>{preview.platform}</Typography.Text> ·{' '}
-          {preview.value} · {AUTO_LABEL[AUTO_CONNECT_COST[preview.platform]]}
+          {preview.value}
         </Typography.Text>
       ) : (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>

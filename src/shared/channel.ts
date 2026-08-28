@@ -161,9 +161,3 @@ export function parseChannelInput(input: string, platformHint?: Platform): Parse
 
   return parseBareName(raw, platformHint)
 }
-
-export const AUTO_CONNECT_COST: Record<Platform, 'push' | 'polled'> = {
-  twitch: 'push',
-  kick: 'push',
-  youtube: 'polled'
-}
