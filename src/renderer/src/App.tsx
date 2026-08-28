@@ -127,6 +127,8 @@ export default function App(): React.ReactElement {
         onCancel={() => setAdding(false)}
         footer={null}
         width={420}
+        centered
+        styles={{ wrapper: { paddingBottom: '20vh' } }}
         destroyOnHidden
       >
         <AddChannel onAdded={() => setAdding(false)} />
