@@ -15,6 +15,7 @@ interface ChatState {
   bySource: Record<string, ChatMessage[]>
 
   visibleIds: string[]
+  groups: string[][]
 
   deleted: Record<string, true>
 
@@ -39,10 +40,15 @@ function capped(arr: ChatMessage[], capacity: number): ChatMessage[] {
   return arr.length > capacity ? arr.slice(arr.length - capacity) : arr
 }
 
+function pruneGroups(groups: string[][], keep: (sourceId: string) => boolean): string[][] {
+  return groups.map((group) => group.filter(keep)).filter((group) => group.length > 1)
+}
+
 export const useStore = create<ChatState>()((set) => ({
   sources: [],
   bySource: {},
   visibleIds: [],
+  groups: [],
   deleted: {},
 
   showDeleted: true,
@@ -62,10 +68,16 @@ export const useStore = create<ChatState>()((set) => ({
           ? states.find((state) => !s.sources.some((was) => was.id === state.id))
           : undefined
 
-      if (opened) return { sources: states, visibleIds: [opened.id] }
-      if (kept.length > 0) return { sources: states, visibleIds: kept }
+      const groups = pruneGroups(s.groups, (id) => alive.has(id))
 
-      return { sources: states, visibleIds: states.slice(0, 1).map((state) => state.id) }
+      if (opened) return { sources: states, groups, visibleIds: [opened.id] }
+      if (kept.length > 0) return { sources: states, groups, visibleIds: kept }
+
+      return {
+        sources: states,
+        groups,
+        visibleIds: states.slice(0, 1).map((state) => state.id)
+      }
     }),
 
   setTwitchAuth: (twitchAuth) => set({ twitchAuth }),
@@ -82,14 +94,30 @@ export const useStore = create<ChatState>()((set) => ({
     }),
 
   showSource: (sourceId) =>
-    set((s) => (s.visibleIds.includes(sourceId) ? s : { visibleIds: [sourceId] })),
+    set((s) => {
+      if (s.visibleIds.includes(sourceId)) return s
+
+      const group = s.groups.find((ids) => ids.includes(sourceId))
+
+      return { visibleIds: group ? [...group] : [sourceId] }
+    }),
 
   toggleSplit: (sourceId) =>
     set((s) => {
-      if (!s.visibleIds.includes(sourceId)) return { visibleIds: [...s.visibleIds, sourceId] }
-      if (s.visibleIds.length === 1) return s
+      const held = s.visibleIds.includes(sourceId)
+      if (held && s.visibleIds.length === 1) return s
 
-      return { visibleIds: s.visibleIds.filter((id) => id !== sourceId) }
+      const visibleIds = held
+        ? s.visibleIds.filter((id) => id !== sourceId)
+        : [...s.visibleIds, sourceId]
+
+      const touched = new Set([...visibleIds, sourceId])
+      const groups = pruneGroups(s.groups, (id) => !touched.has(id))
+
+      return {
+        visibleIds,
+        groups: visibleIds.length > 1 ? [...groups, visibleIds] : groups
+      }
     }),
 
   ingest: (batch) =>
@@ -165,6 +193,10 @@ export const useStore = create<ChatState>()((set) => ({
       const bySource = { ...s.bySource }
       delete bySource[sourceId]
 
-      return { bySource, visibleIds: s.visibleIds.filter((id) => id !== sourceId) }
+      return {
+        bySource,
+        visibleIds: s.visibleIds.filter((id) => id !== sourceId),
+        groups: pruneGroups(s.groups, (id) => id !== sourceId)
+      }
     }),
 }))

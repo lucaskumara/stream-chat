@@ -20,6 +20,9 @@
 }
 
 :root {
+  /* Matches antd's Tabs cardGutter so a group band can span the gap. */
+  --tab-gutter: 2px;
+
   /* Driven by the font-size control in the top bar; every message-row size
      is expressed in em so this one value scales timestamps, badges and
      emotes together. */
@@ -68,6 +71,59 @@ body {
 .tab-split-inert:hover {
   opacity: 0.3;
   background: transparent;
+}
+
+/* Tabs that share a saved split group wear one continuous coloured bar across
+   their top edge — the bar bridges the 2px gutter between adjacent members so a
+   run reads as a single band rather than one mark per tab. The whole tab is
+   deliberately left alone; only the band says "these open together". */
+.tab-group {
+  position: relative;
+}
+.tab-group::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: calc(-1 * var(--tab-gutter));
+  height: 2px;
+  background: var(--group-color);
+  opacity: 0.3;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+/* The band lights up for the group currently on screen and stays dimmed for
+   groups that are only remembered. */
+.tab-group.tab-shown::before {
+  opacity: 1;
+}
+
+/* Grip on the leftmost member — drags the whole group rather than one tab. The
+   bar is 3px but the hit area is the whole 14px of leading space, because that
+   space is what reads as "grab the group". */
+.tab-grip {
+  width: 14px;
+  height: 18px;
+  margin-left: -5px;
+  border-radius: 2px;
+  background: linear-gradient(var(--group-color), var(--group-color)) center / 3px 12px no-repeat;
+  opacity: 0.45;
+  cursor: grab;
+  transition: opacity 0.12s;
+}
+.tab-grip:hover {
+  opacity: 1;
+}
+.tab-group.tab-shown .tab-grip {
+  opacity: 0.8;
+}
+.tab-group-end::before {
+  right: 0;
+  border-top-right-radius: 2px;
+}
+.tab-group-start::before {
+  border-top-left-radius: 2px;
 }
 
 /* Every open chat is "shown", but antd only marks one tab active. Shown tabs

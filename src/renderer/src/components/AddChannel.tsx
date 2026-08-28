@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Alert, Badge, Button, Flex, Input, Select, Space, Typography } from 'antd'
+import { Alert, Button, Flex, Input, Select, Space, Typography } from 'antd'
 import type { Platform } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
 import { bridge } from '../bridge'
-import { PLATFORM_COLOR } from './MessageRow'
+import { PlatformIcon } from './PlatformIcon'
 
 const PLATFORM_OPTIONS: { value: Platform; label: React.ReactNode }[] = (
   ['twitch', 'youtube', 'kick'] as Platform[]
@@ -11,7 +11,7 @@ const PLATFORM_OPTIONS: { value: Platform; label: React.ReactNode }[] = (
   value: platform,
   label: (
     <Flex align="center" gap={6}>
-      <Badge color={PLATFORM_COLOR[platform]} />
+      <PlatformIcon platform={platform} />
       {platform}
     </Flex>
   )

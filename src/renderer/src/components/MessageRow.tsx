@@ -1,11 +1,6 @@
 import { memo, useState } from 'react'
-import type { Badge, ChatMessage, Fragment, Platform } from '@shared/types'
-
-export const PLATFORM_COLOR: Record<Platform, string> = {
-  twitch: '#9146ff',
-  youtube: '#ff0033',
-  kick: '#53fc18'
-}
+import type { Badge, ChatMessage, Fragment } from '@shared/types'
+import { PLATFORM_COLOR } from './PlatformIcon'
 
 const KIND_LABEL: Partial<Record<ChatMessage['kind'], string>> = {
   subscription: 'SUB',
