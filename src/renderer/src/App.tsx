@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { App as AntApp, Badge, Button, Empty, Flex, Layout, Modal, Splitter, Typography } from 'antd'
+import { App as AntApp, Button, Empty, Flex, Layout, Modal, Splitter } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import type { SourceState } from '@shared/types'
 import { bridge } from './bridge'
@@ -7,33 +7,6 @@ import { useStore } from './store'
 import { AddChannel } from './components/AddChannel'
 import { ChannelTabs } from './components/ChannelTabs'
 import { ChatPane } from './components/ChatPane'
-import { PLATFORM_COLOR } from './components/MessageRow'
-import { INK } from './theme'
-
-function PaneHeader({ source }: { source: SourceState }): React.ReactElement {
-  const count = useStore((s) => s.bySource[source.id]?.length ?? 0)
-
-  return (
-    <Flex
-      align="center"
-      gap={6}
-      style={{
-        flexShrink: 0,
-        padding: '4px 8px',
-        background: INK.chrome,
-        borderBottom: `1px solid ${INK.line}`
-      }}
-    >
-      <Badge color={PLATFORM_COLOR[source.platform]} />
-      <Typography.Text strong ellipsis style={{ fontSize: 13 }}>
-        {source.label}
-      </Typography.Text>
-      <Typography.Text type="secondary" style={{ marginLeft: 'auto', fontSize: 12 }}>
-        {count}
-      </Typography.Text>
-    </Flex>
-  )
-}
 
 export default function App(): React.ReactElement {
   const { modal } = AntApp.useApp()
@@ -135,7 +108,6 @@ export default function App(): React.ReactElement {
                 search=""
                 messages={bySource[panes[0].id] ?? []}
                 showPlatform={false}
-                header={null}
               />
             ) : (
               <Splitter style={{ height: '100%', width: '100%' }}>
@@ -148,7 +120,6 @@ export default function App(): React.ReactElement {
                       search=""
                       messages={bySource[source.id] ?? []}
                       showPlatform={false}
-                      header={<PaneHeader source={source} />}
                     />
                   </Splitter.Panel>
                 ))}

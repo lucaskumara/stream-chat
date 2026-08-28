@@ -17,7 +17,6 @@ export interface ChatPaneProps {
   showTimestamps: boolean
   showPlatform: boolean
   search: string
-  header: React.ReactNode
 }
 
 export function ChatPane({
@@ -26,8 +25,7 @@ export function ChatPane({
   showDeleted,
   showTimestamps,
   showPlatform,
-  search,
-  header
+  search
 }: ChatPaneProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState(true)
@@ -106,8 +104,6 @@ export function ChatPane({
       className="flex min-h-0 min-w-0 flex-1 flex-col"
       style={{ height: '100%', background: INK.chat }}
     >
-      {header}
-
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
