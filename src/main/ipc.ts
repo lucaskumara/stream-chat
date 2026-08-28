@@ -1,4 +1,4 @@
-import { ipcMain, shell } from 'electron'
+import { BrowserWindow, ipcMain, shell } from 'electron'
 import type { AddSourceRequest, Platform } from '@shared/types'
 import type { SourceManager } from './sources'
 import type { TwitchAuth } from './twitch/auth'
@@ -14,6 +14,12 @@ export const IPC = {
   reorderSources: 'sources:reorder',
   openExternal: 'shell:open-external',
 
+  windowMinimize: 'window:minimize',
+  windowToggleMaximize: 'window:toggle-maximize',
+  windowClose: 'window:close',
+  windowIsMaximized: 'window:is-maximized',
+  windowMaximized: 'window:maximized',
+
   twitchAuthState: 'twitch:auth-state',
   twitchStartLogin: 'twitch:start-login',
   twitchSignOut: 'twitch:sign-out',
@@ -26,6 +32,7 @@ export const IPC = {
 export function registerIpc(sources: SourceManager, auth: TwitchAuth): void {
   registerSourceHandlers(sources)
   registerShellHandlers()
+  registerWindowHandlers()
   registerTwitchAuthHandlers(sources, auth)
 }
 
@@ -51,6 +58,26 @@ function registerShellHandlers(): void {
   })
 }
 
+function registerWindowHandlers(): void {
+  ipcMain.handle(IPC.windowMinimize, (event) => senderWindow(event)?.minimize())
+
+  ipcMain.handle(IPC.windowToggleMaximize, (event) => {
+    const window = senderWindow(event)
+    if (!window) return
+
+    if (window.isMaximized()) window.unmaximize()
+    else window.maximize()
+  })
+
+  ipcMain.handle(IPC.windowClose, (event) => senderWindow(event)?.close())
+
+  ipcMain.handle(IPC.windowIsMaximized, (event) => senderWindow(event)?.isMaximized() ?? false)
+}
+
+function senderWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow | null {
+  return BrowserWindow.fromWebContents(event.sender)
+}
+
 function registerTwitchAuthHandlers(sources: SourceManager, auth: TwitchAuth): void {
   ipcMain.handle(IPC.twitchAuthState, () => buildAuthState(auth))
   ipcMain.handle(IPC.twitchStartLogin, async () => auth.startDeviceFlow())
@@ -67,6 +94,10 @@ export function unregisterIpc(): void {
     IPC.removeSource,
     IPC.reorderSources,
     IPC.openExternal,
+    IPC.windowMinimize,
+    IPC.windowToggleMaximize,
+    IPC.windowClose,
+    IPC.windowIsMaximized,
     IPC.twitchAuthState,
     IPC.twitchStartLogin,
     IPC.twitchSignOut

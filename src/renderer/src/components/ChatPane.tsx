@@ -102,7 +102,7 @@ export function ChatPane({
   return (
     <div
       className="flex min-h-0 min-w-0 flex-1 flex-col"
-      style={{ height: '100%', background: INK.chat }}
+      style={{ height: '100%', background: INK.app }}
     >
       <div className="relative min-h-0 flex-1">
         <div

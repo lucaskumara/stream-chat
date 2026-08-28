@@ -12,8 +12,7 @@
   --color-kick: #53fc18;
   --color-mock: #64748b;
 
-  --color-ink-900: #0d0d0d;
-  --color-ink-800: #141414;
+  --color-ink-900: #141414;
   --color-ink-700: #1c1c1c;
   --color-ink-600: #242424;
   --color-ink-500: #333333;
@@ -166,4 +165,54 @@ body {
 }
 .chat-scroll::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* The window is frameless, so this row is the whole title bar: it carries the
+   OS drag region and the only way to minimise, maximise or close. Everything
+   inside it is draggable except the buttons, which opt back out — a drag
+   region swallows clicks, so a control left inside one is dead. */
+.titlebar {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  flex: none;
+  -webkit-app-region: drag;
+}
+
+.titlebar-drag {
+  flex: 1;
+  align-self: stretch;
+}
+
+.titlebar-name {
+  padding: 0 10px;
+  font-size: 12px;
+  color: #6b6b6b;
+  letter-spacing: 0.02em;
+}
+
+.titlebar-button {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #a1a1a1;
+  cursor: default;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.titlebar-button:hover {
+  background: #242424;
+  color: #ededed;
+}
+.titlebar-close:hover {
+  background: #c42b1c;
+  color: #ffffff;
 }

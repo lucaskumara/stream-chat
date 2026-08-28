@@ -669,13 +669,37 @@ dependencies.
 onto antd tokens and exports `INK` for the few places that still need a raw hex (the tab
 strip's background and border, the chat background). Reach for a token before a hex.
 
-**The palette is deliberately hueless.** `INK` runs `#0d0d0d` to `#272727` with R=G=B, and
+**Every app surface is one shade.** `INK.app` (`#141414`) paints the title bar, the tab
+strip, the chat panes and the empty state, and `--color-ink-900` matches it so the body
+behind them cannot show a seam. The chrome used to run three greys — `#0d0d0d` body,
+`#101010` strip, `#141414` chat — which read as a mismatched frame bolted onto the app once
+the OS frame was gone. Depth comes from the cards on top (`INK.card` for a shown tab,
+`INK.raised` for a popover) and from `INK.line`, never from tinting the surface underneath.
+Verified in the running app: body, title bar, tab strip and chat all compute
+`rgb(20, 20, 20)`.
+
+**The palette is deliberately hueless.** `INK` runs `#141414` to `#272727` with R=G=B, and
 `colorPrimary` is a mid grey rather than an accent. It started as a cool blue-grey and read
 as a blue app rather than a black one: every surface measured about 215 degrees of hue, from
 the app background at `rgb(11, 13, 16)` to secondary text at `rgb(154, 164, 178)`. antd's
 dark algorithm derives its whole neutral ramp from `colorBgBase`, so a single tinted seed
 propagates to every border, surface and text tone. Group bands are the one intentional
 colour in the chrome. Author name colours are content, not chrome, and are left alone.
+
+**The window is frameless and the renderer draws the title bar.** `frame: false` plus
+`TitleBar`, which is rendered above the tab strip for *both* branches of `App` — including
+the empty state, since a window whose only close button lives behind "you have channels"
+cannot be closed. Two things bite here. A `-webkit-app-region: drag` region swallows mouse
+events, so every control inside the bar has to opt back out with `no-drag` or it is simply
+dead. And the maximise glyph is driven by `maximize`/`unmaximize` events pushed from main,
+not by what the button did — double-clicking the drag region, Win+Up and snapping all
+maximise the window without going through the button. Window control handlers resolve their
+target with `BrowserWindow.fromWebContents(event.sender)` rather than the module-level
+`mainWindow`, which is the same reason every other IPC handler validates its own input.
+Cost of `frame: false` on Windows: no snap-layouts flyout on maximise hover — that needs
+`titleBarStyle: 'hidden'` with `titleBarOverlay`, which hands the right-hand strip back to
+the OS. Note that a frameless window still reports `outerHeight - innerHeight === 8` (the
+invisible resize border), so that difference is not a test for "is the frame gone".
 
 **Platform dots are the sites' favicons, except in message rows.** `PlatformIcon` loads
 `favicon.ico` from each platform and falls back to the old coloured dot on error, so a dead

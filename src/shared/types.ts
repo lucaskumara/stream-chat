@@ -118,6 +118,13 @@ export interface ChatApi {
   reorderSources(orderedIds: string[]): Promise<void>
   openExternal(url: string): Promise<void>
 
+  windowMinimize(): Promise<void>
+  windowToggleMaximize(): Promise<void>
+  windowClose(): Promise<void>
+  windowIsMaximized(): Promise<boolean>
+
+  onWindowMaximized(cb: (maximized: boolean) => void): () => void
+
   onBatch(cb: (batch: ChatBatch) => void): () => void
 
   onSources(cb: (states: SourceState[]) => void): () => void

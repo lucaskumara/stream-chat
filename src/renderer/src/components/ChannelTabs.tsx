@@ -666,7 +666,7 @@ export function ChannelTabs({
   )
 
   return (
-    <div style={{ background: INK.chrome, borderBottom: `1px solid ${INK.line}`, paddingTop: 6 }}>
+    <div style={{ background: INK.app, borderBottom: `1px solid ${INK.line}`, paddingTop: 6 }}>
       <Tabs
         type="editable-card"
         size="small"

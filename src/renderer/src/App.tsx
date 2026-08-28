@@ -7,6 +7,7 @@ import { useStore } from './store'
 import { AddChannel } from './components/AddChannel'
 import { ChannelTabs } from './components/ChannelTabs'
 import { ChatPane } from './components/ChatPane'
+import { TitleBar } from './components/TitleBar'
 
 export default function App(): React.ReactElement {
   const sources = useStore((s) => s.sources)
@@ -67,6 +68,8 @@ export default function App(): React.ReactElement {
 
   return (
     <Layout style={{ height: '100%' }}>
+      <TitleBar />
+
       {sources.length === 0 ? (
         <Flex flex={1} align="center" justify="center">
           <Empty
@@ -79,7 +82,7 @@ export default function App(): React.ReactElement {
           </Empty>
         </Flex>
       ) : (
-        <Flex vertical style={{ height: '100%' }}>
+        <Flex vertical style={{ flex: 1, minHeight: 0 }}>
           <ChannelTabs
             sources={sources}
             visibleIds={visibleIds}

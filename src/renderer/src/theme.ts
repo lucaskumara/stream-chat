@@ -2,11 +2,9 @@ import { theme } from 'antd'
 import type { ThemeConfig } from 'antd'
 
 export const INK = {
-  app: '#0d0d0d',
-  chat: '#141414',
+  app: '#141414',
   card: '#1c1c1c',
   raised: '#242424',
-  chrome: '#101010',
   line: '#272727'
 }
 
@@ -37,7 +35,7 @@ export const chatTheme: ThemeConfig = {
 
   components: {
     Layout: {
-      bodyBg: INK.chat
+      bodyBg: INK.app
     },
     Empty: {
       colorTextDescription: '#6b6b6b'

@@ -1,0 +1,64 @@
+import { useEffect, useState } from 'react'
+import { bridge } from '../bridge'
+
+function Glyph({ path }: { path: string }): React.ReactElement {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden focusable="false">
+      <path d={path} fill="none" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  )
+}
+
+const MINIMIZE = 'M0 5.5 H10'
+const MAXIMIZE = 'M0.5 0.5 H9.5 V9.5 H0.5 Z'
+const RESTORE = 'M2.5 2.5 H9.5 V9.5 H2.5 Z M0.5 0.5 H7.5 V2.5 M0.5 0.5 V7.5 H2.5'
+const CLOSE = 'M0.5 0.5 L9.5 9.5 M9.5 0.5 L0.5 9.5'
+
+export function TitleBar(): React.ReactElement {
+  const [maximized, setMaximized] = useState(false)
+
+  useEffect(() => {
+    const { api } = bridge()
+
+    void api.windowIsMaximized().then(setMaximized)
+
+    return api.onWindowMaximized(setMaximized)
+  }, [])
+
+  const { api } = bridge()
+
+  return (
+    <div className="titlebar">
+      <span className="titlebar-name">stream-chat</span>
+
+      <div className="titlebar-drag" />
+
+      <button
+        type="button"
+        className="titlebar-button"
+        aria-label="Minimize"
+        onClick={() => void api.windowMinimize()}
+      >
+        <Glyph path={MINIMIZE} />
+      </button>
+
+      <button
+        type="button"
+        className="titlebar-button"
+        aria-label={maximized ? 'Restore' : 'Maximize'}
+        onClick={() => void api.windowToggleMaximize()}
+      >
+        <Glyph path={maximized ? RESTORE : MAXIMIZE} />
+      </button>
+
+      <button
+        type="button"
+        className="titlebar-button titlebar-close"
+        aria-label="Close"
+        onClick={() => void api.windowClose()}
+      >
+        <Glyph path={CLOSE} />
+      </button>
+    </div>
+  )
+}

@@ -47,8 +47,8 @@ function createWindow(): BrowserWindow {
     minWidth: 720,
     minHeight: 420,
     show: false,
-    autoHideMenuBar: true,
-    backgroundColor: '#0b0d10',
+    frame: false,
+    backgroundColor: '#141414',
     title: 'stream-chat',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -61,6 +61,13 @@ function createWindow(): BrowserWindow {
   })
 
   window.on('ready-to-show', () => window.show())
+
+  const reportMaximized = (): void => {
+    window.webContents.send(IPC.windowMaximized, window.isMaximized())
+  }
+
+  window.on('maximize', reportMaximized)
+  window.on('unmaximize', reportMaximized)
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     void openExternalSafely(url)

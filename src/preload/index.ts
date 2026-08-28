@@ -14,6 +14,11 @@ const IPC = {
   removeSource: 'sources:remove',
   reorderSources: 'sources:reorder',
   openExternal: 'shell:open-external',
+  windowMinimize: 'window:minimize',
+  windowToggleMaximize: 'window:toggle-maximize',
+  windowClose: 'window:close',
+  windowIsMaximized: 'window:is-maximized',
+  windowMaximized: 'window:maximized',
   twitchAuthState: 'twitch:auth-state',
   twitchStartLogin: 'twitch:start-login',
   twitchSignOut: 'twitch:sign-out',
@@ -36,6 +41,22 @@ const api: ChatApi = {
 
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke(IPC.openExternal, url),
+
+  windowMinimize: (): Promise<void> => ipcRenderer.invoke(IPC.windowMinimize),
+
+  windowToggleMaximize: (): Promise<void> => ipcRenderer.invoke(IPC.windowToggleMaximize),
+
+  windowClose: (): Promise<void> => ipcRenderer.invoke(IPC.windowClose),
+
+  windowIsMaximized: (): Promise<boolean> => ipcRenderer.invoke(IPC.windowIsMaximized),
+
+  onWindowMaximized: (cb: (maximized: boolean) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, maximized: boolean): void => cb(maximized)
+    ipcRenderer.on(IPC.windowMaximized, handler)
+    return () => {
+      ipcRenderer.off(IPC.windowMaximized, handler)
+    }
+  },
 
   onBatch: (cb: (batch: ChatBatch) => void): (() => void) => {
     const handler = (_e: Electron.IpcRendererEvent, batch: ChatBatch): void => cb(batch)
