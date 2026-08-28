@@ -237,3 +237,24 @@ body {
 .chat-pane-search .ant-select-selection-item-remove {
   display: none;
 }
+
+/* antd sizes the add button but does not centre a child element in it — its own
+   glyph is a font icon that rides the line box, so a 16px svg sat hard against the
+   left edge. */
+.ant-tabs-nav-add {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+/* antd pulls the close control 4px past the tab's padding with a negative margin,
+   which reads as the x being crammed against the tab edge. */
+.ant-tabs-tab-remove {
+  margin-inline-end: 0 !important;
+}
+
+/* The rule under the tab strip separated the tabs from the chat they belong to.
+   The tab itself already carries an outline. */
+.ant-tabs-nav::before {
+  display: none;
+}

@@ -731,6 +731,15 @@ platform dropdown needs a `mousedown` dispatched on `.ant-select-content` — a 
 `lucide-react`. Only main-process packages that stay external — `electron-store`, `ws`,
 `youtubei.js` — are real dependencies.
 
+**antd's tab chrome needs three CSS corrections, all of them in `index.css`.** They are
+overrides of antd internals, so re-check them on an antd upgrade. `.ant-tabs-nav-add` sizes
+its button but centres nothing — antd's own glyph is a font icon riding the line box, so a
+16px svg sat hard against the left edge; it needs `display: flex` with centring.
+`.ant-tabs-tab-remove` carries a negative inline-end margin that pulls the `×` 4px past the
+tab's padding, which reads as the close control being crammed into the tab edge; zero it.
+And `.ant-tabs-nav::before` draws a rule under the whole strip, separating the tabs from the
+chat they belong to — hidden, since each tab already carries its own outline.
+
 **Icons are lucide, and antd's own glyphs have to be overridden to keep it that way.**
 `lucide-react` is the only icon import in the tree; `@ant-design/icons` is no longer a direct
 dependency, though antd still pulls it transitively for internals we do not reach. Three antd

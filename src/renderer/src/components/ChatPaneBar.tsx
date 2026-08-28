@@ -56,8 +56,8 @@ function ChatPaneBarImpl({
 
   return (
     <div
-      className="flex items-center gap-2 px-2 py-1"
-      style={{ borderTop: `1px solid ${INK.line}`, background: INK.app, flex: 'none' }}
+      className="flex items-center gap-2 p-2"
+      style={{ background: INK.app, flex: 'none' }}
     >
       <Select
         mode="tags"
