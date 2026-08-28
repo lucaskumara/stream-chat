@@ -82,6 +82,13 @@ function blockExtent(members: string[]): { left: number; right: number } | null 
   }
 }
 
+function travelBounds(
+  span: { left: number; right: number },
+  limit: { left: number; right: number }
+): { min: number; max: number } {
+  return { min: limit.left - span.left, max: limit.right - span.right }
+}
+
 function contiguousOrder(ids: string[], groups: string[][]): string[] {
   const owner = new Map<string, string[]>()
 
@@ -232,17 +239,11 @@ export function ChannelTabs({
   } | null>(null)
   const shift = useRef(0)
 
-  const clampToStrip: Modifier = ({ transform, draggingNodeRect }) => {
+  const clampToStrip: Modifier = ({ transform }) => {
     const held = bounds.current
-    if (held) return { ...transform, x: Math.min(Math.max(transform.x, held.min), held.max) }
+    if (!held) return transform
 
-    const extent = tabsExtent()
-    if (!draggingNodeRect || !extent) return transform
-
-    const min = extent.left - draggingNodeRect.left
-    const max = extent.right - draggingNodeRect.right
-
-    return { ...transform, x: Math.min(Math.max(transform.x, min), max) }
+    return { ...transform, x: Math.min(Math.max(transform.x, held.min), held.max) }
   }
   const [carry, setCarry] = useState<{ active: string; members: string[]; dx: number } | null>(null)
 
@@ -349,18 +350,14 @@ export function ChannelTabs({
     return from > to ? run.start : run.end
   }
 
-  const runBounds = (sourceId: string): { min: number; max: number } | null => {
+  const soloBounds = (sourceId: string): { min: number; max: number } | null => {
+    const span = blockExtent([sourceId])
+    if (!span) return null
+
     const group = groups.find((members) => members.includes(sourceId))
-    if (!group) return null
+    const limit = group ? blockExtent(ids.filter((id) => group.includes(id))) : tabsExtent()
 
-    const run = blockExtent(ids.filter((id) => group.includes(id)))
-    const rect = document
-      .querySelector(`.ant-tabs-tab[data-node-key="${sourceId}"]`)
-      ?.getBoundingClientRect()
-
-    if (!run || !rect) return null
-
-    return { min: run.left - rect.left, max: run.right - rect.right }
+    return limit ? travelBounds(span, limit) : null
   }
 
   const sweptPast = (tabs: { width: number }[], distance: number): number => {
@@ -404,7 +401,7 @@ export function ChannelTabs({
     const held = handle ? groups.find((members) => members.includes(handle)) : undefined
 
     if (!held || !held.includes(dragged)) {
-      bounds.current = runBounds(dragged)
+      bounds.current = soloBounds(dragged)
       return
     }
 
@@ -413,10 +410,7 @@ export function ChannelTabs({
     const extent = tabsExtent()
     const block = blockExtent(members)
 
-    bounds.current =
-      extent && block
-        ? { min: extent.left - block.left, max: extent.right - block.right }
-        : null
+    bounds.current = extent && block ? travelBounds(block, extent) : null
 
     layout.current = block
       ? {
