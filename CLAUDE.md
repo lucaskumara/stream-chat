@@ -159,6 +159,30 @@ resolve/recheck loop; three of them existed before and one platform was silently
 terminal and stops. YouTube is the only platform that returns `offline` in practice — Twitch
 and Kick chat are readable while the channel is dark.
 
+**Adding a channel is checked twice, and the two checks fail differently.**
+`parseChannelInput` in `src/shared/channel.ts` decides whether the text is *shaped* like a
+channel — `TWITCH_LOGIN` is 3-25 of `[a-z0-9_]`, `KICK_SLUG` 2-25, a YouTube handle 3-30
+after the `@` — and rejects in the renderer without an IPC call. Resolve then decides whether
+the channel *exists*. A name that is too long and a name nobody owns therefore surface
+different messages from different processes, which is worth knowing when a fix to one appears
+to do nothing to the other.
+
+**Only `missing` refuses the add; everything else keeps the tab.** `BaseChatWatcher.attach`
+throws `MissingChannelError` on a terminal lookup, `SourceManager.add` catches exactly that
+one, discards the entry it had already inserted and rethrows so the modal shows the reason
+and no dead tab is left behind. `unreachable` and `offline` keep the tab and retry, which is
+why the catch cannot simply reject on any connect failure — a network blip while adding
+`@LofiGirl` must not read as "no such channel". Two places have to swallow the same error:
+`scheduleAttach`, because a later re-resolve can go `missing` (a channel deleted mid-run) and
+the status event has already reported it, and `restoreSaved`, or one deleted saved channel
+aborts the whole startup restore loop. `restoreSaved` deliberately leaves the saved entry in
+`config.json` — a wrong `missing` would otherwise quietly delete the user's channel.
+
+**The renderer has to strip Electron's IPC wrapper before showing an error.**
+`ipcRenderer.invoke` rejects with `Error invoking remote method 'sources:add': Error: …`, so
+`remoteMessage` in `bridge.ts` trims that prefix. It did not matter while `add` only threw on
+malformed input nobody hit; it matters now that a typo'd channel name is the common path.
+
 **`FeedSink.ended` is not `failed`, and neither is a status.** `ended` means this feed is
 finished and the watcher should go back and re-resolve (a YouTube stream ended). `failed`
 means the transport broke and should be retried. This pair is what lets one `ChatFeed`
@@ -243,22 +267,6 @@ split is the whole point: without it, IRC happily joins a channel that does not 
 the tab sits at `connected` and silent forever, while treating an outage as `missing` would
 tell a user their channel was deleted because gql.twitch.tv had a bad minute. A GQL outage
 therefore still costs casing, not the connection.
-
-**Only `missing` refuses the add; everything else keeps the tab.** `BaseChatWatcher.attach`
-throws `MissingChannelError` on a terminal lookup, `SourceManager.add` catches exactly that
-one, discards the entry it had already inserted and rethrows so the modal shows the reason
-and no dead tab is left behind. `unreachable` and `offline` keep the tab and retry, which is
-why the catch cannot simply reject on any connect failure — a network blip while adding
-`@LofiGirl` must not read as "no such channel". Two places have to swallow the same error:
-`scheduleAttach`, because a later re-resolve can go `missing` (a channel deleted mid-run) and
-the status event has already reported it, and `restoreSaved`, or one deleted saved channel
-aborts the whole startup restore loop. `restoreSaved` deliberately leaves the saved entry in
-`config.json` — a wrong `missing` would otherwise quietly delete the user's channel.
-
-**The renderer has to strip Electron's IPC wrapper before showing an error.**
-`ipcRenderer.invoke` rejects with `Error invoking remote method 'sources:add': Error: …`, so
-`remoteMessage` in `bridge.ts` trims that prefix. It did not matter while `add` only threw on
-malformed input nobody hit; it matters now that a typo'd channel name is the common path.
 
 **A rename after `connect()` returns has to be pushed, or nothing sees it.**
 `SourceManager.add` copies `watcher.label` once, after connect. Anything that renames later
@@ -484,10 +492,6 @@ on newer ones (adinross is chatroom 875062, channel 875396). Chat lives on
 `chatrooms.{chatroom.id}.v2`. Only the chatroom is subscribed now that liveness is gone, but
 the trap returns the moment anything reads `channel.id` again.
 
-**7TV keys Kick by `user_id`, not by channel id.** `7tv.io/v3/users/kick/668` is a 404 for xQc;
-`.../kick/676` is the emote set. Both numbers sit in the same payload and both look plausible,
-so the wrong one reads as "this channel has no 7TV emotes".
-
 **Kick sends the author's colour, and two badge arrays that mean different things.**
 `sender.identity.color` is a hex string and is always present. `identity.badges` is
 `{ type, text, count? }` with **no image url at all** — `moderator`, `vip`, `og`,
@@ -690,8 +694,8 @@ main-process packages that stay external — `electron-store`, `ws`, `youtubei.j
 dependencies.
 
 **The theme is one object, not scattered inline styles.** `theme.ts` maps the ink palette
-onto antd tokens and exports `INK` for the few places that still need a raw hex (the tab
-strip's background and border, the chat background). Reach for a token before a hex.
+onto antd tokens and exports `INK` for the few places that still need a raw hex. Reach for a
+token before a hex.
 
 **Every app surface is one shade.** `INK.app` (`#141414`) paints the title bar, the tab
 strip, the chat panes and the empty state, and `--color-ink-900` matches it so the body
@@ -859,11 +863,12 @@ now **back** — 7TV and BTTV resolve through `Channel.emotes`, verified live at
 images in one screen of a busy Twitch chat, none broken.
 
 The renderer chrome was rebuilt on **Ant Design v6**, then the sidebar was replaced by a
-browser-style tab strip: one tab per channel, `+` opens the add-channel `Modal`, `×`
-removes after a confirm, and a pin on each tab drops that channel into a `Splitter`
-alongside the active one. Status, held count and "clear this pane" live in the tab bar's
-right extra slot. `MessageRow` stays hand-written for the reasons in "Renderer UI", and
-Tailwind is still in the tree for the chat rows.
+browser-style tab strip, and the OS frame was replaced by `TitleBar`. The twelve rules the
+strip has to keep live in "Tabs, split groups and dragging" — read them there rather than
+here, since this paragraph has drifted from the code twice already. `MessageRow` stays
+hand-written for the reasons in "Renderer UI", and Tailwind is still in the tree for the
+chat rows. There is no per-pane header and no tab-bar extra slot: the tab strip carries
+status, and "clear this pane" does not exist.
 
 Next: polish — settings persistence, sending messages back, auto-update. The store already carries `showDeleted`, `showTimestamps` and `fontSize` with
 **no UI bound to them** — an antd `Popover` of `Switch`es and a `Slider` hung off the tab
