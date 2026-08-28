@@ -383,6 +383,20 @@ Providers self-stagger because each schedules its next poll after its own respon
 without jitter all offline channels would re-resolve in lockstep every 120s, each pulling
 ~130KB. Resolve is ~130KB on the wire gzipped (1.2MB raw), not free.
 
+**Resolving the handle is also the existence check, and the only place a name is
+learned.** `resolveURL('/@handle/live')` answers a browse endpoint carrying
+`browseId` when the channel exists and 404s when it does not — which
+`classifyFailure` turns into the terminal `missing`. It carries `videoId` only
+while the channel is live, so a dark channel yields a `browseId` and nothing
+else. `channelName(browseId)` then fetches the title through `getChannel`, cached
+in a module-level `Map` because an offline channel re-resolves every couple of
+minutes and its title is the one thing that does not change. Without this a
+YouTube tab shows the raw identifier — `@theburntpeanut` rather than
+`TheBurntPeanut` — until the channel happens to go live, because
+`info.basic_info.author` only exists on a live video. `ChannelLookup`'s `offline`
+variant carries the optional `displayName` for exactly this, and
+`BaseChatWatcher` renames on it before firing the status event.
+
 **Never percent-encode the `@` in a handle URL.** `resolveURL` is given
 `youtube.com/@handle/live`; running the whole handle through `encodeURIComponent` yields
 `%40handle`, and YouTube resolves *some* of those and 404s others — `%40LofiGirl` works,

@@ -8,7 +8,7 @@ export abstract class Channel {
 
 export type ChannelLookup<TChannel extends Channel> =
   | { state: "ok"; channel: TChannel }
-  | { state: "offline"; reason: string }
+  | { state: "offline"; reason: string; displayName?: string }
   | { state: "missing"; reason: string }
   | { state: "unreachable"; reason: string };
 

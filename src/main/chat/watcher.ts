@@ -85,6 +85,7 @@ export abstract class BaseChatWatcher<
         return this.open(lookup.channel);
 
       case "offline":
+        if (lookup.displayName) this.rename(lookup.displayName);
         this.events.status("offline", lookup.reason);
         return this.scheduleAttach(this.retry.offlineMs);
 

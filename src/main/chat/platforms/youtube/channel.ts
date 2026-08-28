@@ -51,13 +51,13 @@ export async function resolveChannel(
   const reference = referenceFor(identifier);
 
   try {
-    const videoId =
-      reference.kind === "video"
-        ? reference.videoId
-        : await liveVideoId(reference.url);
+    if (reference.kind === "video") return await inspectStream(reference.videoId);
+
+    const { videoId, browseId } = await liveEndpoint(reference.url);
+    const displayName = browseId ? await channelName(browseId) : undefined;
 
     if (!videoId) {
-      return { state: "offline", reason: "not streaming right now" };
+      return { state: "offline", reason: "not streaming right now", displayName };
     }
 
     return await inspectStream(videoId);
@@ -66,11 +66,34 @@ export async function resolveChannel(
   }
 }
 
-async function liveVideoId(url: string): Promise<string | null> {
+async function liveEndpoint(
+  url: string,
+): Promise<{ videoId?: string; browseId?: string }> {
   const youtube = await innertube();
   const endpoint = await youtube.resolveURL(url);
 
-  return endpoint.payload?.videoId ?? null;
+  return {
+    videoId: endpoint.payload?.videoId,
+    browseId: endpoint.payload?.browseId,
+  };
+}
+
+const channelNames = new Map<string, string>();
+
+async function channelName(browseId: string): Promise<string | undefined> {
+  const known = channelNames.get(browseId);
+  if (known) return known;
+
+  try {
+    const youtube = await innertube();
+    const title = (await youtube.getChannel(browseId)).metadata?.title;
+
+    if (typeof title === "string" && title) channelNames.set(browseId, title);
+
+    return channelNames.get(browseId);
+  } catch {
+    return undefined;
+  }
 }
 
 async function inspectStream(
