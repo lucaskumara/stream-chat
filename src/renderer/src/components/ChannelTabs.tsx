@@ -31,6 +31,8 @@ const DRAG_THRESHOLD_PX = 5
 
 const TAB_GUTTER_PX = 2
 
+const NUDGE = 'transform 200ms cubic-bezier(0.2, 0, 0, 1)'
+
 const GROUP_COLORS = ['#6ea8d8', '#78bb92', '#d0a45e', '#b48ad4', '#d3838f', '#5fb8b8']
 
 const STATUS_BADGE: Record<SourceStatus, BadgeProps['status']> = {
@@ -55,6 +57,7 @@ interface DraggableTabProps extends React.HTMLAttributes<HTMLDivElement> {
   'data-node-key': string
   shown: boolean
   carryX?: number
+  nudgeX?: number
   mark?: GroupMark
 }
 
@@ -128,6 +131,7 @@ function splitHint(shown: boolean, onlyOne: boolean): string {
 function DraggableTab({
   shown,
   carryX,
+  nudgeX,
   mark,
   children,
   ...props
@@ -137,11 +141,15 @@ function DraggableTab({
   })
 
   const carried = carryX !== undefined
+  const shifted = carried ? carryX : nudgeX
 
   const style = {
     ...props.style,
-    transform: carried ? `translate3d(${carryX}px, 0, 0)` : CSS.Translate.toString(transform),
-    transition: isDragging || carried ? 'none' : transition,
+    transform:
+      shifted !== undefined
+        ? `translate3d(${shifted}px, 0, 0)`
+        : CSS.Translate.toString(transform),
+    transition: isDragging || carried ? 'none' : nudgeX !== undefined ? NUDGE : transition,
     zIndex: isDragging || carried ? 2 : undefined,
     cursor: isDragging || carried ? 'grabbing' : 'pointer',
     ...(mark ? { '--group-color': mark.color } : {})
@@ -235,6 +243,7 @@ export function ChannelTabs({
   const bounds = useRef<{ min: number; max: number } | null>(null)
   const layout = useRef<{
     left: number
+    width: number
     rest: { id: string; left: number; width: number }[]
   } | null>(null)
   const shift = useRef(0)
@@ -374,18 +383,34 @@ export function ChannelTabs({
     return passed
   }
 
+  const passedNeighbours = (dx: number): { id: string; width: number }[] => {
+    const placed = layout.current
+    if (!placed || dx === 0) return []
+
+    const lane =
+      dx > 0
+        ? placed.rest.filter((tab) => tab.left > placed.left)
+        : [...placed.rest.filter((tab) => tab.left < placed.left)].reverse()
+
+    return lane.slice(0, sweptPast(lane, Math.abs(dx)))
+  }
+
+  const nudges = new Map<string, number>()
+
+  if (carry && layout.current) {
+    const aside = carry.dx > 0 ? -layout.current.width : layout.current.width
+
+    for (const tab of passedNeighbours(carry.dx)) nudges.set(tab.id, aside)
+  }
+
   const dropWholeGroup = (group: string[]): void => {
     const placed = layout.current
     if (!placed) return
 
     const dx = shift.current
-    const ahead = placed.rest.filter((tab) => tab.left > placed.left)
     const behind = placed.rest.filter((tab) => tab.left < placed.left)
 
-    const moved =
-      dx > 0 ? sweptPast(ahead, dx) : dx < 0 ? -sweptPast([...behind].reverse(), -dx) : 0
-
-    const at = behind.length + moved
+    const at = behind.length + passedNeighbours(dx).length * (dx > 0 ? 1 : -1)
     const rest = placed.rest.map((tab) => tab.id)
     const members = ids.filter((id) => group.includes(id))
 
@@ -415,6 +440,7 @@ export function ChannelTabs({
     layout.current = block
       ? {
           left: block.left,
+          width: block.right - block.left + TAB_GUTTER_PX,
           rest: ids
             .filter((id) => !held.includes(id))
             .map((id) => {
@@ -496,6 +522,7 @@ export function ChannelTabs({
                     ? carry.dx
                     : undefined
                 }
+                nudgeX={nudges.get(key)}
                 mark={marks.get(key)}
                 key={key}
               >

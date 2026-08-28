@@ -44,6 +44,14 @@ body {
   overflow: hidden;
 }
 
+/* antd re-measures the tab bar as tabs are reordered and can settle on a taller
+   row, which made the whole strip jump between 28px and 33px purely from moving a
+   tab. The chrome has no reason to vary, so the height is pinned. */
+.ant-tabs-tab {
+  height: 30px;
+  box-sizing: border-box;
+}
+
 /* The split control on each tab. It has to read as a control at rest — at low
    opacity it looked like decoration and split view was undiscoverable. */
 .tab-split {
@@ -103,12 +111,14 @@ body {
    bar is 3px but the hit area is the whole 14px of leading space, because that
    space is what reads as "grab the group". */
 .tab-grip {
-  width: 14px;
-  height: 18px;
-  margin-left: -5px;
-  border-radius: 2px;
-  background: linear-gradient(var(--group-color), var(--group-color)) center / 3px 12px no-repeat;
-  opacity: 0.45;
+  width: 20px;
+  height: 20px;
+  margin-left: -7px;
+  border-radius: 3px;
+  background:
+    linear-gradient(var(--group-color), var(--group-color)) left 6px center / 2px 12px no-repeat,
+    linear-gradient(var(--group-color), var(--group-color)) left 11px center / 2px 12px no-repeat;
+  opacity: 0.5;
   cursor: grab;
   transition: opacity 0.12s;
 }
