@@ -39,6 +39,7 @@ interface ChatState {
   ingest: (batch: ChatBatch) => void
   setSearch: (sourceId: string, terms: string[]) => void
   setSearchDraft: (sourceId: string, draft: string) => void
+  addSearchTerm: (sourceId: string, term: string) => void
   clearSource: (sourceId: string) => void
   forgetSource: (sourceId: string) => void
 }
@@ -205,6 +206,14 @@ export const useStore = create<ChatState>()((set) => ({
       if (s.searchDraft[sourceId] === draft) return s
 
       return { searchDraft: { ...s.searchDraft, [sourceId]: draft } }
+    }),
+
+  addSearchTerm: (sourceId, term) =>
+    set((s) => {
+      const existing = s.search[sourceId] ?? []
+      if (existing.some((held) => held.toLowerCase() === term.toLowerCase())) return s
+
+      return { search: { ...s.search, [sourceId]: [...existing, term] } }
     }),
 
   clearSource: (sourceId) =>

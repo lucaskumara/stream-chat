@@ -5,7 +5,7 @@ import { ArrowDownOutlined } from '@ant-design/icons'
 import type { ChatMessage } from '@shared/types'
 import { bridge } from '../bridge'
 import { INK } from '../theme'
-import { matchesSearch, parseSearch } from '../search'
+import { authorTerm, matchesSearch, parseSearch } from '../search'
 import { ChatPaneBar } from './ChatPaneBar'
 import { MessageRow } from './MessageRow'
 
@@ -22,6 +22,7 @@ export interface ChatPaneProps {
   searchDraft: string
   onSearchTerms: (terms: string[]) => void
   onSearchDraft: (draft: string) => void
+  onAddSearchTerm: (term: string) => void
   onClear: () => void
 }
 
@@ -35,6 +36,7 @@ export function ChatPane({
   searchDraft,
   onSearchTerms,
   onSearchDraft,
+  onAddSearchTerm,
   onClear
 }: ChatPaneProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -106,6 +108,19 @@ export function ChatPane({
     void bridge().api.openExternal(url)
   }, [])
 
+  // Delegated so MessageRow gains an attribute rather than a callback prop — a new
+  // prop on every batch would defeat its memo across every row on screen.
+  const filterByAuthor = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const target = (event.target as HTMLElement).closest('[data-author]')
+      const author = target?.getAttribute('data-author')
+      if (!author) return
+
+      onAddSearchTerm(authorTerm(author))
+    },
+    [onAddSearchTerm]
+  )
+
   const items = virtualizer.getVirtualItems()
 
   return (
@@ -117,6 +132,7 @@ export function ChatPane({
         <div
           ref={scrollRef}
           onScroll={handleScroll}
+          onClick={filterByAuthor}
           className="chat-scroll absolute inset-0 overflow-x-hidden overflow-y-auto"
         >
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>

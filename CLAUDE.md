@@ -564,7 +564,17 @@ so `author:name` and `author:@name` are the same search on YouTube (whose names 
 and on Twitch and Kick (whose names do not); and everything is lowercased on both sides.
 Terms render as pills via antd's tag-mode `Select` with `tokenSeparators={[',']}`, and the
 **draft is filtered live** — `parseSearch([...terms, draft])` — because tags mode alone would
-not filter anything until you typed a comma.
+not filter anything until you typed a comma. Enter has to clear the draft by hand from
+`onChange`: antd commits a tag without firing `onSearch`, so a controlled `searchValue` keeps
+the text that just became a pill, showing the term twice and filtering by it twice.
+
+**Clicking an author name filters by them, and it is delegated on purpose.** The name span in
+`MessageRow` carries `data-author` and nothing else; the click is caught by an `onClick` on
+the pane's scroll container, which walks `closest('[data-author]')`. `MessageRow` is `memo`'d
+and the pane re-renders on every 100ms batch, so handing it a callback prop — necessarily a
+fresh closure per source — would break that memo for every row on screen. An attribute costs
+nothing. `addSearchTerm` dedupes case-insensitively, so clicking the same name twice does not
+stack pills.
 
 Filtering happens in `ChatPane`, not the store: `visible` is derived from the message list
 each render, so clearing the search restores everything instantly and the ring buffer keeps

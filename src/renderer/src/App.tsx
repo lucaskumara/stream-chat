@@ -25,6 +25,7 @@ export default function App(): React.ReactElement {
   const searchDraft = useStore((s) => s.searchDraft)
   const setSearch = useStore((s) => s.setSearch)
   const setSearchDraft = useStore((s) => s.setSearchDraft)
+  const addSearchTerm = useStore((s) => s.addSearchTerm)
   const clearSource = useStore((s) => s.clearSource)
   const showDeleted = useStore((s) => s.showDeleted)
   const showTimestamps = useStore((s) => s.showTimestamps)
@@ -108,6 +109,7 @@ export default function App(): React.ReactElement {
                 searchDraft={searchDraft[panes[0].id] ?? ''}
                 onSearchTerms={(terms) => setSearch(panes[0].id, terms)}
                 onSearchDraft={(draft) => setSearchDraft(panes[0].id, draft)}
+                onAddSearchTerm={(term) => addSearchTerm(panes[0].id, term)}
                 onClear={() => clearSource(panes[0].id)}
                 messages={bySource[panes[0].id] ?? []}
                 showPlatform={false}
@@ -124,6 +126,7 @@ export default function App(): React.ReactElement {
                       searchDraft={searchDraft[source.id] ?? ''}
                       onSearchTerms={(terms) => setSearch(source.id, terms)}
                       onSearchDraft={(draft) => setSearchDraft(source.id, draft)}
+                      onAddSearchTerm={(term) => addSearchTerm(source.id, term)}
                       onClear={() => clearSource(source.id)}
                       messages={bySource[source.id] ?? []}
                       showPlatform={false}

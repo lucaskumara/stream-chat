@@ -196,7 +196,12 @@ function MessageRowImpl({
           <BadgeView key={`${badge.label}-${i}`} badge={badge} />
         ))}
 
-        <span className="font-semibold" style={{ color: nameColor(msg) }}>
+        <span
+          className="cursor-pointer font-semibold hover:underline"
+          style={{ color: nameColor(msg) }}
+          data-author={msg.authorName}
+          title="Filter this chat by this author"
+        >
           {msg.authorDisplayName ?? msg.authorName}
         </span>
         <span className="text-neutral-500">: </span>

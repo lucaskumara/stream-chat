@@ -56,6 +56,10 @@ export function matchesSearch(message: ChatMessage, terms: SearchTerm[]): boolea
   return true
 }
 
+export function authorTerm(authorName: string): string {
+  return `author:${withoutHandlePrefix(authorName.trim())}`
+}
+
 export function termLabel(text: string): string {
   const trimmed = text.trim()
 
