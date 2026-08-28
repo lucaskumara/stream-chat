@@ -34,6 +34,16 @@ function ChatPaneBarImpl({
     [terms]
   )
 
+  // Enter commits a tag through onChange but never fires onSearch, so a controlled
+  // searchValue would keep the text that just became a pill — and keep filtering by it.
+  const handleChange = useCallback(
+    (next: string[]) => {
+      onTerms(next)
+      onDraft('')
+    },
+    [onTerms, onDraft]
+  )
+
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLElement>) => {
       if (event.key !== 'Escape') return
@@ -62,7 +72,7 @@ function ChatPaneBarImpl({
         title={SYNTAX_HINT}
         className="chat-pane-search"
         style={{ flex: 1, minWidth: 0 }}
-        onChange={onTerms}
+        onChange={handleChange}
         onSearch={onDraft}
         onKeyDown={handleKeyDown}
       />
