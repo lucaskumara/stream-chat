@@ -25,7 +25,7 @@ function PaneHeader({ source }: { source: SourceState }): React.ReactElement {
       }}
     >
       <Badge color={PLATFORM_COLOR[source.platform]} />
-      <Typography.Text strong ellipsis style={{ fontSize: 12 }}>
+      <Typography.Text strong ellipsis style={{ fontSize: 13 }}>
         {source.label}
       </Typography.Text>
       <Typography.Text type="secondary" style={{ marginLeft: 'auto', fontSize: 12 }}>

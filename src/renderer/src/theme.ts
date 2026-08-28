@@ -30,7 +30,7 @@ export const chatTheme: ThemeConfig = {
     colorTextTertiary: '#7a7a7a',
 
     fontFamily: "ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif",
-    fontSize: 13,
+    fontSize: 14,
     borderRadius: 4,
     controlHeight: 28
   },
