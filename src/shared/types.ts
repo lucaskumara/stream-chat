@@ -1,4 +1,4 @@
-export type Platform = 'twitch' | 'youtube' | 'kick' | 'mock'
+export type Platform = 'twitch' | 'youtube' | 'kick'
 
 export type EmoteProvider = 'native' | '7tv' | 'bttv'
 
@@ -16,9 +16,10 @@ export type Fragment =
   | { kind: 'link'; text: string; href: string }
 
 export interface Badge {
-  id: string
   label: string
+
   url?: string
+  srcSet?: string
 }
 
 export type MessageKind =
@@ -39,9 +40,10 @@ export interface ChatMessage {
   authorName: string
 
   authorDisplayName?: string
-
   authorColor?: string
-  badges: Badge[]
+
+  badges?: Badge[]
+
   fragments: Fragment[]
 
   plainText: string
@@ -65,14 +67,6 @@ export type SourceStatus =
   | 'offline'
   | 'error'
 
-export interface EmoteSettings {
-  sevenTv: boolean
-
-  bttv: boolean
-}
-
-export const DEFAULT_EMOTE_SETTINGS: EmoteSettings = { sevenTv: true, bttv: true }
-
 export interface SourceState {
   id: string
   platform: Platform
@@ -81,9 +75,6 @@ export interface SourceState {
   status: SourceStatus
 
   error?: string
-
-  live: boolean | null
-  emotes: EmoteSettings
 }
 
 export interface ChatBatch {
@@ -94,9 +85,6 @@ export interface ChatBatch {
 export interface AddSourceRequest {
   platform: Platform
   label: string
-
-  rate?: number
-
   identifier?: string
 }
 
@@ -127,8 +115,7 @@ export interface ChatApi {
   listSources(): Promise<SourceState[]>
   addSource(req: AddSourceRequest): Promise<string>
   removeSource(sourceId: string): Promise<void>
-  setRate(sourceId: string, rate: number): Promise<void>
-  setEmoteSettings(sourceId: string, settings: EmoteSettings): Promise<void>
+  reorderSources(orderedIds: string[]): Promise<void>
   openExternal(url: string): Promise<void>
 
   onBatch(cb: (batch: ChatBatch) => void): () => void

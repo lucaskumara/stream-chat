@@ -9,19 +9,6 @@ export interface HelixUser {
   profile_image_url: string
 }
 
-export interface BadgeVersion {
-  id: string
-  image_url_1x: string
-  image_url_2x: string
-  image_url_4x: string
-  title: string
-}
-
-export interface BadgeSet {
-  set_id: string
-  versions: BadgeVersion[]
-}
-
 export class HelixError extends Error {
   constructor(
     message: string,
@@ -79,25 +66,6 @@ export class Helix {
     return data.data[0] ?? null
   }
 
-  async isLive(userId: string): Promise<boolean> {
-    const data = await this.request<{ data: unknown[] }>(
-      `/streams?user_id=${encodeURIComponent(userId)}`
-    )
-    return data.data.length > 0
-  }
-
-  async getGlobalBadges(): Promise<BadgeSet[]> {
-    const data = await this.request<{ data: BadgeSet[] }>('/chat/badges/global')
-    return data.data
-  }
-
-  async getChannelBadges(broadcasterId: string): Promise<BadgeSet[]> {
-    const data = await this.request<{ data: BadgeSet[] }>(
-      `/chat/badges?broadcaster_id=${encodeURIComponent(broadcasterId)}`
-    )
-    return data.data
-  }
-
   async createEventSubSubscription(
     type: string,
     version: string,
@@ -122,40 +90,5 @@ export class Helix {
     await this.request<void>(`/eventsub/subscriptions?id=${encodeURIComponent(id)}`, {
       method: 'DELETE'
     })
-  }
-}
-
-export class BadgeCache {
-  private global: Map<string, Map<string, BadgeVersion>> | null = null
-  private perChannel = new Map<string, Map<string, Map<string, BadgeVersion>>>()
-
-  constructor(private helix: Helix) {}
-
-  private index(sets: BadgeSet[]): Map<string, Map<string, BadgeVersion>> {
-    const out = new Map<string, Map<string, BadgeVersion>>()
-    for (const set of sets) {
-      const versions = new Map<string, BadgeVersion>()
-      for (const v of set.versions) versions.set(v.id, v)
-      out.set(set.set_id, versions)
-    }
-    return out
-  }
-
-  async load(broadcasterId: string): Promise<void> {
-    try {
-      if (!this.global) this.global = this.index(await this.helix.getGlobalBadges())
-      if (!this.perChannel.has(broadcasterId)) {
-        this.perChannel.set(broadcasterId, this.index(await this.helix.getChannelBadges(broadcasterId)))
-      }
-    } catch (err) {
-      console.warn('[twitch] badge load failed:', err)
-    }
-  }
-
-  resolve(broadcasterId: string, setId: string, versionId: string): BadgeVersion | undefined {
-    return (
-      this.perChannel.get(broadcasterId)?.get(setId)?.get(versionId) ??
-      this.global?.get(setId)?.get(versionId)
-    )
   }
 }

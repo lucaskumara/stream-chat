@@ -155,16 +155,15 @@ export function parseChannelInput(input: string, platformHint?: Platform): Parse
   const selfDescribing = parseSelfDescribingName(raw)
   if (selfDescribing) return selfDescribing
 
-  if (!platformHint || platformHint === 'mock') {
+  if (!platformHint) {
     return { ok: false, needsPlatform: true, error: 'Pick a platform, or paste the channel link.' }
   }
 
   return parseBareName(raw, platformHint)
 }
 
-export const AUTO_CONNECT_COST: Record<Platform, 'push' | 'polled' | 'none'> = {
+export const AUTO_CONNECT_COST: Record<Platform, 'push' | 'polled'> = {
   twitch: 'push',
   kick: 'push',
-  youtube: 'polled',
-  mock: 'none'
+  youtube: 'polled'
 }

@@ -1,10 +1,9 @@
 import { ipcMain, shell } from 'electron'
-import type { AddSourceRequest, EmoteSettings, Platform } from '@shared/types'
+import type { AddSourceRequest, Platform } from '@shared/types'
 import type { SourceManager } from './sources'
 import type { TwitchAuth } from './twitch/auth'
 import { buildAuthState } from './twitch/state'
 
-const MAX_MOCK_RATE = 2000
 const MAX_LABEL_LENGTH = 80
 const MAX_IDENTIFIER_LENGTH = 100
 
@@ -12,8 +11,7 @@ export const IPC = {
   listSources: 'sources:list',
   addSource: 'sources:add',
   removeSource: 'sources:remove',
-  setRate: 'sources:set-rate',
-  setEmotes: 'sources:set-emotes',
+  reorderSources: 'sources:reorder',
   openExternal: 'shell:open-external',
 
   twitchAuthState: 'twitch:auth-state',
@@ -42,15 +40,8 @@ function registerSourceHandlers(sources: SourceManager): void {
     await sources.remove(requireString(sourceId, 'sourceId'))
   })
 
-  ipcMain.handle(IPC.setRate, (_e, sourceId: unknown, rate: unknown) => {
-    if (typeof rate !== 'number' || !Number.isFinite(rate)) {
-      throw new Error('rate must be a finite number')
-    }
-    sources.setRate(requireString(sourceId, 'sourceId'), clamp(rate, 0, MAX_MOCK_RATE))
-  })
-
-  ipcMain.handle(IPC.setEmotes, (_e, sourceId: unknown, settings: unknown) => {
-    sources.setEmoteSettings(requireString(sourceId, 'sourceId'), parseEmoteSettings(settings))
+  ipcMain.handle(IPC.reorderSources, (_e, orderedIds: unknown) => {
+    sources.reorder(parseSourceIds(orderedIds))
   })
 }
 
@@ -74,8 +65,7 @@ export function unregisterIpc(): void {
     IPC.listSources,
     IPC.addSource,
     IPC.removeSource,
-    IPC.setRate,
-    IPC.setEmotes,
+    IPC.reorderSources,
     IPC.openExternal,
     IPC.twitchAuthState,
     IPC.twitchStartLogin,
@@ -85,24 +75,17 @@ export function unregisterIpc(): void {
   }
 }
 
-const SUPPORTED_PLATFORMS: Platform[] = ['mock', 'twitch', 'youtube', 'kick']
+const SUPPORTED_PLATFORMS: Platform[] = ['twitch', 'youtube', 'kick']
 
 function requireString(value: unknown, field: string): string {
   if (typeof value !== 'string') throw new Error(`${field} must be a string`)
   return value
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max)
-}
+function parseSourceIds(value: unknown): string[] {
+  if (!Array.isArray(value)) throw new Error('orderedIds must be an array')
 
-function parseEmoteSettings(value: unknown): EmoteSettings {
-  if (typeof value !== 'object' || value === null) {
-    throw new Error('settings must be an object')
-  }
-  const record = value as Record<string, unknown>
-
-  return { sevenTv: record.sevenTv !== false, bttv: record.bttv !== false }
+  return value.map((entry, index) => requireString(entry, `orderedIds[${index}]`))
 }
 
 function parseWebUrl(value: unknown): string {
@@ -132,18 +115,14 @@ function parseAddSource(value: unknown): AddSourceRequest {
 
   const platform = parsePlatform(record.platform)
   const label = typeof record.label === 'string' ? record.label.slice(0, MAX_LABEL_LENGTH) : ''
-  const rate =
-    typeof record.rate === 'number' && Number.isFinite(record.rate)
-      ? clamp(record.rate, 0, MAX_MOCK_RATE)
-      : undefined
   const identifier =
     typeof record.identifier === 'string'
       ? record.identifier.trim().slice(0, MAX_IDENTIFIER_LENGTH)
       : undefined
 
-  if (platform !== 'mock' && !identifier) {
+  if (!identifier) {
     throw new Error(`${platform} sources need a channel identifier`)
   }
 
-  return { platform, label, rate, identifier }
+  return { platform, label, identifier }
 }

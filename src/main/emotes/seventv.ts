@@ -1,5 +1,5 @@
 import type { ThirdPartyEmote } from './types'
-import { fetchOptionalJson } from '../net/fetchJson'
+import { fetchOptionalJson } from './fetchJson'
 
 const API = 'https://7tv.io/v3'
 const CDN_SCALES = ['1x', '2x', '3x'] as const

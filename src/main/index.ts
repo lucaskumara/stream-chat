@@ -5,10 +5,8 @@ import { MessageBus } from './bus'
 import { SourceManager } from './sources'
 import { IPC, registerIpc, unregisterIpc } from './ipc'
 import { TwitchAuth } from './twitch/auth'
-import { BadgeCache, Helix } from './twitch/helix'
-import { EventSubHub } from './twitch/eventsub'
-import { IrcHub } from './twitch/irc'
-import { ThirdPartyEmotes } from './emotes'
+import { Helix } from './twitch/helix'
+import { EventSubHub, IrcHub } from './chat/platforms/twitch'
 import { buildAuthState } from './twitch/state'
 
 const isDev = !app.isPackaged
@@ -31,24 +29,16 @@ function broadcastTwitchAuth(): void {
 
 const auth = new TwitchAuth(broadcastTwitchAuth)
 const helix = new Helix(auth)
-const badges = new BadgeCache(helix)
-const hub = new EventSubHub(helix, (status, error) => {
+
+const eventsub = new EventSubHub(helix, (status, error) => {
   if (status === 'error') console.warn('[eventsub]', error)
 })
 
-const irc = new IrcHub((status, error) => {
-  if (status === 'error') console.warn('[irc]', error)
+const irc = new IrcHub()
+
+const sources = new SourceManager(bus, broadcastSources, {
+  twitch: { auth, helix, eventsub, irc }
 })
-
-const seventv = new ThirdPartyEmotes()
-
-const sources = new SourceManager(
-  bus,
-  broadcastSources,
-  { auth, helix, hub, badges, seventv },
-  irc,
-  seventv
-)
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -115,8 +105,6 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     app.setAppUserModelId('com.lucaskumara.streamchat')
 
-    void seventv.loadGlobals()
-
     registerIpc(sources, auth)
 
     mainWindow = createWindow()
@@ -149,7 +137,7 @@ if (!app.requestSingleInstanceLock()) {
     unregisterIpc()
     bus.detach()
     auth.cancelPolling()
-    hub.shutdown()
+    eventsub.shutdown()
     irc.shutdown()
     void sources.disconnectAll()
   })

@@ -13,13 +13,12 @@ export interface StoredTwitchTokens {
   login: string
 }
 
-export type StoredPlatform = 'twitch' | 'youtube'
+export type StoredPlatform = 'twitch' | 'youtube' | 'kick'
 
 export interface StoredChannel {
   platform: StoredPlatform
 
   login: string
-  emotes?: { sevenTv: boolean; bttv: boolean }
 }
 
 interface PersistedShape {
@@ -115,15 +114,7 @@ class Config {
     this.write()
   }
 
-  setChannelEmotes(
-    platform: StoredPlatform,
-    login: string,
-    emotes: { sevenTv: boolean; bttv: boolean }
-  ): void {
-    const channels = this.getChannels()
-    const found = channels.find((c) => c.platform === platform && c.login === login)
-    if (!found) return
-    found.emotes = emotes
+  setChannels(channels: StoredChannel[]): void {
     this.data.channels = channels
     this.write()
   }

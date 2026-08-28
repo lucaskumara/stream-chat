@@ -1,7 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AddSourceRequest,
-  EmoteSettings,
   ChatApi,
   ChatBatch,
   DeviceCodePrompt,
@@ -13,8 +12,7 @@ const IPC = {
   listSources: 'sources:list',
   addSource: 'sources:add',
   removeSource: 'sources:remove',
-  setRate: 'sources:set-rate',
-  setEmotes: 'sources:set-emotes',
+  reorderSources: 'sources:reorder',
   openExternal: 'shell:open-external',
   twitchAuthState: 'twitch:auth-state',
   twitchStartLogin: 'twitch:start-login',
@@ -33,11 +31,8 @@ const api: ChatApi = {
   removeSource: (sourceId: string): Promise<void> =>
     ipcRenderer.invoke(IPC.removeSource, sourceId),
 
-  setRate: (sourceId: string, rate: number): Promise<void> =>
-    ipcRenderer.invoke(IPC.setRate, sourceId, rate),
-
-  setEmoteSettings: (sourceId: string, settings: EmoteSettings): Promise<void> =>
-    ipcRenderer.invoke(IPC.setEmotes, sourceId, settings),
+  reorderSources: (orderedIds: string[]): Promise<void> =>
+    ipcRenderer.invoke(IPC.reorderSources, orderedIds),
 
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke(IPC.openExternal, url),

@@ -1,5 +1,5 @@
 import type { ThirdPartyEmote } from './types'
-import { fetchOptionalJson } from '../net/fetchJson'
+import { fetchOptionalJson } from './fetchJson'
 
 const API = 'https://api.betterttv.net/3'
 const CDN = 'https://cdn.betterttv.net/emote'
