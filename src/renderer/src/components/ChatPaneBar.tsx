@@ -1,30 +1,47 @@
-import { memo, useCallback } from 'react'
-import { Button, Input, Popconfirm, Typography } from 'antd'
+import { memo, useCallback, useMemo } from 'react'
+import { Button, Popconfirm, Select, Typography } from 'antd'
 import { ClearOutlined, SearchOutlined } from '@ant-design/icons'
 import { INK } from '../theme'
+import { termLabel } from '../search'
+
+const SYNTAX_HINT =
+  'Type a word to match message text, or author:name to match the sender. ' +
+  'Separate with commas — every term has to match.'
 
 export interface ChatPaneBarProps {
-  search: string
+  terms: string[]
+  draft: string
   matches: number
   total: number
-  onSearch: (needle: string) => void
+  onTerms: (terms: string[]) => void
+  onDraft: (draft: string) => void
   onClear: () => void
 }
 
 function ChatPaneBarImpl({
-  search,
+  terms,
+  draft,
   matches,
   total,
-  onSearch,
+  onTerms,
+  onDraft,
   onClear
 }: ChatPaneBarProps): React.ReactElement {
-  const filtering = search.trim() !== ''
+  const filtering = terms.length > 0 || draft.trim() !== ''
+
+  const options = useMemo(
+    () => terms.map((term) => ({ value: term, label: termLabel(term) })),
+    [terms]
+  )
 
   const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === 'Escape') onSearch('')
+    (event: React.KeyboardEvent<HTMLElement>) => {
+      if (event.key !== 'Escape') return
+
+      if (draft !== '') onDraft('')
+      else if (terms.length > 0) onTerms([])
     },
-    [onSearch]
+    [draft, terms, onDraft, onTerms]
   )
 
   return (
@@ -32,21 +49,28 @@ function ChatPaneBarImpl({
       className="flex items-center gap-2 px-2 py-1"
       style={{ borderTop: `1px solid ${INK.line}`, background: INK.app, flex: 'none' }}
     >
-      <Input
-        size="small"
+      <Select
+        mode="tags"
+        open={false}
         allowClear
-        value={search}
-        spellCheck={false}
-        prefix={<SearchOutlined style={{ opacity: 0.45 }} />}
-        placeholder="search this chat"
-        onChange={(e) => onSearch(e.target.value)}
+        value={terms}
+        options={options}
+        searchValue={draft}
+        tokenSeparators={[',']}
+        suffixIcon={<SearchOutlined style={{ opacity: 0.45 }} />}
+        placeholder="search this chat — text, or author:name"
+        title={SYNTAX_HINT}
+        className="chat-pane-search"
+        style={{ flex: 1, minWidth: 0 }}
+        onChange={onTerms}
+        onSearch={onDraft}
         onKeyDown={handleKeyDown}
       />
 
       <Typography.Text
         type="secondary"
         className="chat-pane-count"
-        style={{ fontSize: 11, whiteSpace: 'nowrap', flex: 'none' }}
+        style={{ fontSize: '1rem', whiteSpace: 'nowrap', flex: 'none' }}
       >
         {filtering ? `${matches} of ${total}` : `${total}`}
       </Typography.Text>
@@ -62,7 +86,6 @@ function ChatPaneBarImpl({
         styles={{ root: { minWidth: 200 } }}
       >
         <Button
-          size="small"
           type="text"
           className="chat-pane-clear"
           icon={<ClearOutlined />}

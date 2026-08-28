@@ -549,11 +549,22 @@ but each pane does carry a `ChatPaneBar` along its bottom edge (see "The pane ba
 
 **The pane bar is per source, and its state lives in the store, not the pane.**
 `ChatPaneBar` sits along the bottom of every `ChatPane` and does two things: filters that
-pane by message text or author name, and clears that pane's history. Both are keyed by
-`sourceId` — `store.search[sourceId]` and `clearSource(sourceId)` — because `App` renders a
-different tree for one pane than for several, so a pane *remounts* when the split changes
-and local `useState` would silently drop the search. `forgetSource` deletes the search entry
-alongside the messages.
+pane, and clears that pane's history. Both are keyed by `sourceId` — `store.search[sourceId]`
+(committed terms), `store.searchDraft[sourceId]` (what is half-typed) and
+`clearSource(sourceId)` — because `App` renders a different tree for one pane than for
+several, so a pane *remounts* when the split changes and local `useState` would silently drop
+the search. `forgetSource` deletes both search entries alongside the messages.
+
+**The filter is a comma-separated term list, parsed in `search.ts`.** A bare term matches
+message text; `author:` (or `from:`) matches the sender; terms are ANDed, so
+`def, author:abc` is "messages containing def, sent by abc". Three rules that are easy to
+break: a prefix only counts if it is a *known* field, so `https://youtube.com` stays a
+content search rather than becoming a `https:` field; the author needle drops a leading `@`
+so `author:name` and `author:@name` are the same search on YouTube (whose names carry one)
+and on Twitch and Kick (whose names do not); and everything is lowercased on both sides.
+Terms render as pills via antd's tag-mode `Select` with `tokenSeparators={[',']}`, and the
+**draft is filtered live** — `parseSearch([...terms, draft])` — because tags mode alone would
+not filter anything until you typed a comma.
 
 Filtering happens in `ChatPane`, not the store: `visible` is derived from the message list
 each render, so clearing the search restores everything instantly and the ring buffer keeps
@@ -691,7 +702,8 @@ sorting strategy walked every group for every tab to find its run.
 taller, so the whole strip jumped 28px to 33px purely from moving a tab. Both arrangements
 carried identical classes and identical inner content, so nothing here caused it. The pin
 costs a coupling: change the tab font size or padding and the `height` in `index.css` has to
-move with it.
+move with it — raising the token from 14px to 1rem/16px is what took the pin from 30px to
+`2.25rem`.
 
 **`SourceManager.reorder` permutes the live entry map and nothing else.** Main's entry order
 is what `list()` broadcasts, so it has to track the strip or the next `sources:changed` would
@@ -708,6 +720,20 @@ platform dropdown needs a `mousedown` dispatched on `.ant-select-content` — a 
 `externalizeDepsPlugin` on that target), so it belongs beside `react` and `zustand`. Only
 main-process packages that stay external — `electron-store`, `ws`, `youtubei.js` — are real
 dependencies.
+
+**Every text size is 1rem or 1.25rem, against a root pinned at 16px.** `index.css` sets
+`html { font-size: 16px }` so the rem is not at the mercy of a browser default, and the whole
+app uses exactly two sizes: **1rem (16px) for everything** — chat messages, author names,
+tabs, inputs, buttons, timestamps, badge chips, the pane bar — and 1.25rem (20px) reserved for
+the modal heading. Verified by walking every visible text node in the running app: one
+distinct computed size, 16px, with 20px appearing only when a modal is open. antd's
+`fontSize`/`titleFontSize` tokens are the exception that has to stay numeric (16 and 20)
+because the token type is a number, not a CSS length.
+
+The em units left in `MessageRow` are deliberate and are *not* text: they size emote images
+(`1.55em`) and badge images (`1.1em`) so those still scale with `--chat-font-size`. The store's
+`fontSize` now holds **rem**, not px — `App` writes it as `${fontSize}rem` — so a future
+size control moves the chat tier without breaking the two-size rule.
 
 **The theme is one object, not scattered inline styles.** `theme.ts` maps the ink palette
 onto antd tokens and exports `INK` for the few places that still need a raw hex. Reach for a
@@ -745,8 +771,10 @@ resize border), so that difference is not a test for "is the frame gone".
 **The frame is not the same on all three platforms, and one uniform `frame: false` is
 wrong.** `frameOptions()` in `main/index.ts` gives Windows and Linux `frame: false` with our
 own buttons, and macOS `titleBarStyle: 'hidden'` with `trafficLightPosition` — on macOS the
-OS keeps drawing its traffic lights, so `TitleBar` renders no buttons of its own there and
-`.titlebar-mac` insets the name past them. Our buttons sit on the right and the close button
+OS keeps drawing its traffic lights, so `TitleBar` renders no buttons of its own there. The
+bar carries no text at all — it is a drag region plus the window buttons — so nothing needs
+insetting past the traffic lights, which is why the old `.titlebar-mac` padding rule is
+gone. Our buttons sit on the right and the close button
 hovers Windows red; that is the wrong furniture on the wrong side for macOS, which is the
 whole reason for the branch. The renderer learns which host it is on from `api.platform`,
 set once in the preload from `process.platform` — sandboxed preloads still expose that, so

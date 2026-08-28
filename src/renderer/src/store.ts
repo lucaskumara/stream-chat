@@ -19,12 +19,14 @@ interface ChatState {
 
   deleted: Record<string, true>
 
-  search: Record<string, string>
+  search: Record<string, string[]>
+  searchDraft: Record<string, string>
 
   showDeleted: boolean
   showTimestamps: boolean
   capacity: number
 
+  /** Chat row size in rem, against the 16px root pinned in index.css. */
   fontSize: number
 
   twitchAuth: TwitchAuthState
@@ -35,7 +37,8 @@ interface ChatState {
   showSource: (sourceId: string) => void
   toggleSplit: (sourceId: string) => void
   ingest: (batch: ChatBatch) => void
-  setSearch: (sourceId: string, needle: string) => void
+  setSearch: (sourceId: string, terms: string[]) => void
+  setSearchDraft: (sourceId: string, draft: string) => void
   clearSource: (sourceId: string) => void
   forgetSource: (sourceId: string) => void
 }
@@ -55,11 +58,12 @@ export const useStore = create<ChatState>()((set) => ({
   groups: [],
   deleted: {},
   search: {},
+  searchDraft: {},
 
   showDeleted: true,
   showTimestamps: true,
   capacity: DEFAULT_CAPACITY,
-  fontSize: 15,
+  fontSize: 1,
 
   twitchAuth: { status: 'signed-out' },
 
@@ -193,11 +197,14 @@ export const useStore = create<ChatState>()((set) => ({
       return { bySource, deleted }
     }),
 
-  setSearch: (sourceId, needle) =>
-    set((s) => {
-      if (s.search[sourceId] === needle) return s
+  setSearch: (sourceId, terms) =>
+    set((s) => ({ search: { ...s.search, [sourceId]: terms } })),
 
-      return { search: { ...s.search, [sourceId]: needle } }
+  setSearchDraft: (sourceId, draft) =>
+    set((s) => {
+      if (s.searchDraft[sourceId] === draft) return s
+
+      return { searchDraft: { ...s.searchDraft, [sourceId]: draft } }
     }),
 
   clearSource: (sourceId) =>
@@ -215,9 +222,13 @@ export const useStore = create<ChatState>()((set) => ({
       const search = { ...s.search }
       delete search[sourceId]
 
+      const searchDraft = { ...s.searchDraft }
+      delete searchDraft[sourceId]
+
       return {
         bySource,
         search,
+        searchDraft,
         visibleIds: s.visibleIds.filter((id) => id !== sourceId),
         groups: pruneGroups(s.groups, (id) => id !== sourceId)
       }

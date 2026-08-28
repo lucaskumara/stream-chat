@@ -22,10 +22,16 @@
   /* Matches antd's Tabs cardGutter so a group band can span the gap. */
   --tab-gutter: 2px;
 
-  /* Driven by the font-size control in the top bar; every message-row size
-     is expressed in em so this one value scales timestamps, badges and
-     emotes together. */
-  --chat-font-size: 15px;
+  /* Message text and author names. Every text size in the app is either 1rem or
+     1.25rem; the em units left in MessageRow size emote and badge *images*, so
+     those still scale with this value. */
+  --chat-font-size: 1rem;
+}
+
+/* Pin the rem so every text size can be written as 1rem (16px) or 1.25rem (20px)
+   rather than a raw pixel count. */
+html {
+  font-size: 16px;
 }
 
 html,
@@ -39,15 +45,16 @@ body {
   background: var(--color-ink-900);
   color: #e3e3e3;
   font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
-  font-size: 14px;
+  font-size: 1rem;
   overflow: hidden;
 }
 
 /* antd re-measures the tab bar as tabs are reordered and can settle on a taller
    row, which made the whole strip jump between 28px and 33px purely from moving a
-   tab. The chrome has no reason to vary, so the height is pinned. */
+   tab. The chrome has no reason to vary, so the height is pinned — and the pin has to
+  move with the token font size. */
 .ant-tabs-tab {
-  height: 30px;
+  height: 2.25rem;
   box-sizing: border-box;
 }
 
@@ -179,23 +186,9 @@ body {
   -webkit-app-region: drag;
 }
 
-/* macOS keeps its own traffic lights (titleBarStyle: 'hidden'), drawn over the
-   top-left of our bar — so the name has to start clear of them, and we render
-   no buttons of our own. */
-.titlebar-mac {
-  padding-left: 66px;
-}
-
 .titlebar-drag {
   flex: 1;
   align-self: stretch;
-}
-
-.titlebar-name {
-  padding: 0 10px;
-  font-size: 12px;
-  color: #6b6b6b;
-  letter-spacing: 0.02em;
 }
 
 .titlebar-button {
@@ -222,4 +215,25 @@ body {
 .titlebar-close:hover {
   background: #c42b1c;
   color: #ffffff;
+}
+
+/* Search terms in the pane bar read as pills: fully rounded, and removed with
+   Backspace rather than a per-pill close cross — the bar is narrow and a cross
+   on every term crowded it. antd tags mode already pops the last tag on
+   Backspace when the typed text is empty, so hiding the cross costs nothing. */
+.chat-pane-search .ant-select-selection-item {
+  height: 1.5rem;
+  border-radius: 999px;
+  padding-inline: 0.625rem;
+  line-height: 1.5rem;
+}
+
+/* antd reserves room after the label for the close cross; with the cross hidden
+   that reservation reads as a long empty tail on every pill. */
+.chat-pane-search .ant-select-selection-item-content {
+  margin-inline-end: 0;
+}
+
+.chat-pane-search .ant-select-selection-item-remove {
+  display: none;
 }

@@ -28,9 +28,9 @@ export const chatTheme: ThemeConfig = {
     colorTextTertiary: '#7a7a7a',
 
     fontFamily: "ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif",
-    fontSize: 14,
+    fontSize: 16,
     borderRadius: 4,
-    controlHeight: 28
+    controlHeight: 32
   },
 
   components: {
@@ -39,6 +39,9 @@ export const chatTheme: ThemeConfig = {
     },
     Empty: {
       colorTextDescription: '#6b6b6b'
+    },
+    Modal: {
+      titleFontSize: 20
     },
     Tabs: {
       horizontalMargin: '0',

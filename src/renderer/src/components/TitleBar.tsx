@@ -29,9 +29,7 @@ export function TitleBar(): React.ReactElement {
   }, [])
 
   return (
-    <div className={trafficLights ? 'titlebar titlebar-mac' : 'titlebar'}>
-      <span className="titlebar-name">stream-chat</span>
-
+    <div className="titlebar">
       <div className="titlebar-drag" />
 
       {!trafficLights && (

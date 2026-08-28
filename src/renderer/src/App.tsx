@@ -9,6 +9,8 @@ import { ChannelTabs } from './components/ChannelTabs'
 import { ChatPane } from './components/ChatPane'
 import { TitleBar } from './components/TitleBar'
 
+const EMPTY_TERMS: string[] = []
+
 export default function App(): React.ReactElement {
   const sources = useStore((s) => s.sources)
   const visibleIds = useStore((s) => s.visibleIds)
@@ -20,7 +22,9 @@ export default function App(): React.ReactElement {
   const bySource = useStore((s) => s.bySource)
   const deleted = useStore((s) => s.deleted)
   const search = useStore((s) => s.search)
+  const searchDraft = useStore((s) => s.searchDraft)
   const setSearch = useStore((s) => s.setSearch)
+  const setSearchDraft = useStore((s) => s.setSearchDraft)
   const clearSource = useStore((s) => s.clearSource)
   const showDeleted = useStore((s) => s.showDeleted)
   const showTimestamps = useStore((s) => s.showTimestamps)
@@ -29,7 +33,7 @@ export default function App(): React.ReactElement {
   const [adding, setAdding] = useState(false)
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--chat-font-size', `${fontSize}px`)
+    document.documentElement.style.setProperty('--chat-font-size', `${fontSize}rem`)
   }, [fontSize])
 
   useEffect(() => {
@@ -100,8 +104,10 @@ export default function App(): React.ReactElement {
                 deleted={deleted}
                 showDeleted={showDeleted}
                 showTimestamps={showTimestamps}
-                search={search[panes[0].id] ?? ''}
-                onSearch={(needle) => setSearch(panes[0].id, needle)}
+                searchTerms={search[panes[0].id] ?? EMPTY_TERMS}
+                searchDraft={searchDraft[panes[0].id] ?? ''}
+                onSearchTerms={(terms) => setSearch(panes[0].id, terms)}
+                onSearchDraft={(draft) => setSearchDraft(panes[0].id, draft)}
                 onClear={() => clearSource(panes[0].id)}
                 messages={bySource[panes[0].id] ?? []}
                 showPlatform={false}
@@ -114,8 +120,10 @@ export default function App(): React.ReactElement {
                       deleted={deleted}
                       showDeleted={showDeleted}
                       showTimestamps={showTimestamps}
-                      search={search[source.id] ?? ''}
-                      onSearch={(needle) => setSearch(source.id, needle)}
+                      searchTerms={search[source.id] ?? EMPTY_TERMS}
+                      searchDraft={searchDraft[source.id] ?? ''}
+                      onSearchTerms={(terms) => setSearch(source.id, terms)}
+                      onSearchDraft={(draft) => setSearchDraft(source.id, draft)}
                       onClear={() => clearSource(source.id)}
                       messages={bySource[source.id] ?? []}
                       showPlatform={false}

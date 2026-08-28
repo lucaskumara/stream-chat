@@ -5,6 +5,7 @@ import { ArrowDownOutlined } from '@ant-design/icons'
 import type { ChatMessage } from '@shared/types'
 import { bridge } from '../bridge'
 import { INK } from '../theme'
+import { matchesSearch, parseSearch } from '../search'
 import { ChatPaneBar } from './ChatPaneBar'
 import { MessageRow } from './MessageRow'
 
@@ -17,8 +18,10 @@ export interface ChatPaneProps {
   showDeleted: boolean
   showTimestamps: boolean
   showPlatform: boolean
-  search: string
-  onSearch: (needle: string) => void
+  searchTerms: string[]
+  searchDraft: string
+  onSearchTerms: (terms: string[]) => void
+  onSearchDraft: (draft: string) => void
   onClear: () => void
 }
 
@@ -28,8 +31,10 @@ export function ChatPane({
   showDeleted,
   showTimestamps,
   showPlatform,
-  search,
-  onSearch,
+  searchTerms,
+  searchDraft,
+  onSearchTerms,
+  onSearchDraft,
   onClear
 }: ChatPaneProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -38,24 +43,23 @@ export function ChatPane({
   const [frozen, setFrozen] = useState<ChatMessage[] | null>(null)
   const list = frozen ?? messages
 
+  const terms = useMemo(
+    () => parseSearch([...searchTerms, searchDraft]),
+    [searchTerms, searchDraft]
+  )
+
   const visible = useMemo(() => {
-    const needle = search.trim().toLowerCase()
     const out: ChatMessage[] = []
 
     for (const msg of list) {
       if (!showDeleted && deleted[msg.id]) continue
-      if (
-        needle !== '' &&
-        !msg.plainText.toLowerCase().includes(needle) &&
-        !msg.authorName.toLowerCase().includes(needle)
-      ) {
-        continue
-      }
+      if (terms.length > 0 && !matchesSearch(msg, terms)) continue
+
       out.push(msg)
     }
 
     return out
-  }, [list, deleted, showDeleted, search])
+  }, [list, deleted, showDeleted, terms])
 
   const virtualizer = useVirtualizer({
     count: visible.length,
@@ -181,10 +185,12 @@ export function ChatPane({
       </div>
 
       <ChatPaneBar
-        search={search}
+        terms={searchTerms}
+        draft={searchDraft}
         matches={visible.length}
         total={list.length}
-        onSearch={onSearch}
+        onTerms={onSearchTerms}
+        onDraft={onSearchDraft}
         onClear={onClear}
       />
     </div>

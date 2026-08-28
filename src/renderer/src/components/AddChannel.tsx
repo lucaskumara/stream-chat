@@ -90,12 +90,12 @@ export function AddChannel({ onAdded }: AddChannelProps): React.ReactElement {
       </Space.Compact>
 
       {preview ? (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          <Typography.Text style={{ fontSize: 12 }}>{preview.platform}</Typography.Text> ·{' '}
+        <Typography.Text type="secondary" style={{ fontSize: '1rem' }}>
+          <Typography.Text style={{ fontSize: '1rem' }}>{preview.platform}</Typography.Text> ·{' '}
           {preview.value}
         </Typography.Text>
       ) : (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" style={{ fontSize: '1rem' }}>
           Paste a twitch.tv / youtube.com / kick.com link, or pick a platform and type a name.
         </Typography.Text>
       )}
