@@ -313,6 +313,20 @@ export function ChannelTabs({
     if (doomed) onRemove(doomed)
   }
 
+  const runBounds = (sourceId: string): { min: number; max: number } | null => {
+    const group = groups.find((members) => members.includes(sourceId))
+    if (!group) return null
+
+    const run = blockExtent(ids.filter((id) => group.includes(id)))
+    const rect = document
+      .querySelector(`.ant-tabs-tab[data-node-key="${sourceId}"]`)
+      ?.getBoundingClientRect()
+
+    if (!run || !rect) return null
+
+    return { min: run.left - rect.left, max: run.right - rect.right }
+  }
+
   const sweptPast = (tabs: { width: number }[], distance: number): number => {
     let travelled = 0
     let passed = 0
@@ -349,9 +363,14 @@ export function ChannelTabs({
   }
 
   const dragStart = ({ active }: DragStartEvent): void => {
+    const dragged = String(active.id)
     const handle = grip.current
     const held = handle ? groups.find((members) => members.includes(handle)) : undefined
-    if (!held || !held.includes(String(active.id))) return
+
+    if (!held || !held.includes(dragged)) {
+      bounds.current = runBounds(dragged)
+      return
+    }
 
     const members = ids.filter((id) => held.includes(id))
 
