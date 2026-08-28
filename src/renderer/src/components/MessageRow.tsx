@@ -1,18 +1,10 @@
 import { memo, useState } from 'react'
-import type {
-  Badge as BadgeType,
-  ChatMessage,
-  EmoteProvider,
-  EmoteSettings,
-  Fragment,
-  Platform
-} from '@shared/types'
+import type { Badge, ChatMessage, Fragment, Platform } from '@shared/types'
 
 export const PLATFORM_COLOR: Record<Platform, string> = {
   twitch: '#9146ff',
   youtube: '#ff0033',
-  kick: '#53fc18',
-  mock: '#64748b'
+  kick: '#53fc18'
 }
 
 const KIND_LABEL: Partial<Record<ChatMessage['kind'], string>> = {
@@ -23,21 +15,55 @@ const KIND_LABEL: Partial<Record<ChatMessage['kind'], string>> = {
   system: 'SYS'
 }
 
-function readableColor(hex: string | undefined): string {
-  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return '#9aa4b2'
+const DEFAULT_NAME_COLORS = [
+  '#FF0000',
+  '#0000FF',
+  '#00FF00',
+  '#B22222',
+  '#FF7F50',
+  '#9ACD32',
+  '#FF4500',
+  '#2E8B57',
+  '#DAA520',
+  '#D2691E',
+  '#5F9EA0',
+  '#1E90FF',
+  '#FF69B4',
+  '#8A2BE2',
+  '#00FF7F'
+]
 
-  let r = parseInt(hex.slice(1, 3), 16)
-  let g = parseInt(hex.slice(3, 5), 16)
-  let b = parseInt(hex.slice(5, 7), 16)
+const LUMINANCE_FLOOR = 0.4
 
-  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
-  if (luminance >= 0.4) return hex
+function readableColor(hex: string): string {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return '#9aa4b2'
 
-  const boost = 0.4 / Math.max(luminance, 0.05)
-  r = Math.min(255, Math.round(r * boost))
-  g = Math.min(255, Math.round(g * boost))
-  b = Math.min(255, Math.round(b * boost))
-  return `rgb(${r}, ${g}, ${b})`
+  const channels = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16))
+
+  const luminance =
+    (0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]) / 255
+
+  if (luminance >= LUMINANCE_FLOOR) return hex
+
+  const towardsWhite = (LUMINANCE_FLOOR - luminance) / (1 - luminance)
+  const lifted = channels.map((value) =>
+    Math.round(value + (255 - value) * towardsWhite)
+  )
+
+  return `rgb(${lifted[0]}, ${lifted[1]}, ${lifted[2]})`
+}
+
+function nameColor(msg: ChatMessage): string {
+  if (msg.authorColor) return readableColor(msg.authorColor)
+
+  const seed = msg.authorId || msg.authorName
+  let hash = 0
+
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0
+
+  const picked = DEFAULT_NAME_COLORS[Math.abs(hash) % DEFAULT_NAME_COLORS.length]
+
+  return readableColor(picked)
 }
 
 function formatTime(ts: number): string {
@@ -61,16 +87,16 @@ function Emote({ name, url }: { name: string; url: string }): React.ReactElement
   )
 }
 
-function BadgeView({ badge }: { badge: BadgeType }): React.ReactElement {
+function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
   const [failed, setFailed] = useState(false)
 
   if (!badge.url || failed) {
     return (
       <span
         title={badge.label}
-        className="mr-1 rounded-sm bg-slate-600/40 px-1 text-[0.75em] text-slate-300"
+        className="mr-1 rounded-sm bg-slate-600/40 px-1 text-[0.7em] font-semibold tracking-wide text-slate-300 uppercase"
       >
-        {badge.label.length <= 5 ? badge.label : badge.label.slice(0, 3).toUpperCase()}
+        {badge.label.slice(0, 3)}
       </span>
     )
   }
@@ -78,49 +104,29 @@ function BadgeView({ badge }: { badge: BadgeType }): React.ReactElement {
   return (
     <img
       src={badge.url}
+      srcSet={badge.srcSet}
       alt={badge.label}
       title={badge.label}
       loading="lazy"
       draggable={false}
-      className="mr-1 inline-block h-[1.15em] w-[1.15em] align-middle"
+      className="mr-1 inline-block h-[1.1em] w-[1.1em] align-middle"
       onError={() => setFailed(true)}
     />
   )
 }
 
-function isEmoteEnabled(
-  provider: EmoteProvider | undefined,
-  settings: EmoteSettings
-): boolean {
-  switch (provider) {
-    case '7tv':
-      return settings.sevenTv
-    case 'bttv':
-      return settings.bttv
-    default:
-
-      return true
-  }
-}
-
 function FragmentView({
   fragment,
-  emoteSettings,
   onOpenLink
 }: {
   fragment: Fragment
-  emoteSettings: EmoteSettings
   onOpenLink: (url: string) => void
 }): React.ReactElement {
   switch (fragment.kind) {
     case 'text':
       return <span>{fragment.text}</span>
     case 'emote':
-      return isEmoteEnabled(fragment.provider, emoteSettings) ? (
-        <Emote name={fragment.name} url={fragment.url} />
-      ) : (
-        <span>{fragment.name}</span>
-      )
+      return <Emote name={fragment.name} url={fragment.url} />
     case 'mention':
       return (
         <span className="rounded-sm bg-indigo-500/20 px-1 font-medium text-indigo-200">
@@ -145,7 +151,6 @@ export interface MessageRowProps {
   deleted: boolean
   showTimestamps: boolean
   showPlatform: boolean
-  emoteSettings: EmoteSettings
   onOpenLink: (url: string) => void
 }
 
@@ -154,7 +159,6 @@ function MessageRowImpl({
   deleted,
   showTimestamps,
   showPlatform,
-  emoteSettings,
   onOpenLink
 }: MessageRowProps): React.ReactElement {
   const kindLabel = KIND_LABEL[msg.kind]
@@ -193,11 +197,11 @@ function MessageRowImpl({
           </span>
         )}
 
-        {msg.badges.map((badge) => (
-          <BadgeView key={badge.id} badge={badge} />
+        {msg.badges?.map((badge, i) => (
+          <BadgeView key={`${badge.label}-${i}`} badge={badge} />
         ))}
 
-        <span className="font-semibold" style={{ color: readableColor(msg.authorColor) }}>
+        <span className="font-semibold" style={{ color: nameColor(msg) }}>
           {msg.authorDisplayName ?? msg.authorName}
         </span>
         <span className="text-slate-500">: </span>
@@ -212,11 +216,7 @@ function MessageRowImpl({
 
         {msg.fragments.map((fragment, i) => (
           <span key={i}>
-            <FragmentView
-              fragment={fragment}
-              emoteSettings={emoteSettings}
-              onOpenLink={onOpenLink}
-            />{' '}
+            <FragmentView fragment={fragment} onOpenLink={onOpenLink} />{' '}
           </span>
         ))}
       </span>

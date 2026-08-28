@@ -1,7 +1,10 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { ChatMessage, EmoteSettings } from '@shared/types'
+import { Button, Empty, Flex } from 'antd'
+import { ArrowDownOutlined } from '@ant-design/icons'
+import type { ChatMessage } from '@shared/types'
 import { bridge } from '../bridge'
+import { INK } from '../theme'
 import { MessageRow } from './MessageRow'
 
 const PIN_THRESHOLD_PX = 40
@@ -14,7 +17,6 @@ export interface ChatPaneProps {
   showTimestamps: boolean
   showPlatform: boolean
   search: string
-  emoteSettings: EmoteSettings
   header: React.ReactNode
 }
 
@@ -25,7 +27,6 @@ export function ChatPane({
   showTimestamps,
   showPlatform,
   search,
-  emoteSettings,
   header
 }: ChatPaneProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -101,14 +102,17 @@ export function ChatPane({
   const items = virtualizer.getVirtualItems()
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#12151a]">
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col"
+      style={{ height: '100%', background: INK.chat }}
+    >
       {header}
 
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="chat-scroll absolute inset-0 overflow-y-auto overflow-x-hidden"
+          className="chat-scroll absolute inset-0 overflow-x-hidden overflow-y-auto"
         >
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
             {items.map((item) => {
@@ -132,7 +136,6 @@ export function ChatPane({
                     deleted={deleted[msg.id] === true}
                     showTimestamps={showTimestamps}
                     showPlatform={showPlatform}
-                    emoteSettings={emoteSettings}
                     onOpenLink={openLink}
                   />
                 </div>
@@ -142,20 +145,37 @@ export function ChatPane({
         </div>
 
         {visible.length === 0 && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-600">
-            {list.length === 0 ? 'waiting for messages…' : 'every message is filtered out'}
-          </div>
+          <Flex
+            align="center"
+            justify="center"
+            className="pointer-events-none absolute inset-0"
+          >
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                list.length === 0 ? 'waiting for messages…' : 'every message is filtered out'
+              }
+            />
+          </Flex>
         )}
 
         {!pinned && (
-          <button
-            type="button"
+          <Button
+            type="primary"
+            shape="round"
+            size="small"
+            icon={<ArrowDownOutlined />}
             onClick={resume}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 cursor-pointer rounded-full bg-indigo-600 px-3 py-1 text-[13px] font-medium text-white shadow-lg hover:bg-indigo-500"
+            style={{
+              position: 'absolute',
+              bottom: 8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.45)'
+            }}
           >
-            {unread > 0 ? `${unread} new message${unread === 1 ? '' : 's'} · ` : ''}
-            chat paused — resume ↓
-          </button>
+            {unread > 0 ? `${unread} new · ` : ''}chat paused — resume
+          </Button>
         )}
       </div>
     </div>

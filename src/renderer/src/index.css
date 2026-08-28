@@ -1,3 +1,9 @@
+/* antd sits between Tailwind's preflight and its utilities: component styles
+   win over the base reset (which would otherwise strip button backgrounds),
+   while utility classes still win over antd. StyleProvider `layer` in
+   main.tsx is what puts antd's runtime styles into this layer. */
+@layer theme, base, antd, components, utilities;
+
 @import 'tailwindcss';
 
 @theme {
@@ -35,6 +41,45 @@ body {
   overflow: hidden;
 }
 
+/* The split control on each tab. It has to read as a control at rest — at low
+   opacity it looked like decoration and split view was undiscoverable. */
+.tab-split {
+  display: flex;
+  padding: 2px;
+  border-radius: 3px;
+  opacity: 0.55;
+  transition:
+    opacity 0.12s,
+    color 0.12s,
+    background 0.12s;
+}
+.tab-split:hover {
+  opacity: 1;
+  background: #2b323d;
+}
+.tab-split-on {
+  opacity: 1;
+  color: #818cf8;
+}
+.tab-split-inert {
+  opacity: 0.3;
+  cursor: default;
+}
+.tab-split-inert:hover {
+  opacity: 0.3;
+  background: transparent;
+}
+
+/* Every open chat is "shown", but antd only marks one tab active. Shown tabs
+   are styled to match the active one so the tab strip reflects what is on
+   screen rather than which tab was clicked last. */
+.ant-tabs-tab.tab-shown {
+  background: #171b22;
+}
+.ant-tabs-tab.tab-shown .ant-tabs-tab-btn {
+  color: #e6ebf2;
+}
+
 /* Chat scrollers get a thin, low-contrast bar so a fast-moving list doesn't
    draw the eye to the scrollbar instead of the messages. */
 .chat-scroll {
@@ -51,8 +96,4 @@ body {
 }
 .chat-scroll::-webkit-scrollbar-track {
   background: transparent;
-}
-
-input[type='range'] {
-  accent-color: #6366f1;
 }

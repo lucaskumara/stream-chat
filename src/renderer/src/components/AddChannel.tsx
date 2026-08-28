@@ -1,26 +1,32 @@
 import { useMemo, useState } from 'react'
+import { Alert, Badge, Button, Flex, Input, Select, Space, Typography } from 'antd'
 import type { Platform } from '@shared/types'
 import { AUTO_CONNECT_COST, parseChannelInput } from '@shared/channel'
 import { bridge } from '../bridge'
+import { PLATFORM_COLOR } from './MessageRow'
 
-const READY: Record<Platform, boolean> = {
-  twitch: true,
-  youtube: true,
-  kick: false,
-  mock: true
-}
-
-const PHASE_NOTE: Partial<Record<Platform, string>> = {
-  kick: 'Kick arrives in Phase 4, over its unofficial socket.'
-}
-
-const AUTO_LABEL: Record<'push' | 'polled' | 'none', string> = {
+const AUTO_LABEL: Record<'push' | 'polled', string> = {
   push: 'auto-connects when live (push, no polling)',
-  polled: 'rechecked every 2 min while the channel is offline',
-  none: 'synthetic traffic'
+  polled: 'rechecked every 2 min while the channel is offline'
 }
 
-export function AddChannel(): React.ReactElement {
+const PLATFORM_OPTIONS: { value: Platform; label: React.ReactNode }[] = (
+  ['twitch', 'youtube', 'kick'] as Platform[]
+).map((platform) => ({
+  value: platform,
+  label: (
+    <Flex align="center" gap={6}>
+      <Badge color={PLATFORM_COLOR[platform]} />
+      {platform}
+    </Flex>
+  )
+}))
+
+export interface AddChannelProps {
+  onAdded?: () => void
+}
+
+export function AddChannel({ onAdded }: AddChannelProps): React.ReactElement {
   const [input, setInput] = useState('')
   const [platform, setPlatform] = useState<Platform>('twitch')
   const [error, setError] = useState<string | null>(null)
@@ -32,8 +38,6 @@ export function AddChannel(): React.ReactElement {
     return parsed.ok && parsed.ref ? parsed.ref : null
   }, [input, platform])
 
-  const effectivePlatform = preview?.platform ?? platform
-
   const submit = async (): Promise<void> => {
     setError(null)
     const parsed = parseChannelInput(input, platform)
@@ -44,10 +48,6 @@ export function AddChannel(): React.ReactElement {
     }
 
     const ref = parsed.ref
-    if (!READY[ref.platform]) {
-      setError(PHASE_NOTE[ref.platform] ?? `${ref.platform} is not supported yet.`)
-      return
-    }
     setBusy(true)
     try {
       await bridge().api.addSource({
@@ -56,6 +56,7 @@ export function AddChannel(): React.ReactElement {
         identifier: ref.value
       })
       setInput('')
+      onAdded?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -64,76 +65,59 @@ export function AddChannel(): React.ReactElement {
   }
 
   return (
-    <div className="space-y-[6px] border-t border-[#232932] p-2">
-      <div className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
-        Add a channel
-      </div>
-
-      <div className="flex gap-1">
-        <select
+    <Flex vertical gap={10}>
+      <Space.Compact style={{ width: '100%' }}>
+        <Select<Platform>
           value={platform}
-          onChange={(e) => setPlatform(e.target.value as Platform)}
-          className="rounded border border-[#2b323d] bg-[#0b0d10] px-1 py-1 text-[12px] text-slate-300 outline-none focus:border-indigo-500"
+          onChange={setPlatform}
+          options={PLATFORM_OPTIONS}
+          style={{ width: 116, flexShrink: 0 }}
           title="platform for bare names — pasted links detect their own"
-        >
-          <option value="twitch">twitch</option>
-          <option value="youtube">youtube</option>
-          <option value="kick">kick</option>
-        </select>
+        />
 
-        <input
-          type="text"
+        <Input
+          autoFocus
           value={input}
           spellCheck={false}
-          placeholder="name or paste a link"
+          placeholder="channel name, or paste a link"
           onChange={(e) => {
             setInput(e.target.value)
             setError(null)
           }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void submit()
-          }}
-          className="min-w-0 flex-1 rounded border border-[#2b323d] bg-[#0b0d10] px-[6px] py-1 text-[12px] text-slate-200 outline-none focus:border-indigo-500"
+          onPressEnter={() => void submit()}
         />
+      </Space.Compact>
 
-        <button
-          type="button"
-          disabled={busy || input.trim() === ''}
-          onClick={() => void submit()}
-          className="cursor-pointer rounded bg-indigo-600 px-2 py-1 text-[12px] font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
-        >
-          add
-        </button>
-      </div>
-
-      {preview && (
-        <div className="space-y-[2px]">
-          <div className="truncate text-[11px] text-slate-500">
-            <span className="text-slate-400">{preview.platform}</span> · {preview.value} ·{' '}
-            {AUTO_LABEL[AUTO_CONNECT_COST[preview.platform]]}
-          </div>
-          {preview.kind === 'youtube-video-id' && (
-            <div className="text-[11px] leading-relaxed text-amber-500/70">
-              That link names one broadcast. Add the @handle instead to follow the channel
-              across streams.
-            </div>
-          )}
-        </div>
+      {preview ? (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text style={{ fontSize: 12 }}>{preview.platform}</Typography.Text> ·{' '}
+          {preview.value} · {AUTO_LABEL[AUTO_CONNECT_COST[preview.platform]]}
+        </Typography.Text>
+      ) : (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          Paste a twitch.tv / youtube.com / kick.com link, or pick a platform and type a name.
+        </Typography.Text>
       )}
 
-      {!preview && input.trim() !== '' && (
-        <div className="text-[11px] text-slate-600">
-          Paste a twitch.tv / youtube.com / kick.com link, or pick a platform above.
-        </div>
+      {preview?.kind === 'youtube-video-id' && (
+        <Alert
+          type="warning"
+          showIcon
+          message="That link names one broadcast. Add the @handle instead to follow the channel across streams."
+        />
       )}
 
-      {!READY[effectivePlatform] && PHASE_NOTE[effectivePlatform] && (
-        <div className="text-[11px] leading-relaxed text-amber-500/80">
-          {PHASE_NOTE[effectivePlatform]}
-        </div>
-      )}
+      {error && <Alert type="error" showIcon message={error} />}
 
-      {error && <div className="text-[11px] leading-relaxed text-red-400">{error}</div>}
-    </div>
+      <Button
+        type="primary"
+        block
+        loading={busy}
+        disabled={input.trim() === ''}
+        onClick={() => void submit()}
+      >
+        Add channel
+      </Button>
+    </Flex>
   )
 }

@@ -1,38 +1,57 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { App as AntApp, Badge, Button, Empty, Flex, Layout, Modal, Splitter, Typography } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
 import type { SourceState } from '@shared/types'
 import { bridge } from './bridge'
 import { useStore } from './store'
+import { AddChannel } from './components/AddChannel'
+import { ChannelTabs } from './components/ChannelTabs'
 import { ChatPane } from './components/ChatPane'
 import { PLATFORM_COLOR } from './components/MessageRow'
-import { Sidebar } from './components/Sidebar'
+import { INK } from './theme'
 
 function PaneHeader({ source }: { source: SourceState }): React.ReactElement {
   const count = useStore((s) => s.bySource[source.id]?.length ?? 0)
+
   return (
-    <div className="flex shrink-0 items-center gap-[6px] border-b border-[#232932] bg-[#0f1216] px-2 py-1">
-      <span
-        className="h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: PLATFORM_COLOR[source.platform] }}
-      />
-      <span className="truncate text-[14px] font-medium text-slate-200">{source.label}</span>
-      {source.live === true && (
-        <span className="shrink-0 text-[11px] text-red-400">LIVE</span>
-      )}
-      <span className="ml-auto shrink-0 text-[12px] tabular-nums text-slate-600">{count}</span>
-    </div>
+    <Flex
+      align="center"
+      gap={6}
+      style={{
+        flexShrink: 0,
+        padding: '4px 8px',
+        background: INK.chrome,
+        borderBottom: `1px solid ${INK.line}`
+      }}
+    >
+      <Badge color={PLATFORM_COLOR[source.platform]} />
+      <Typography.Text strong ellipsis style={{ fontSize: 12 }}>
+        {source.label}
+      </Typography.Text>
+      <Typography.Text type="secondary" style={{ marginLeft: 'auto', fontSize: 12 }}>
+        {count}
+      </Typography.Text>
+    </Flex>
   )
 }
 
 export default function App(): React.ReactElement {
+  const { modal } = AntApp.useApp()
+
   const sources = useStore((s) => s.sources)
+  const visibleIds = useStore((s) => s.visibleIds)
   const setSources = useStore((s) => s.setSources)
   const setTwitchAuth = useStore((s) => s.setTwitchAuth)
   const ingest = useStore((s) => s.ingest)
+  const forgetSource = useStore((s) => s.forgetSource)
+  const reorderSources = useStore((s) => s.reorderSources)
   const bySource = useStore((s) => s.bySource)
   const deleted = useStore((s) => s.deleted)
   const showDeleted = useStore((s) => s.showDeleted)
   const showTimestamps = useStore((s) => s.showTimestamps)
   const fontSize = useStore((s) => s.fontSize)
+
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     document.documentElement.style.setProperty('--chat-font-size', `${fontSize}px`)
@@ -57,33 +76,98 @@ export default function App(): React.ReactElement {
     }
   }, [ingest, setSources, setTwitchAuth])
 
-  return (
-    <div className="flex h-full min-h-0">
-      <Sidebar />
+  const remove = useCallback(
+    (source: SourceState) => {
+      modal.confirm({
+        title: `Remove ${source.label}?`,
+        content: 'The channel is dropped from your saved list and its messages are discarded.',
+        okText: 'Remove',
+        okButtonProps: { danger: true },
+        cancelText: 'Keep',
+        onOk: async () => {
+          await bridge().api.removeSource(source.id)
+          forgetSource(source.id)
+        }
+      })
+    },
+    [modal, forgetSource]
+  )
 
-      <main className="flex min-h-0 min-w-0 flex-1">
-        {sources.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center px-6 text-center text-[13px] leading-relaxed text-slate-600">
-            Add a channel on the left to start watching chat.
-          </div>
-        ) : (
-          <div className="flex min-h-0 min-w-0 flex-1 divide-x divide-[#232932]">
-            {sources.map((source) => (
+  const reorder = useCallback(
+    (orderedIds: string[]) => {
+      reorderSources(orderedIds)
+      void bridge().api.reorderSources(orderedIds)
+    },
+    [reorderSources]
+  )
+
+  const panes = sources.filter((source) => visibleIds.includes(source.id))
+
+  return (
+    <Layout style={{ height: '100%' }}>
+      {sources.length === 0 ? (
+        <Flex flex={1} align="center" justify="center">
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="No channels yet. Add one by name, or paste its link."
+          >
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
+              Add a channel
+            </Button>
+          </Empty>
+        </Flex>
+      ) : (
+        <Flex vertical style={{ height: '100%' }}>
+          <ChannelTabs
+            sources={sources}
+            visibleIds={visibleIds}
+            onAdd={() => setAdding(true)}
+            onRemove={remove}
+            onReorder={reorder}
+          />
+
+          <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+            {panes.length === 1 ? (
               <ChatPane
-                key={source.id}
                 deleted={deleted}
                 showDeleted={showDeleted}
                 showTimestamps={showTimestamps}
                 search=""
-                messages={bySource[source.id] ?? []}
-                emoteSettings={source.emotes}
+                messages={bySource[panes[0].id] ?? []}
                 showPlatform={false}
-                header={<PaneHeader source={source} />}
+                header={null}
               />
-            ))}
+            ) : (
+              <Splitter style={{ height: '100%', width: '100%' }}>
+                {panes.map((source) => (
+                  <Splitter.Panel key={source.id} min={220}>
+                    <ChatPane
+                      deleted={deleted}
+                      showDeleted={showDeleted}
+                      showTimestamps={showTimestamps}
+                      search=""
+                      messages={bySource[source.id] ?? []}
+                      showPlatform={false}
+                      header={<PaneHeader source={source} />}
+                    />
+                  </Splitter.Panel>
+                ))}
+              </Splitter>
+            )}
           </div>
-        )}
-      </main>
-    </div>
+        </Flex>
+      )}
+
+      <Modal
+        title="Add a channel"
+        open={adding}
+        onCancel={() => setAdding(false)}
+        footer={null}
+        width={420}
+        destroyOnHidden
+      >
+        <AddChannel onAdded={() => setAdding(false)} />
+      </Modal>
+    </Layout>
   )
 }

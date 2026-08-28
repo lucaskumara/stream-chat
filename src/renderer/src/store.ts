@@ -14,6 +14,8 @@ interface ChatState {
   sources: SourceState[]
   bySource: Record<string, ChatMessage[]>
 
+  visibleIds: string[]
+
   deleted: Record<string, true>
 
   showDeleted: boolean
@@ -26,8 +28,10 @@ interface ChatState {
 
   setSources: (states: SourceState[]) => void
   setTwitchAuth: (state: TwitchAuthState) => void
+  reorderSources: (orderedIds: string[]) => void
+  showSource: (sourceId: string) => void
+  toggleSplit: (sourceId: string) => void
   ingest: (batch: ChatBatch) => void
-  clearSource: (sourceId: string) => void
   forgetSource: (sourceId: string) => void
 }
 
@@ -38,6 +42,7 @@ function capped(arr: ChatMessage[], capacity: number): ChatMessage[] {
 export const useStore = create<ChatState>()((set) => ({
   sources: [],
   bySource: {},
+  visibleIds: [],
   deleted: {},
 
   showDeleted: true,
@@ -47,8 +52,45 @@ export const useStore = create<ChatState>()((set) => ({
 
   twitchAuth: { status: 'signed-out' },
 
-  setSources: (states) => set({ sources: states }),
+  setSources: (states) =>
+    set((s) => {
+      const alive = new Set(states.map((state) => state.id))
+      const kept = s.visibleIds.filter((id) => alive.has(id))
+
+      const opened =
+        s.sources.length > 0
+          ? states.find((state) => !s.sources.some((was) => was.id === state.id))
+          : undefined
+
+      if (opened) return { sources: states, visibleIds: [opened.id] }
+      if (kept.length > 0) return { sources: states, visibleIds: kept }
+
+      return { sources: states, visibleIds: states.slice(0, 1).map((state) => state.id) }
+    }),
+
   setTwitchAuth: (twitchAuth) => set({ twitchAuth }),
+
+  reorderSources: (orderedIds) =>
+    set((s) => {
+      const byId = new Map(s.sources.map((source) => [source.id, source]))
+
+      const ordered = orderedIds
+        .map((id) => byId.get(id))
+        .filter((source): source is SourceState => source !== undefined)
+
+      return ordered.length === s.sources.length ? { sources: ordered } : s
+    }),
+
+  showSource: (sourceId) =>
+    set((s) => (s.visibleIds.includes(sourceId) ? s : { visibleIds: [sourceId] })),
+
+  toggleSplit: (sourceId) =>
+    set((s) => {
+      if (!s.visibleIds.includes(sourceId)) return { visibleIds: [...s.visibleIds, sourceId] }
+      if (s.visibleIds.length === 1) return s
+
+      return { visibleIds: s.visibleIds.filter((id) => id !== sourceId) }
+    }),
 
   ingest: (batch) =>
     set((s) => {
@@ -118,13 +160,11 @@ export const useStore = create<ChatState>()((set) => ({
       return { bySource, deleted }
     }),
 
-  clearSource: (sourceId) =>
-    set((s) => ({ bySource: { ...s.bySource, [sourceId]: [] } })),
-
   forgetSource: (sourceId) =>
     set((s) => {
       const bySource = { ...s.bySource }
       delete bySource[sourceId]
-      return { bySource }
+
+      return { bySource, visibleIds: s.visibleIds.filter((id) => id !== sourceId) }
     }),
 }))
