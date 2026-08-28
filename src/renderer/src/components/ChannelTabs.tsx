@@ -18,7 +18,8 @@ import {
   SortableContext,
   arrayMove,
   horizontalListSortingStrategy,
-  useSortable
+  useSortable,
+  type SortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { SourceState, SourceStatus } from '@shared/types'
@@ -313,6 +314,41 @@ export function ChannelTabs({
     if (doomed) onRemove(doomed)
   }
 
+  const runAt = (index: number): { start: number; end: number } | null => {
+    const group = groups.find((members) => members.includes(ids[index]))
+    if (!group) return null
+
+    const positions = group.map((id) => ids.indexOf(id)).filter((at) => at !== -1)
+
+    return { start: Math.min(...positions), end: Math.max(...positions) }
+  }
+
+  // A group shifts aside as one block: if any member would move to make room for
+  // a foreign tab, every member moves by the same amount. Shifting them
+  // individually tears the group's band open around the hovering tab.
+  const blockStrategy: SortingStrategy = (args) => {
+    const own = horizontalListSortingStrategy(args)
+
+    const run = runAt(args.index)
+    if (!run) return own
+    if (args.activeIndex >= run.start && args.activeIndex <= run.end) return own
+
+    for (let member = run.start; member <= run.end; member++) {
+      const shifted = horizontalListSortingStrategy({ ...args, index: member })
+      if (shifted && shifted.x !== 0) return shifted
+    }
+
+    return own
+  }
+
+  const snapOutOfRun = (from: number, to: number): number => {
+    const run = runAt(to)
+    if (!run) return to
+    if (from >= run.start && from <= run.end) return to
+
+    return from > to ? run.start : run.end
+  }
+
   const runBounds = (sourceId: string): { min: number; max: number } | null => {
     const group = groups.find((members) => members.includes(sourceId))
     if (!group) return null
@@ -434,7 +470,7 @@ export function ChannelTabs({
     const to = ids.indexOf(String(over.id))
     if (from === -1 || to === -1) return
 
-    onReorder(contiguousOrder(arrayMove(ids, from, to), groups))
+    onReorder(contiguousOrder(arrayMove(ids, from, snapOutOfRun(from, to)), groups))
   }
 
   const renderTabBar: TabsProps['renderTabBar'] = (barProps, DefaultTabBar) => (
@@ -451,7 +487,7 @@ export function ChannelTabs({
         setCarry(null)
       }}
     >
-      <SortableContext items={ids} strategy={horizontalListSortingStrategy}>
+      <SortableContext items={ids} strategy={blockStrategy}>
         <DefaultTabBar {...barProps}>
           {(node: React.ReactElement) => {
             const props = node.props as { 'data-node-key': string }
