@@ -179,6 +179,13 @@ body {
   -webkit-app-region: drag;
 }
 
+/* macOS keeps its own traffic lights (titleBarStyle: 'hidden'), drawn over the
+   top-left of our bar — so the name has to start clear of them, and we render
+   no buttons of our own. */
+.titlebar-mac {
+  padding-left: 66px;
+}
+
 .titlebar-drag {
   flex: 1;
   align-self: stretch;

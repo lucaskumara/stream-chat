@@ -111,7 +111,11 @@ export interface DeviceCodePrompt {
   interval: number
 }
 
+export type HostPlatform = 'darwin' | 'win32' | 'linux' | 'other'
+
 export interface ChatApi {
+  readonly platform: HostPlatform
+
   listSources(): Promise<SourceState[]>
   addSource(req: AddSourceRequest): Promise<string>
   removeSource(sourceId: string): Promise<void>

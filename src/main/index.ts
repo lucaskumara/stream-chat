@@ -40,6 +40,12 @@ const sources = new SourceManager(bus, broadcastSources, {
   twitch: { auth, helix, eventsub, irc }
 })
 
+function frameOptions(): Electron.BrowserWindowConstructorOptions {
+  if (process.platform !== 'darwin') return { frame: false }
+
+  return { titleBarStyle: 'hidden', trafficLightPosition: { x: 12, y: 10 } }
+}
+
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1440,
@@ -47,7 +53,7 @@ function createWindow(): BrowserWindow {
     minWidth: 720,
     minHeight: 420,
     show: false,
-    frame: false,
+    ...frameOptions(),
     backgroundColor: '#141414',
     title: 'stream-chat',
     webPreferences: {

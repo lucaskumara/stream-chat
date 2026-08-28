@@ -17,6 +17,9 @@ const CLOSE = 'M0.5 0.5 L9.5 9.5 M9.5 0.5 L0.5 9.5'
 export function TitleBar(): React.ReactElement {
   const [maximized, setMaximized] = useState(false)
 
+  const { api } = bridge()
+  const trafficLights = api.platform === 'darwin'
+
   useEffect(() => {
     const { api } = bridge()
 
@@ -25,40 +28,42 @@ export function TitleBar(): React.ReactElement {
     return api.onWindowMaximized(setMaximized)
   }, [])
 
-  const { api } = bridge()
-
   return (
-    <div className="titlebar">
+    <div className={trafficLights ? 'titlebar titlebar-mac' : 'titlebar'}>
       <span className="titlebar-name">stream-chat</span>
 
       <div className="titlebar-drag" />
 
-      <button
-        type="button"
-        className="titlebar-button"
-        aria-label="Minimize"
-        onClick={() => void api.windowMinimize()}
-      >
-        <Glyph path={MINIMIZE} />
-      </button>
+      {!trafficLights && (
+        <>
+          <button
+            type="button"
+            className="titlebar-button"
+            aria-label="Minimize"
+            onClick={() => void api.windowMinimize()}
+          >
+            <Glyph path={MINIMIZE} />
+          </button>
 
-      <button
-        type="button"
-        className="titlebar-button"
-        aria-label={maximized ? 'Restore' : 'Maximize'}
-        onClick={() => void api.windowToggleMaximize()}
-      >
-        <Glyph path={maximized ? RESTORE : MAXIMIZE} />
-      </button>
+          <button
+            type="button"
+            className="titlebar-button"
+            aria-label={maximized ? 'Restore' : 'Maximize'}
+            onClick={() => void api.windowToggleMaximize()}
+          >
+            <Glyph path={maximized ? RESTORE : MAXIMIZE} />
+          </button>
 
-      <button
-        type="button"
-        className="titlebar-button titlebar-close"
-        aria-label="Close"
-        onClick={() => void api.windowClose()}
-      >
-        <Glyph path={CLOSE} />
-      </button>
+          <button
+            type="button"
+            className="titlebar-button titlebar-close"
+            aria-label="Close"
+            onClick={() => void api.windowClose()}
+          >
+            <Glyph path={CLOSE} />
+          </button>
+        </>
+      )}
     </div>
   )
 }

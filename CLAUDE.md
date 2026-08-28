@@ -714,20 +714,30 @@ dark algorithm derives its whole neutral ramp from `colorBgBase`, so a single ti
 propagates to every border, surface and text tone. Group bands are the one intentional
 colour in the chrome. Author name colours are content, not chrome, and are left alone.
 
-**The window is frameless and the renderer draws the title bar.** `frame: false` plus
-`TitleBar`, which is rendered above the tab strip for *both* branches of `App` — including
-the empty state, since a window whose only close button lives behind "you have channels"
-cannot be closed. Two things bite here. A `-webkit-app-region: drag` region swallows mouse
+**The window is frameless and the renderer draws the title bar.** `TitleBar` is rendered
+above the tab strip for *both* branches of `App` — including the empty state, since a window
+whose only close button lives behind "you have channels" cannot be closed. Two things bite here. A `-webkit-app-region: drag` region swallows mouse
 events, so every control inside the bar has to opt back out with `no-drag` or it is simply
 dead. And the maximise glyph is driven by `maximize`/`unmaximize` events pushed from main,
 not by what the button did — double-clicking the drag region, Win+Up and snapping all
 maximise the window without going through the button. Window control handlers resolve their
 target with `BrowserWindow.fromWebContents(event.sender)` rather than the module-level
 `mainWindow`, which is the same reason every other IPC handler validates its own input.
-Cost of `frame: false` on Windows: no snap-layouts flyout on maximise hover — that needs
-`titleBarStyle: 'hidden'` with `titleBarOverlay`, which hands the right-hand strip back to
-the OS. Note that a frameless window still reports `outerHeight - innerHeight === 8` (the
-invisible resize border), so that difference is not a test for "is the frame gone".
+Note that a frameless window still reports `outerHeight - innerHeight === 8` (the invisible
+resize border), so that difference is not a test for "is the frame gone".
+
+**The frame is not the same on all three platforms, and one uniform `frame: false` is
+wrong.** `frameOptions()` in `main/index.ts` gives Windows and Linux `frame: false` with our
+own buttons, and macOS `titleBarStyle: 'hidden'` with `trafficLightPosition` — on macOS the
+OS keeps drawing its traffic lights, so `TitleBar` renders no buttons of its own there and
+`.titlebar-mac` insets the name past them. Our buttons sit on the right and the close button
+hovers Windows red; that is the wrong furniture on the wrong side for macOS, which is the
+whole reason for the branch. The renderer learns which host it is on from `api.platform`,
+set once in the preload from `process.platform` — sandboxed preloads still expose that, so
+it costs no IPC. Costs that remain: Windows loses the snap-layouts flyout on maximise hover
+(that needs `titleBarOverlay`, which hands the right-hand strip back to the OS), and on
+Linux edge-resize and double-click-to-maximise depend on the compositor. **Only the Windows
+path has been run** — the macOS and Linux branches are written, not tested.
 
 **Platform dots are the sites' favicons, except in message rows.** `PlatformIcon` loads
 `favicon.ico` from each platform and falls back to the old coloured dot on error, so a dead

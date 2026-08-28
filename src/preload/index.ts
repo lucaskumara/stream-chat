@@ -4,6 +4,7 @@ import type {
   ChatApi,
   ChatBatch,
   DeviceCodePrompt,
+  HostPlatform,
   SourceState,
   TwitchAuthState
 } from '@shared/types'
@@ -27,7 +28,13 @@ const IPC = {
   twitchAuth: 'twitch:auth'
 } as const
 
+const HOSTS: HostPlatform[] = ['darwin', 'win32', 'linux']
+
+const host = HOSTS.find((candidate) => candidate === process.platform) ?? 'other'
+
 const api: ChatApi = {
+  platform: host,
+
   listSources: (): Promise<SourceState[]> => ipcRenderer.invoke(IPC.listSources),
 
   addSource: (req: AddSourceRequest): Promise<string> =>
