@@ -5,6 +5,12 @@ import { parseChannelInput } from '@shared/channel'
 import { bridge } from '../bridge'
 import { PlatformIcon } from './PlatformIcon'
 
+const PLATFORM_NAME: Record<Platform, string> = {
+  twitch: 'Twitch',
+  youtube: 'YouTube',
+  kick: 'Kick'
+}
+
 const PLATFORM_OPTIONS: { value: Platform; label: React.ReactNode }[] = (
   ['twitch', 'youtube', 'kick'] as Platform[]
 ).map((platform) => ({
@@ -12,7 +18,7 @@ const PLATFORM_OPTIONS: { value: Platform; label: React.ReactNode }[] = (
   label: (
     <Flex align="center" gap={6}>
       <PlatformIcon platform={platform} />
-      {platform}
+      {PLATFORM_NAME[platform]}
     </Flex>
   )
 }))
