@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Alert, Button, Flex, Input, Select, Space, Typography } from 'antd'
 import type { Platform } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
-import { bridge } from '../bridge'
+import { bridge, remoteMessage } from '../bridge'
 import { PlatformIcon } from './PlatformIcon'
 
 const PLATFORM_NAME: Record<Platform, string> = {
@@ -59,7 +59,7 @@ export function AddChannel({ onAdded }: AddChannelProps): React.ReactElement {
       setInput('')
       onAdded?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(remoteMessage(err))
     } finally {
       setBusy(false)
     }

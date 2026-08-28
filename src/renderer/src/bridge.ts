@@ -6,3 +6,11 @@ export function bridge(): { api: ChatApi } {
 
   return { api }
 }
+
+const REMOTE_WRAPPER = /^Error invoking remote method '[^']*':[ ]*(?:Error:[ ]*)?/
+
+export function remoteMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error)
+
+  return raw.replace(REMOTE_WRAPPER, '')
+}

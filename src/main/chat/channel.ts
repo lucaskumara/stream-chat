@@ -17,6 +17,8 @@ export type ChannelLookup<TChannel extends Channel> =
   | { state: "missing"; reason: string }
   | { state: "unreachable"; reason: string };
 
+export class MissingChannelError extends Error {}
+
 export interface RetryPolicy {
   offlineMs: number;
   errorMs: number;

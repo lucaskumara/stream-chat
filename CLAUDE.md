@@ -231,10 +231,34 @@ dead on arrival — no caller ever used them, because filtering happened at draw
 **The anonymous path still needs the properly-cased display name, and GQL is where it comes
 from.** Signed out there is no Helix token, so `resolveChannel` used to build
 `new TwitchChannel(login, login, '')` and the tab read `theburntpeanut` instead of
-`TheBurntPeanut`. `anonymousDisplayName` asks `gql.twitch.tv` for `user(login:){displayName}`
+`TheBurntPeanut`. `anonymousLookup` asks `gql.twitch.tv` for `user(login:){id displayName}`
 over the same anonymous client id the badges use — hence `platforms/twitch/gql.ts`, which
-owns the endpoint, the web client id and the `data` unwrapping for both callers. It falls
-back to the login on any failure, so a GQL outage costs casing, not the connection.
+owns the endpoint, the web client id and the `data` unwrapping for both callers.
+
+**That same query is the anonymous existence check, and the two failure shapes are not the
+same failure.** GQL answers `{ data: { user: null } }` for a login nobody owns, which is a
+terminal `missing`; a request that never landed (`twitchGql` returning `null`, or throwing)
+is *not* evidence about the channel, so it still falls back to the login and connects. That
+split is the whole point: without it, IRC happily joins a channel that does not exist and
+the tab sits at `connected` and silent forever, while treating an outage as `missing` would
+tell a user their channel was deleted because gql.twitch.tv had a bad minute. A GQL outage
+therefore still costs casing, not the connection.
+
+**Only `missing` refuses the add; everything else keeps the tab.** `BaseChatWatcher.attach`
+throws `MissingChannelError` on a terminal lookup, `SourceManager.add` catches exactly that
+one, discards the entry it had already inserted and rethrows so the modal shows the reason
+and no dead tab is left behind. `unreachable` and `offline` keep the tab and retry, which is
+why the catch cannot simply reject on any connect failure — a network blip while adding
+`@LofiGirl` must not read as "no such channel". Two places have to swallow the same error:
+`scheduleAttach`, because a later re-resolve can go `missing` (a channel deleted mid-run) and
+the status event has already reported it, and `restoreSaved`, or one deleted saved channel
+aborts the whole startup restore loop. `restoreSaved` deliberately leaves the saved entry in
+`config.json` — a wrong `missing` would otherwise quietly delete the user's channel.
+
+**The renderer has to strip Electron's IPC wrapper before showing an error.**
+`ipcRenderer.invoke` rejects with `Error invoking remote method 'sources:add': Error: …`, so
+`remoteMessage` in `bridge.ts` trims that prefix. It did not matter while `add` only threw on
+malformed input nobody hit; it matters now that a typo'd channel name is the common path.
 
 **A rename after `connect()` returns has to be pushed, or nothing sees it.**
 `SourceManager.add` copies `watcher.label` once, after connect. Anything that renames later

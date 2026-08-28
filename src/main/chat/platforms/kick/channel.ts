@@ -99,7 +99,7 @@ export async function resolveChannel(identifier: string): Promise<ChannelLookup<
   }
 
   if (response.status === 404) {
-    return { state: 'missing', reason: `no Kick channel called ${slug}` }
+    return { state: 'missing', reason: `Kick has no channel called "${slug}".` }
   }
 
   if (!response.ok) {

@@ -143,7 +143,7 @@ function classifyFailure(
       reference.kind === "video" ? reference.videoId : reference.label;
     return {
       state: "missing",
-      reason: `no YouTube channel or video for ${label}`,
+      reason: `YouTube has no channel or video for "${label}".`,
     };
   }
 

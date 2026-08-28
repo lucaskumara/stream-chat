@@ -4,7 +4,12 @@ import type {
   Platform,
   SourceStatus,
 } from "@shared/types";
-import type { Channel, ChannelLookup, RetryPolicy } from "./channel";
+import {
+  MissingChannelError,
+  type Channel,
+  type ChannelLookup,
+  type RetryPolicy,
+} from "./channel";
 import { applyEmotes, thirdPartyEmotes } from "../emotes";
 
 export abstract class BaseChatWatcher<
@@ -96,7 +101,7 @@ export abstract class BaseChatWatcher<
 
       case "missing":
         this.events.status("error", lookup.reason);
-        return;
+        throw new MissingChannelError(lookup.reason);
     }
   }
 
@@ -142,7 +147,7 @@ export abstract class BaseChatWatcher<
 
   private scheduleAttach(delayMs: number): void {
     this.schedule(
-      () => void this.attach(),
+      () => void this.attach().catch(alreadyReported),
       delayMs + Math.random() * this.retry.jitterMs,
     );
   }
@@ -152,6 +157,8 @@ export abstract class BaseChatWatcher<
     this.timers.clear();
   }
 }
+
+function alreadyReported(): void {}
 
 const DEFAULT_MAX_FAILURES = 3;
 const DEFAULT_RETRY_MS = 2_000;

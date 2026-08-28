@@ -6,6 +6,7 @@ import {
   type ChatWatcherEvents,
   type PlatformServices
 } from './chat'
+import { MissingChannelError } from './chat/channel'
 import { config, type StoredChannel, type StoredPlatform } from './config'
 import { ignoreTeardownFailure } from './lifecycle'
 
@@ -71,6 +72,11 @@ export class SourceManager {
       if (watcher.label) state.label = watcher.label
       this.rememberIfConnected(request, identifier, state)
     } catch (error) {
+      if (error instanceof MissingChannelError) {
+        await this.discard(sourceId)
+        throw error
+      }
+
       state.status = 'error'
       state.error = error instanceof Error ? error.message : String(error)
     }
@@ -83,11 +89,18 @@ export class SourceManager {
     const entry = this.entries.get(sourceId)
     if (!entry) return
 
-    this.entries.delete(sourceId)
-    this.bus.dropSource(sourceId)
-
     const persisted = persistedPlatform(entry.state.platform)
     if (persisted && entry.identifier) config().removeChannel(persisted, entry.identifier)
+
+    await this.discard(sourceId)
+  }
+
+  private async discard(sourceId: string): Promise<void> {
+    const entry = this.entries.get(sourceId)
+    if (!entry) return
+
+    this.entries.delete(sourceId)
+    this.bus.dropSource(sourceId)
 
     await entry.watcher.disconnect().catch(ignoreTeardownFailure(`source ${sourceId}`))
     this.onStateChange(this.list())
@@ -133,11 +146,15 @@ export class SourceManager {
       )
       if (already) continue
 
-      await this.add({
-        platform: channel.platform,
-        label: channel.login,
-        identifier: channel.login
-      })
+      try {
+        await this.add({
+          platform: channel.platform,
+          label: channel.login,
+          identifier: channel.login
+        })
+      } catch (error) {
+        console.warn('[sources] skipping saved channel', channel.login, error)
+      }
     }
   }
 

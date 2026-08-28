@@ -7,6 +7,10 @@ import { twitchGql } from './gql'
 
 const IDENTITY_QUERY = 'query($login:String!){user(login:$login){id displayName}}'
 
+interface Identity {
+  user?: { id?: string; displayName?: string } | null
+}
+
 export class TwitchChannel extends Channel {
   readonly platform: Platform = 'twitch'
 
@@ -33,26 +37,16 @@ export async function resolveChannel(
   const login = identifier.trim().toLowerCase().replace(/^@/, '')
 
   if (!login) {
-    return { state: 'missing', reason: 'no Twitch channel name given' }
+    return { state: 'missing', reason: 'No Twitch channel name given.' }
   }
 
-  if (!auth.isSignedIn()) {
-    const identity = await anonymousIdentity(login)
-
-    return {
-      state: 'ok',
-      channel: new TwitchChannel(identity.displayName, login, identity.id)
-    }
-  }
+  if (!auth.isSignedIn()) return anonymousLookup(login)
 
   try {
     const user = await helix.getUserByLogin(login)
 
     if (!user) {
-      return {
-        state: 'missing',
-        reason: `Twitch channel "${login}" does not exist.`
-      }
+      return { state: 'missing', reason: missingTwitch(login) }
     }
 
     return {
@@ -67,17 +61,29 @@ export async function resolveChannel(
   }
 }
 
-async function anonymousIdentity(
-  login: string
-): Promise<{ id: string; displayName: string }> {
-  try {
-    const data = await twitchGql<{ user?: { id?: string; displayName?: string } | null }>(
-      IDENTITY_QUERY,
-      { login }
-    )
+function missingTwitch(login: string): string {
+  return `Twitch has no channel called "${login}".`
+}
 
-    return { id: data?.user?.id ?? '', displayName: data?.user?.displayName || login }
+async function anonymousLookup(login: string): Promise<ChannelLookup<TwitchChannel>> {
+  const identity = await anonymousIdentity(login)
+
+  if (identity && !identity.user) {
+    return { state: 'missing', reason: missingTwitch(login) }
+  }
+
+  const user = identity?.user
+
+  return {
+    state: 'ok',
+    channel: new TwitchChannel(user?.displayName || login, login, user?.id ?? '')
+  }
+}
+
+async function anonymousIdentity(login: string): Promise<Identity | null> {
+  try {
+    return await twitchGql<Identity>(IDENTITY_QUERY, { login })
   } catch {
-    return { id: '', displayName: login }
+    return null
   }
 }
