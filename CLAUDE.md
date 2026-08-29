@@ -737,8 +737,13 @@ its button but centres nothing — antd's own glyph is a font icon riding the li
 16px svg sat hard against the left edge; it needs `display: flex` with centring.
 `.ant-tabs-tab-remove` carries a negative inline-end margin that pulls the `×` 4px past the
 tab's padding, which reads as the close control being crammed into the tab edge; zero it.
-And `.ant-tabs-nav::before` draws a rule under the whole strip, separating the tabs from the
-chat they belong to — hidden, since each tab already carries its own outline.
+And the rule under the strip has to break under the *open* tab, so it reads as connected to
+the chat below it: `.ant-tabs-nav::before` still draws the full-width line, while
+`.ant-tabs-tab.tab-shown` paints its own `border-bottom-color` the chat's ink. That border is
+otherwise `INK.card`, a shade lighter than the chat, which is what made it read as a line
+under the open tab rather than as part of the tab. Hiding `::before` outright is the wrong
+fix — it removes the line everywhere, including the stretch beside the tabs that should
+stay.
 
 **Icons are lucide, and antd's own glyphs have to be overridden to keep it that way.**
 `lucide-react` is the only icon import in the tree; `@ant-design/icons` is no longer a direct

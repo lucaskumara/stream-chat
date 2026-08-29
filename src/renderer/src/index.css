@@ -253,8 +253,11 @@ body {
   margin-inline-end: 0 !important;
 }
 
-/* The rule under the tab strip separated the tabs from the chat they belong to.
-   The tab itself already carries an outline. */
-.ant-tabs-nav::before {
-  display: none;
+/* An open tab merges into the chat below it: the strip's rule runs the full width,
+   but a shown tab paints its own bottom edge the chat's colour, so the line appears
+   to break under exactly the tab whose chat you are looking at. The tab's card
+   border is INK.card, a shade lighter than the chat, which is why it read as a line
+   under the open tab rather than as part of the tab. */
+.ant-tabs-tab.tab-shown {
+  border-bottom-color: var(--color-ink-900);
 }
