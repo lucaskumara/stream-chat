@@ -547,6 +547,19 @@ the first source on cold start. Panes render inside a `Splitter` with no per-pan
 the tab strip already names every open channel and columns map left to right onto tab order —
 but each pane does carry a `ChatPaneBar` along its bottom edge (see "The pane bar").
 
+**The chrome does not explain itself on hover.** The pane bar's icon buttons, the search
+field, the pin, and emote and badge *images* all carry `aria-label` but no `title`, so nothing
+pops a caption while you read chat. The one `title` left in a message row is on the
+three-letter badge chip that stands in for a badge with no image — there the title is the only
+place the full label exists. Do not reintroduce tooltips on the bar; they were removed on
+purpose.
+
+**The pin is not rendered when it cannot do anything.** The split control disappears on a tab
+that is shown while it is the only one shown, because clicking it there is refused anyway (the
+visible set must never empty). It still renders on every hidden tab, and on a shown tab once a
+second chat is open, which is what removes a chat from a split — the only route for that, since
+membership never changes by dragging.
+
 **The pane bar is per source, and its state lives in the store, not the pane.**
 `ChatPaneBar` sits along the bottom of every `ChatPane` and does two things: filters that
 pane, and clears that pane's history. Both are keyed by `sourceId` — `store.search[sourceId]`
@@ -761,11 +774,12 @@ buttons, the pane bar — and 1.25rem (20px) reserved for the modal heading. ant
 `fontSize`/`titleFontSize` tokens are the exception that has to stay numeric (16 and 20)
 because the token type is a number, not a CSS length.
 
-**Chat text is adjustable, and it is per pane.** The pane bar's `A↑`/`A↓`/`↺` buttons walk
-`store.fontSize[sourceId]` along `CHAT_FONT_SIZES` — the same `[14, 16, 18, 20]` as the CSS
-scale — by index rather than by arithmetic, so a chat can only ever land on a value the scale
-already has. Reset drops the entry rather than writing the default back, so "unset" and
-"explicitly default" stay the same state. `ChatPane` writes
+**Chat text is adjustable, per pane, and on a wider range than the chrome.** The pane bar's
+`A↑`/`A↓`/`↺` buttons walk `store.fontSize[sourceId]` along `CHAT_FONT_SIZES`,
+`[10, 12, 14, 16, 18, 20, 22, 24]`, by index rather than by arithmetic. That range is
+deliberately *not* the chrome's four `--text-*` variables — chat is the content and wants to
+go smaller and larger than the frame around it. Reset drops the entry rather than writing the
+default back, so "unset" and "explicitly default" stay the same state. `ChatPane` writes
 `--chat-font-size` as an inline custom property on **its own root**, not on
 `document.documentElement` — that is what lets two panes in a split run at different sizes,
 and setting it globally (as an earlier version did) silently coupled them.

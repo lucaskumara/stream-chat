@@ -5,10 +5,6 @@ import { INK } from '../theme'
 import { termLabel } from '../search'
 import { CHAT_FONT_DEFAULT, CHAT_FONT_SIZES } from '../store'
 
-const SYNTAX_HINT =
-  'Type a word to match message text, or author:name to match the sender. ' +
-  'Separate with commas — every term has to match.'
-
 export interface ChatPaneBarProps {
   terms: string[]
   draft: string
@@ -72,8 +68,7 @@ function ChatPaneBarImpl({
         searchValue={draft}
         tokenSeparators={[',']}
         suffixIcon={<Search size={16} style={{ opacity: 0.45 }} />}
-        placeholder="Search"
-        title={SYNTAX_HINT}
+        placeholder="Filter"
         className="chat-pane-search"
         style={{ flex: 1, minWidth: 0 }}
         onChange={handleChange}
@@ -87,7 +82,6 @@ function ChatPaneBarImpl({
         icon={<AArrowUp size={16} />}
         disabled={fontSize >= CHAT_FONT_SIZES[CHAT_FONT_SIZES.length - 1]}
         onClick={() => onFontStep(1)}
-        title="Larger text in this chat"
         aria-label="Larger text in this chat"
         style={{ flex: 'none' }}
       />
@@ -98,7 +92,6 @@ function ChatPaneBarImpl({
         icon={<AArrowDown size={16} />}
         disabled={fontSize <= CHAT_FONT_SIZES[0]}
         onClick={() => onFontStep(-1)}
-        title="Smaller text in this chat"
         aria-label="Smaller text in this chat"
         style={{ flex: 'none' }}
       />
@@ -109,7 +102,6 @@ function ChatPaneBarImpl({
         icon={<RotateCcw size={16} />}
         disabled={fontSize === CHAT_FONT_DEFAULT}
         onClick={onFontReset}
-        title="Reset text size in this chat"
         aria-label="Reset text size in this chat"
         style={{ flex: 'none' }}
       />
@@ -129,7 +121,6 @@ function ChatPaneBarImpl({
           className="chat-pane-clear"
           icon={<Trash2 size={16} />}
           disabled={total === 0}
-          title={total === 0 ? 'Nothing to clear' : 'Clear this chat'}
           aria-label="Clear this chat"
           style={{ flex: 'none' }}
         />

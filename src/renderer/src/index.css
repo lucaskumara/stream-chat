@@ -87,14 +87,6 @@ body {
   opacity: 1;
   color: #ededed;
 }
-.tab-split-inert {
-  opacity: 0.3;
-  cursor: default;
-}
-.tab-split-inert:hover {
-  opacity: 0.3;
-  background: transparent;
-}
 
 /* Tabs that share a saved split group wear one continuous coloured bar across
    their top edge — the bar bridges the 2px gutter between adjacent members so a

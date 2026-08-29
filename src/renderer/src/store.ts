@@ -10,8 +10,9 @@ const DEFAULT_CAPACITY = 500
 
 const DELETED_LIMIT = 4000
 
-/** The type scale from index.css, in px. Chat rows step through exactly these. */
-export const CHAT_FONT_SIZES = [14, 16, 18, 20]
+/** Chat rows have their own range, wider than the chrome's type scale: 10px to 24px
+    in 2px steps. The chrome stays on the four --text-* variables in index.css. */
+export const CHAT_FONT_SIZES = [10, 12, 14, 16, 18, 20, 22, 24]
 export const CHAT_FONT_DEFAULT = 16
 
 interface ChatState {

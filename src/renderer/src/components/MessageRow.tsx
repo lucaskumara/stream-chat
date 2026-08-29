@@ -73,7 +73,6 @@ function Emote({ name, url }: { name: string; url: string }): React.ReactElement
     <img
       src={url}
       alt={name}
-      title={name}
       loading="lazy"
       draggable={false}
       className="mx-[1px] inline-block h-[1.55em] max-w-none align-middle"
@@ -101,7 +100,6 @@ function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
       src={badge.url}
       srcSet={badge.srcSet}
       alt={badge.label}
-      title={badge.label}
       loading="lazy"
       draggable={false}
       className="mr-1 inline-block h-[1.1em] w-[1.1em] align-middle"

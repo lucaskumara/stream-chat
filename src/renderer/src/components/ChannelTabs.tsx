@@ -270,13 +270,6 @@ function passedNeighbours(block: Block | null, dx: number): Unit[] {
   return lane.slice(0, sweptPast(lane, Math.abs(dx)))
 }
 
-function splitHint(shown: boolean, onlyOne: boolean): string {
-  if (!shown) return 'Show this chat alongside the open one'
-  if (onlyOne) return 'The only chat open — open another to split'
-
-  return 'Close this column'
-}
-
 function DraggableTab({
   shown,
   carryX,
@@ -356,21 +349,19 @@ const TabLabel = memo(function TabLabel({
         </Tooltip>
       )}
 
-      <Tooltip title={splitHint(shown, onlyOne)} mouseEnterDelay={0.3}>
+      {!inert && (
         <span
           role="button"
-          className={['tab-split', shown ? 'tab-split-on' : '', inert ? 'tab-split-inert' : '']
-            .filter(Boolean)
-            .join(' ')}
+          className={['tab-split', shown ? 'tab-split-on' : ''].filter(Boolean).join(' ')}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
-            if (!inert) onSplit(source.id)
+            onSplit(source.id)
           }}
         >
           <Pin size={16} />
         </span>
-      </Tooltip>
+      )}
     </Flex>
   )
 })
