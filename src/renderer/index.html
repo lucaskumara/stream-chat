@@ -4,11 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      Emotes are remote images, so img-src must allow https:. script-src keeps
-      'unsafe-inline' because the dev server injects the React Refresh preamble
-      inline; tighten this to a nonce when packaging lands in Phase 5. Remote
-      script *origins* are blocked either way, and chat content is never
-      injected as HTML.
+      This is the *dev* policy. electron.vite.config.ts rewrites it at build time
+      (see PACKAGED_CSP) so the shipped page drops the allowances only the dev
+      server needs. Emotes are remote images, so img-src must allow https: in
+      both. Chat content is never injected as HTML.
     -->
     <meta
       http-equiv="Content-Security-Policy"

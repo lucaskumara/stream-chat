@@ -1,0 +1,37 @@
+appId: com.lucaskumara.streamchat
+productName: Stream Chat
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - '!src/*'
+  - '!electron.vite.config.ts'
+  - '!electron-builder.yml'
+  - '!CLAUDE.md'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{.env,.env.*,.npmrc,.gitattributes}'
+  - '!**/*.tsbuildinfo'
+
+win:
+  executableName: stream-chat
+  target: nsis
+
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+mac:
+  category: public.app-category.social-networking
+  target: dmg
+
+linux:
+  category: Network
+  target: AppImage
+
+npmRebuild: false
