@@ -76,7 +76,7 @@ src/main/             bus.ts (MessageBus), backlog.ts, sources.ts (SourceManager
                       config.ts, lifecycle.ts, index.ts (app bootstrap + service construction)
 src/main/obs/         server.ts — the loopback link server OBS docks connect to
 src/main/twitch/      auth.ts, helix.ts, state.ts, clientId.ts — account only, no wire code
-src/main/emotes/      7TV + BTTV — INTACT BUT UNWIRED, see below
+src/main/emotes/      7TV + BTTV, reached through Channel.emotes — see "Emotes" below
 src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the antd ThemeConfig),
                       search.ts (the pane filter grammar), components/
 src/renderer/src/obs/ the OBS dock page — a second renderer entry, no antd
@@ -536,7 +536,7 @@ confirmed live — deleted messages struck through in the running app.
 
 ### OBS links
 
-**Every chat is reachable at `http://127.0.0.1:4568/chat/<platform>/<channel>`, and one
+**Every chat is reachable at `http://localhost:4568/chat/<platform>/<channel>`, and one
 URL is one chat.** `ObsServer` in `main/obs/server.ts` is an `http` server on loopback with
 a `ws` upgrade at `/socket`. There is deliberately **no combined endpoint** — OBS already
 docks, floats and snaps panels, so a multi-column layout inside one page would reimplement
@@ -596,9 +596,18 @@ Everything vite emits is absolute in dev and relative in the build; both land on
 handler.
 
 **Main builds the link, not the renderer.** `obs:link` returns a finished URL or `null`, so the
-port and the key spelling live in exactly one place. The port scans 4568..4577 on collision and
+port and the host spelling live in exactly one place. The port scans 4568..4577 on collision and
 is *not* persisted — a shifted port means re-copying links, which has never happened because
-the previous instance is gone by the time the next one binds.
+the previous instance is gone by the time the next one binds. 4568 itself is arbitrary: a quiet
+high port, deliberately clear of OBS WebSocket's own 4455 (and the older 4444).
+
+**Both loopback families are bound, and that is what makes `localhost` cheap.** Windows resolves
+`localhost` to `::1` first, so an IPv4-only listener costs every connection a failed attempt
+before it falls back — measured at 219ms against 13ms. `start()` binds `127.0.0.1` first (that
+scan settles the port), then joins `::1` on the same port best-effort, so a machine with IPv6
+off simply keeps the fallback it already had. Never widen this to `0.0.0.0` or a bare
+`listen(port)` to solve a routing problem: that publishes the user's chat to the whole LAN.
+`allowedOrigin` accordingly accepts all three spellings of this server's own origin.
 
 **Query parameters dress the dock; the path is the whole contract.** `size`, `timestamps` and
 `transparent` are optional, and a link carrying none is a working dock. `transparent=1` is what

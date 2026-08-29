@@ -22,6 +22,14 @@ const KEEPALIVE_MS = 30000
 
 const PAGE_FILE = 'obs.html'
 
+const IPV4_LOOPBACK = '127.0.0.1'
+const IPV6_LOOPBACK = '::1'
+
+/** What the copied link says. Both loopback addresses are bound, so this is a
+    spelling choice rather than a routing one — and it is the spelling OBS shows
+    back to the user in its dock list. */
+const LINK_HOST = 'localhost'
+
 const MIME: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -44,7 +52,7 @@ interface Client {
 }
 
 export class ObsServer {
-  private server: Server | null = null
+  private servers: Server[] = []
   private sockets: WebSocketServer | null = null
   private clients = new Set<Client>()
   private keepalive: NodeJS.Timeout | null = null
@@ -59,34 +67,48 @@ export class ObsServer {
   ) {}
 
   baseUrl(): string | null {
-    return this.port === 0 ? null : `http://127.0.0.1:${this.port}`
+    return this.port === 0 ? null : `http://${LINK_HOST}:${this.port}`
   }
 
   async start(): Promise<void> {
-    if (this.server) return
+    if (this.servers.length > 0) return
 
+    this.sockets = new WebSocketServer({ noServer: true })
+
+    const ipv4 = this.createServer()
+    const port = await this.bind(ipv4, IPV4_LOOPBACK, 0)
+
+    if (port === 0) {
+      console.warn('[obs] no free port — chat links are unavailable this session')
+      this.sockets = null
+      ipv4.close()
+      return
+    }
+
+    this.port = port
+    this.servers.push(ipv4)
+
+    // localhost resolves to ::1 first on Windows, so an IPv4-only listener costs
+    // every connection a failed attempt before it falls back — measured at 219ms
+    // against 13ms. Best-effort: IPv4 is what the port scan settled, and a machine
+    // with IPv6 disabled simply keeps the fallback it already had.
+    const ipv6 = this.createServer()
+    if (await this.bind(ipv6, IPV6_LOOPBACK, port)) this.servers.push(ipv6)
+    else ipv6.close()
+
+    this.detachSink = this.bus.addSink({ deliver: (batch) => this.fanout(batch) })
+    this.keepalive = setInterval(() => this.reap(), KEEPALIVE_MS)
+
+    console.log(`[obs] chat links on ${this.baseUrl()}`)
+  }
+
+  private createServer(): Server {
     const server = createServer((req, res) => {
       void this.serve(req, res)
     })
     server.on('upgrade', (req, socket, head) => this.upgrade(req, socket, head))
 
-    this.server = server
-    this.sockets = new WebSocketServer({ noServer: true })
-
-    const port = await this.bind(server)
-    if (port === 0) {
-      console.warn('[obs] no free port — chat links are unavailable this session')
-      this.server = null
-      this.sockets = null
-      server.close()
-      return
-    }
-
-    this.port = port
-    this.detachSink = this.bus.addSink({ deliver: (batch) => this.fanout(batch) })
-    this.keepalive = setInterval(() => this.reap(), KEEPALIVE_MS)
-
-    console.log(`[obs] chat links on ${this.baseUrl()}`)
+    return server
   }
 
   async stop(): Promise<void> {
@@ -104,11 +126,13 @@ export class ObsServer {
     this.sockets?.close()
     this.sockets = null
 
-    const server = this.server
-    this.server = null
+    const servers = this.servers
+    this.servers = []
     this.port = 0
 
-    if (server) await new Promise<void>((done) => server.close(() => done()))
+    await Promise.all(
+      servers.map((server) => new Promise<void>((done) => server.close(() => done())))
+    )
   }
 
   /** A dock can be opened before its channel is added, and a channel re-added
@@ -118,15 +142,18 @@ export class ObsServer {
     for (const client of this.clients) this.rebind(client, false)
   }
 
-  private bind(server: Server): Promise<number> {
+  /** `fixed` of 0 scans OBS_PORT upward; anything else demands that one port, which
+      is how the second family joins the port the first one settled on. */
+  private bind(server: Server, host: string, fixed: number): Promise<number> {
     return new Promise((done) => {
-      let candidate = OBS_PORT
+      let candidate = fixed === 0 ? OBS_PORT : fixed
 
       const attempt = (): void => {
         const onError = (error: NodeJS.ErrnoException): void => {
           server.off('listening', onListening)
 
-          if (error.code !== 'EADDRINUSE' || candidate >= OBS_PORT + OBS_PORT_ATTEMPTS - 1) {
+          const exhausted = candidate >= OBS_PORT + OBS_PORT_ATTEMPTS - 1
+          if (fixed !== 0 || error.code !== 'EADDRINUSE' || exhausted) {
             done(0)
             return
           }
@@ -142,7 +169,7 @@ export class ObsServer {
 
         server.once('error', onError)
         server.once('listening', onListening)
-        server.listen(candidate, '127.0.0.1')
+        server.listen(candidate, host)
       }
 
       attempt()
@@ -211,7 +238,11 @@ export class ObsServer {
   private allowedOrigin(origin?: string): boolean {
     if (!origin) return true
 
-    const allowed = [`http://127.0.0.1:${this.port}`, `http://localhost:${this.port}`]
+    const allowed = [
+      `http://${IPV4_LOOPBACK}:${this.port}`,
+      `http://[${IPV6_LOOPBACK}]:${this.port}`,
+      `http://${LINK_HOST}:${this.port}`
+    ]
     if (this.devServerUrl) allowed.push(new URL(this.devServerUrl).origin)
 
     return allowed.includes(origin)
