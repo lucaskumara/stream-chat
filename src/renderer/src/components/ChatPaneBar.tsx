@@ -1,11 +1,13 @@
 import { memo, useCallback, useMemo } from 'react'
-import { Button, Popconfirm, Select } from 'antd'
-import { AArrowDown, AArrowUp, RotateCcw, Search, Trash2 } from 'lucide-react'
+import { Button, Popconfirm, Popover, Select } from 'antd'
+import { AArrowDown, AArrowUp, RotateCcw, Search, Settings, Trash2 } from 'lucide-react'
 import { INK } from '../theme'
+import { ChatLink } from './ChatLink'
 import { termLabel } from '../search'
 import { CHAT_FONT_DEFAULT, CHAT_FONT_SIZES } from '../store'
 
 export interface ChatPaneBarProps {
+  sourceId: string
   terms: string[]
   draft: string
   total: number
@@ -18,6 +20,7 @@ export interface ChatPaneBarProps {
 }
 
 function ChatPaneBarImpl({
+  sourceId,
   terms,
   draft,
   total,
@@ -105,9 +108,25 @@ function ChatPaneBarImpl({
         style={{ flex: 'none' }}
       />
 
+      <Popover
+        content={<ChatLink sourceId={sourceId} />}
+        title="Chat link"
+        trigger="click"
+        placement="bottomRight"
+        destroyOnHidden
+      >
+        <Button
+          type="text"
+          className="chat-pane-settings"
+          icon={<Settings size={16} />}
+          aria-label="Chat settings"
+          style={{ flex: 'none' }}
+        />
+      </Popover>
+
       <Popconfirm
         title="Are you sure?"
-        placement="topRight"
+        placement="bottomRight"
         okText="Clear"
         cancelText="Cancel"
         okButtonProps={{ danger: true }}

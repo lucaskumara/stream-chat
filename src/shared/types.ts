@@ -1,5 +1,7 @@
 export type Platform = 'twitch' | 'youtube' | 'kick'
 
+export const PLATFORMS: readonly Platform[] = ['twitch', 'youtube', 'kick']
+
 export type EmoteProvider = 'native' | '7tv' | 'bttv'
 
 export type Fragment =
@@ -121,6 +123,9 @@ export interface ChatApi {
   removeSource(sourceId: string): Promise<void>
   reorderSources(orderedIds: string[]): Promise<void>
   openExternal(url: string): Promise<void>
+  copyText(text: string): Promise<void>
+
+  obsLink(sourceId: string): Promise<string | null>
 
   windowMinimize(): Promise<void>
   windowToggleMaximize(): Promise<void>

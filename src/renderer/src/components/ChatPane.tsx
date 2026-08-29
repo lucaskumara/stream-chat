@@ -13,6 +13,7 @@ const PIN_THRESHOLD_PX = 40
 const ESTIMATED_ROW_PX = 26
 
 export interface ChatPaneProps {
+  sourceId: string
   messages: ChatMessage[]
   deleted: Record<string, true>
   showDeleted: boolean
@@ -30,6 +31,7 @@ export interface ChatPaneProps {
 }
 
 export function ChatPane({
+  sourceId,
   messages,
   deleted,
   showDeleted,
@@ -140,6 +142,19 @@ export function ChatPane({
         } as React.CSSProperties
       }
     >
+      <ChatPaneBar
+        sourceId={sourceId}
+        terms={searchTerms}
+        draft={searchDraft}
+        total={list.length}
+        fontSize={fontSize}
+        onTerms={onSearchTerms}
+        onDraft={onSearchDraft}
+        onFontStep={onFontStep}
+        onFontReset={onFontReset}
+        onClear={onClear}
+      />
+
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
@@ -211,18 +226,6 @@ export function ChatPane({
           </Button>
         )}
       </div>
-
-      <ChatPaneBar
-        terms={searchTerms}
-        draft={searchDraft}
-        total={list.length}
-        fontSize={fontSize}
-        onTerms={onSearchTerms}
-        onDraft={onSearchDraft}
-        onFontStep={onFontStep}
-        onFontReset={onFontReset}
-        onClear={onClear}
-      />
     </div>
   )
 }

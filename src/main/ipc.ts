@@ -1,11 +1,15 @@
-import { BrowserWindow, ipcMain, shell } from 'electron'
+import { BrowserWindow, clipboard, ipcMain, shell } from 'electron'
 import type { AddSourceRequest, Platform } from '@shared/types'
+import { PLATFORMS } from '@shared/types'
+import { obsChatPath } from '@shared/obs'
+import type { ObsServer } from './obs/server'
 import type { SourceManager } from './sources'
 import type { TwitchAuth } from './twitch/auth'
 import { buildAuthState } from './twitch/state'
 
 const MAX_LABEL_LENGTH = 80
 const MAX_IDENTIFIER_LENGTH = 100
+const MAX_COPY_LENGTH = 2000
 
 export const IPC = {
   listSources: 'sources:list',
@@ -13,6 +17,8 @@ export const IPC = {
   removeSource: 'sources:remove',
   reorderSources: 'sources:reorder',
   openExternal: 'shell:open-external',
+  copyText: 'clipboard:write',
+  obsLink: 'obs:link',
 
   windowMinimize: 'window:minimize',
   windowToggleMaximize: 'window:toggle-maximize',
@@ -29,11 +35,12 @@ export const IPC = {
   twitchAuth: 'twitch:auth'
 } as const
 
-export function registerIpc(sources: SourceManager, auth: TwitchAuth): void {
+export function registerIpc(sources: SourceManager, auth: TwitchAuth, obs: ObsServer): void {
   registerSourceHandlers(sources)
   registerShellHandlers()
   registerWindowHandlers()
   registerTwitchAuthHandlers(sources, auth)
+  registerObsHandlers(sources, obs)
 }
 
 function registerSourceHandlers(sources: SourceManager): void {
@@ -55,6 +62,24 @@ function registerSourceHandlers(sources: SourceManager): void {
 function registerShellHandlers(): void {
   ipcMain.handle(IPC.openExternal, async (_e, url: unknown) => {
     await shell.openExternal(parseWebUrl(url))
+  })
+
+  ipcMain.handle(IPC.copyText, (_e, text: unknown) => {
+    clipboard.writeText(requireString(text, 'text').slice(0, MAX_COPY_LENGTH))
+  })
+}
+
+/** Main owns the port and the key spelling, so the renderer asks for a finished
+    link rather than assembling one. Null means the link server never bound. */
+function registerObsHandlers(sources: SourceManager, obs: ObsServer): void {
+  ipcMain.handle(IPC.obsLink, (_e, sourceId: unknown) => {
+    const base = obs.baseUrl()
+    if (!base) return null
+
+    const target = sources.targetOf(requireString(sourceId, 'sourceId'))
+    if (!target) return null
+
+    return `${base}${obsChatPath(target.platform, target.identifier)}`
   })
 }
 
@@ -94,6 +119,8 @@ export function unregisterIpc(): void {
     IPC.removeSource,
     IPC.reorderSources,
     IPC.openExternal,
+    IPC.copyText,
+    IPC.obsLink,
     IPC.windowMinimize,
     IPC.windowToggleMaximize,
     IPC.windowClose,
@@ -105,8 +132,6 @@ export function unregisterIpc(): void {
     ipcMain.removeHandler(channel)
   }
 }
-
-const SUPPORTED_PLATFORMS: Platform[] = ['twitch', 'youtube', 'kick']
 
 function requireString(value: unknown, field: string): string {
   if (typeof value !== 'string') throw new Error(`${field} must be a string`)
@@ -133,7 +158,7 @@ function parseWebUrl(value: unknown): string {
 }
 
 function parsePlatform(value: unknown): Platform {
-  const platform = SUPPORTED_PLATFORMS.find((candidate) => candidate === value)
+  const platform = PLATFORMS.find((candidate) => candidate === value)
   if (!platform) throw new Error(`unknown platform: ${String(value)}`)
   return platform
 }

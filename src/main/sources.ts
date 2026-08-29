@@ -1,4 +1,5 @@
 import type { AddSourceRequest, Platform, SourceState } from '@shared/types'
+import { obsMatchKey } from '@shared/obs'
 import type { MessageBus } from './bus'
 import {
   createWatcher,
@@ -21,6 +22,7 @@ function normalizeIdentifier(
 
 interface Entry {
   watcher: ChatWatcher
+  identifier: string
   state: SourceState
 }
 
@@ -50,7 +52,7 @@ export class SourceManager {
       this.services
     )
 
-    this.entries.set(sourceId, { watcher, state })
+    this.entries.set(sourceId, { watcher, identifier: identifier ?? '', state })
     this.onStateChange(this.list())
 
     try {
@@ -69,6 +71,27 @@ export class SourceManager {
 
     this.onStateChange(this.list())
     return sourceId
+  }
+
+  /** OBS links address a channel, not a session-scoped src-N, so nothing stops two
+      entries answering to one key. First match wins — otherwise a dock double-prints
+      every message the day a channel is added twice. */
+  findByKey(platform: Platform, key: string): SourceState | null {
+    for (const entry of this.entries.values()) {
+      if (entry.state.platform !== platform) continue
+      if (obsMatchKey(entry.identifier) !== key) continue
+
+      return { ...entry.state }
+    }
+
+    return null
+  }
+
+  targetOf(sourceId: string): { platform: Platform; identifier: string } | null {
+    const entry = this.entries.get(sourceId)
+    if (!entry) return null
+
+    return { platform: entry.state.platform, identifier: entry.identifier }
   }
 
   async remove(sourceId: string): Promise<void> {

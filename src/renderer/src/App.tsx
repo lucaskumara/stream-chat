@@ -100,6 +100,7 @@ export default function App(): React.ReactElement {
           <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
             {panes.length === 1 ? (
               <ChatPane
+                sourceId={panes[0].id}
                 deleted={deleted}
                 showDeleted={showDeleted}
                 showTimestamps={showTimestamps}
@@ -120,6 +121,7 @@ export default function App(): React.ReactElement {
                 {panes.map((source) => (
                   <Splitter.Panel key={source.id} min={220}>
                     <ChatPane
+                      sourceId={source.id}
                       deleted={deleted}
                       showDeleted={showDeleted}
                       showTimestamps={showTimestamps}

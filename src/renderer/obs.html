@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      The *dev* policy, rewritten at build time by packagedCsp() in
+      electron.vite.config.ts. This page is served over http by the link server
+      rather than loaded from file://, and it talks to that server over a
+      WebSocket, so its connect-src is the one real difference from the app's.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss: http://localhost:* ; object-src 'none'; base-uri 'none'"
+    />
+    <title>stream-chat</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/obs/main.tsx"></script>
+  </body>
+</html>

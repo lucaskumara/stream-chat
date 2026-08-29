@@ -4,6 +4,7 @@ import type { SourceState } from '@shared/types'
 import { MessageBus } from './bus'
 import { SourceManager } from './sources'
 import { IPC, registerIpc, unregisterIpc } from './ipc'
+import { ObsServer } from './obs/server'
 import { TwitchAuth } from './twitch/auth'
 import { Helix } from './twitch/helix'
 import { EventSubHub, IrcHub } from './chat/platforms/twitch'
@@ -19,6 +20,8 @@ function broadcastSources(states: SourceState[]): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC.sourceState, states)
   }
+
+  obs.sourcesChanged()
 }
 
 function broadcastTwitchAuth(): void {
@@ -39,6 +42,13 @@ const irc = new IrcHub()
 const sources = new SourceManager(bus, broadcastSources, {
   twitch: { auth, helix, eventsub, irc }
 })
+
+const obs = new ObsServer(
+  bus,
+  sources,
+  join(__dirname, '../renderer'),
+  isDev ? process.env['ELECTRON_RENDERER_URL'] : undefined
+)
 
 function frameOptions(): Electron.BrowserWindowConstructorOptions {
   if (process.platform !== 'darwin') return { frame: false }
@@ -118,7 +128,9 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     app.setAppUserModelId('com.lucaskumara.streamchat')
 
-    registerIpc(sources, auth)
+    registerIpc(sources, auth, obs)
+
+    void obs.start()
 
     mainWindow = createWindow()
     bus.attach(mainWindow)
@@ -146,6 +158,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', () => {
     unregisterIpc()
+    void obs.stop()
     bus.detach()
     auth.cancelPolling()
     eventsub.shutdown()

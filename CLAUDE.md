@@ -61,6 +61,7 @@ functions under the exported class.
 
 ```
 src/shared/          types plus channel.ts (the "add a channel" parser, used by both processes)
+                     and obs.ts (the dock URL grammar, used by both processes)
 src/main/chat/       the framework:
   watcher.ts           ChatWatcher, BaseChatWatcher, ChatFeed, FeedSink, PollingFeed,
                        and messageId() — the single id composer
@@ -71,12 +72,14 @@ src/main/chat/       the framework:
   recent-ids.ts        bounded replay guard (YouTube only, today)
   index.ts             createWatcher registry + PlatformServices
   platforms/twitch|youtube|kick/
-src/main/             bus.ts (MessageBus), sources.ts (SourceManager), ipc.ts, config.ts,
-                      lifecycle.ts, index.ts (app bootstrap + service construction)
+src/main/             bus.ts (MessageBus), backlog.ts, sources.ts (SourceManager), ipc.ts,
+                      config.ts, lifecycle.ts, index.ts (app bootstrap + service construction)
+src/main/obs/         server.ts — the loopback link server OBS docks connect to
 src/main/twitch/      auth.ts, helix.ts, state.ts, clientId.ts — account only, no wire code
 src/main/emotes/      7TV + BTTV — INTACT BUT UNWIRED, see below
 src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the antd ThemeConfig),
                       search.ts (the pane filter grammar), components/
+src/renderer/src/obs/ the OBS dock page — a second renderer entry, no antd
 ```
 
 The rule that keeps this from drifting: **wire code lives in the platform folder, account
@@ -531,6 +534,78 @@ exists is `ok` and reports `connected`. `KickChannel` carries only `displayName`
 **`App\Events\MessageDeletedEvent` binds to `kick:${sourceId}:${event.message.id}`** and was
 confirmed live — deleted messages struck through in the running app.
 
+### OBS links
+
+**Every chat is reachable at `http://127.0.0.1:4568/chat/<platform>/<channel>`, and one
+URL is one chat.** `ObsServer` in `main/obs/server.ts` is an `http` server on loopback with
+a `ws` upgrade at `/socket`. There is deliberately **no combined endpoint** — OBS already
+docks, floats and snaps panels, so a multi-column layout inside one page would reimplement
+its window manager, worse. Two chats side by side is two docks.
+
+**The URL is a lookup key, not an identifier, and that is why it needs no `@`.**
+`obsMatchKey` in `shared/obs.ts` strips a leading `@` and lowercases; both the path segment
+and the stored identifier go through it, so `/chat/youtube/LofiGirl`,
+`/chat/youtube/lofigirl` and `/chat/youtube/@LofiGirl` are one chat. Safe only because both
+sides are *already resolved* — `normalizeIdentifier` in `sources.ts` still must not
+lowercase YouTube, whose `UC…` ids and video ids are case-sensitive on the wire. Two
+functions, two jobs; merging them gives either a dark dock or a broken resolve. The same
+`@`-dropping rule already exists for `author:` in `search.ts`.
+
+**A dock binds to platform + key and re-resolves, never to a `src-N`.** Source ids are
+session-scoped, so a channel removed and re-added gets a new one while the pasted OBS URL
+does not change. `broadcastSources` calls `obs.sourcesChanged()`, which rebinds every client
+— which is also why a dock opened *before* its channel is added lights up when it appears,
+and falls back to "waiting for …" when the tab is closed. Verified live in both directions.
+
+**`findByKey` takes the first match, on purpose.** Nothing stops the same channel being
+added twice, and the two entries produce distinct message ids for one message. Without the
+first-match rule a dock double-prints everything the day that happens.
+
+**A WebSocket handshake is not subject to CORS.** Any page the user has open could otherwise
+read their chat off loopback, so `allowedOrigin` accepts only this server's own origin (and
+the dev server's). A missing `Origin` is allowed — that is a local process, not a browser,
+and browsers cannot forge the header. Verified: foreign origin 403, own origin 101.
+
+**Main keeps a backlog now, and only for this.** `backlog.ts` holds the last 200 messages per
+source; the renderer's 500-message ring is no help to a page with no store. It is replayed in
+the `sync` frame on connect — measured at 57 rows within 1.2s of load, which no live chat
+delivers. Moderation applies to it too, by *removing* the message rather than marking it, so
+history replay carries no strikethroughs for deletions that predate the dock.
+
+**`MessageBus.attach(window)` is now one sink among several, and sinks filter themselves.**
+The window takes every batch; a dock takes one source. The 100ms flush interval and the 2,000
+message overflow cap are unchanged — and matter more over a socket, not less. The timer runs
+while any sink exists, so buffers are cleared on the last removal rather than on `detach()`.
+
+**The dock page is a second vite renderer entry, and it must not pull antd.** `obs.html` plus
+`src/renderer/src/obs/` reuse `MessageRow` and `index.css` and nothing else from the chrome.
+Measured on the built output: the dock chunk is 7.4KB and shares only the React chunk, while
+antd's 1.49MB chunk stays behind in the app's entry. Rendering is a plain bottom-pinned list
+capped at 200 — no virtualizer, which a dock does not need and which is a dependency the entry
+would otherwise carry.
+
+**Renderer assets are emitted with a relative base**, because the main window loads over
+`file://`. So the page served at `/chat/twitch/xqc` asks for `/chat/twitch/assets/x.js`.
+`assetName()` takes everything from the last `/assets/` segment, which is why the packaged
+build works at all — and it is a path the dev server never exercises, since dev proxies
+everything to vite. Test it packaged or not at all.
+
+**The link server serves the page itself in dev too, by proxying to the vite dev server.** One
+URL shape in both, so the link copied out of the app is the link that works in OBS either way.
+Everything vite emits is absolute in dev and relative in the build; both land on the same
+handler.
+
+**Main builds the link, not the renderer.** `obs:link` returns a finished URL or `null`, so the
+port and the key spelling live in exactly one place. The port scans 4568..4577 on collision and
+is *not* persisted — a shifted port means re-copying links, which has never happened because
+the previous instance is gone by the time the next one binds.
+
+**Query parameters dress the dock; the path is the whole contract.** `size`, `timestamps` and
+`transparent` are optional, and a link carrying none is a working dock. `transparent=1` is what
+makes the same URL usable as an on-stream browser *source* rather than a dock. Watch the
+default: `Number(null)` is `0` and `Number.isFinite(0)` is true, so guarding only on finiteness
+silently snapped every dock to the smallest font in `CHAT_FONT_SIZES`.
+
 ### Renderer UI
 
 **The chrome is Ant Design v6; the chat rows are not.** `Tabs`, `Splitter`, `Modal`,
@@ -560,7 +635,7 @@ so clicking the second of two open chats hid both — that is the bug the no-op 
 to prevent. `setSources` reconciles: drops dead ids, jumps to a genuinely new channel, seeds
 the first source on cold start. Panes render inside a `Splitter` with no per-pane *header* —
 the tab strip already names every open channel and columns map left to right onto tab order —
-but each pane does carry a `ChatPaneBar` along its bottom edge (see "The pane bar").
+but each pane does carry a `ChatPaneBar` along its top edge (see "The pane bar").
 
 **The chrome does not explain itself on hover.** The pane bar's icon buttons, the search
 field, the pin, and emote and badge *images* all carry `aria-label` but no `title`, so nothing
@@ -578,8 +653,9 @@ it reads as a bug. Clicking a shown tab's pin once a second chat is open is what
 from a split, and that is the only route: membership never changes by dragging.
 
 **The pane bar is per source, and its state lives in the store, not the pane.**
-`ChatPaneBar` sits along the bottom of every `ChatPane` and does two things: filters that
-pane, and clears that pane's history. Both are keyed by `sourceId` — `store.search[sourceId]`
+`ChatPaneBar` sits along the top of every `ChatPane`, under the tab strip, and does three
+things: filters that pane, clears that pane's history, and carries the settings popover that
+hands out that chat's OBS link. Both are keyed by `sourceId` — `store.search[sourceId]`
 (committed terms), `store.searchDraft[sourceId]` (what is half-typed) and
 `clearSource(sourceId)` — because `App` renders a different tree for one pane than for
 several, so a pane *remounts* when the split changes and local `useState` would silently drop
@@ -614,10 +690,10 @@ the one control in the app behind a confirm. That is a deliberate exception to t
 confirmation" rule the tab `×` follows: re-adding a channel costs nothing, but discarded
 messages are gone.
 
-**Anchor pane-bar popovers `topRight`, and give them a `minWidth`.** Two separate faults,
-both invisible until the popover actually opens. The bar sits at the bottom-right of a pane,
-so a `Popconfirm` at the default placement opens past the window's right edge, where it is
-both clipped and *unclickable* — the confirm button lands outside the viewport and the click
+**Anchor pane-bar popovers `bottomRight`, and give them a `minWidth`.** Two separate faults,
+both invisible until the popover actually opens. The bar's controls sit at the right edge of a
+pane, so a `Popconfirm` at the default placement opens past the window's right edge, where it
+is both clipped and *unclickable* — the confirm button lands outside the viewport and the click
 misses (measured: x 1172-1692 in a 1440px window). And antd sizes the popover to its
 *content*, so a short title like "Are you sure?" collapses it to 144px, leaving `Cancel` and
 `Clear` (57px + 47px) wedged edge to edge in a 120px row. `styles={{ root: { minWidth: 200 } }}`
@@ -958,7 +1034,10 @@ policy; `packagedCsp()` in `electron.vite.config.ts` swaps in `PACKAGED_CSP` und
 Refresh preamble ever needed, and the localhost/ws allowances in `connect-src`, which nothing
 needed — the renderer makes no network calls at all, main does. `style-src 'unsafe-inline'`
 has to stay: antd's cssinjs injects `<style>` at runtime. Verified against the built
-`out/renderer/index.html`, which contains no inline script.
+`out/renderer/index.html`, which contains no inline script. There are now **two** policies:
+`packagedCsp()` branches on the filename, because `obs.html` is served over http and talks
+to the link server, so it keeps a `connect-src` of `ws://127.0.0.1:*` that the app's
+`connect-src 'none'` must not gain.
 
 **Only `ws` and `youtubei.js` reach the installer.** electron-builder ships `dependencies` and
 prunes `devDependencies`, so the packed `node_modules` is `ws`, `youtubei.js` and its three
@@ -1052,7 +1131,11 @@ strip has to keep live in "Tabs, split groups and dragging" — read them there 
 here, since this paragraph has drifted from the code twice already. `MessageRow` stays
 hand-written for the reasons in "Renderer UI", and Tailwind is still in the tree for the
 chat rows. There is still no per-pane header and no tab-bar extra slot — the tab strip
-carries status — but each pane now has a bottom bar that searches and clears it.
+carries status — but each pane now has a top bar that searches it, clears it, and hands out
+its OBS link.
+
+Every chat is also readable outside the app, at a loopback URL OBS can dock — see "OBS
+links".
 
 Next: polish — settings persistence, sending messages back, auto-update. `fontSize` is now
 driven by the pane bar, but the store still carries `showDeleted` and `showTimestamps` with
@@ -1063,7 +1146,8 @@ Nothing survives a restart. The app opens with no channels every time, by design
 "Nothing is persisted but the Twitch token".
 
 Deliberately not done yet: no persistence of any kind beyond the Twitch token, no
-message sending, and no auto-update. Packaging now works — see "Packaging" — but the build
+message sending, and no auto-update. OBS links are read-only mirrors: a dock shows a channel
+only while that channel is open in the app, and hitting a URL never adds one. Packaging now works — see "Packaging" — but the build
 is unsigned and has no icon of its own.
 YouTube super-chats and memberships are **not** mapped at all — see the YouTube invariant on
 `LiveChatTextMessage`. **Twitch is the only platform that emits a `MessageKind` other than
