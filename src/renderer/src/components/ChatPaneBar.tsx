@@ -28,7 +28,6 @@ function ChatPaneBarImpl({
   onFontReset,
   onClear
 }: ChatPaneBarProps): React.ReactElement {
-
   const options = useMemo(
     () => terms.map((term) => ({ value: term, label: termLabel(term) })),
     [terms]

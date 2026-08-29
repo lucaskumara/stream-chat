@@ -70,7 +70,8 @@ src/main/             bus.ts (MessageBus), sources.ts (SourceManager), ipc.ts, c
                       lifecycle.ts, index.ts (app bootstrap + service construction)
 src/main/twitch/      auth.ts, helix.ts, state.ts, clientId.ts — account only, no wire code
 src/main/emotes/      7TV + BTTV — INTACT BUT UNWIRED, see below
-src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the antd ThemeConfig), components/
+src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the antd ThemeConfig),
+                      search.ts (the pane filter grammar), components/
 ```
 
 The rule that keeps this from drifting: **wire code lives in the platform folder, account
@@ -991,9 +992,10 @@ hand-written for the reasons in "Renderer UI", and Tailwind is still in the tree
 chat rows. There is still no per-pane header and no tab-bar extra slot — the tab strip
 carries status — but each pane now has a bottom bar that searches and clears it.
 
-Next: polish — settings persistence, sending messages back, auto-update. The store already carries `showDeleted`, `showTimestamps` and `fontSize` with
-**no UI bound to them** — an antd `Popover` of `Switch`es and a `Slider` hung off the tab
-strip is the obvious home when settings persistence lands.
+Next: polish — settings persistence, sending messages back, auto-update. `fontSize` is now
+driven by the pane bar, but the store still carries `showDeleted` and `showTimestamps` with
+**no UI bound to them** — an antd `Popover` of `Switch`es hung off the tab strip is the
+obvious home when settings persistence lands.
 
 Nothing survives a restart. The app opens with no channels every time, by design — see
 "Nothing is persisted but the Twitch token".
