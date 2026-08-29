@@ -24,7 +24,7 @@ export interface ChatPaneProps {
   onSearchDraft: (draft: string) => void
   onAddSearchTerm: (term: string) => void
   fontSize: number
-  onFontStep: (delta: number) => void
+  onFontStep: (steps: number) => void
   onFontReset: () => void
   onClear: () => void
 }
@@ -136,7 +136,7 @@ export function ChatPane({
         {
           height: '100%',
           background: INK.app,
-          '--chat-font-size': `${fontSize}rem`
+          '--chat-font-size': `${fontSize}px`
         } as React.CSSProperties
       }
     >

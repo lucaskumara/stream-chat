@@ -22,14 +22,23 @@
   /* Matches antd's Tabs cardGutter so a group band can span the gap. */
   --tab-gutter: 2px;
 
-  /* Message text and author names. Every text size in the app is either 1rem or
-     1.25rem; the em units left in MessageRow size emote and badge *images*, so
-     those still scale with this value. */
-  --chat-font-size: 1rem;
+  /* The whole type scale. Every text size in the app is one of these four, and
+     nothing computes a size of its own. antd's fontSize/titleFontSize tokens in
+     theme.ts have to mirror --text-md and --text-xl by hand, because those tokens
+     take a number rather than a CSS length. */
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+
+  /* Message text and author names, stepped through the scale per pane by the
+     bar's A-arrow buttons. The em units left in MessageRow size emote and badge
+     *images*, so those still scale with this value. */
+  --chat-font-size: var(--text-md);
 }
 
-/* Pin the rem so every text size can be written as 1rem (16px) or 1.25rem (20px)
-   rather than a raw pixel count. */
+/* Text is sized in px from the scale above, but Tailwind's spacing utilities are
+   rem-based, so the root stays pinned to keep padding and gaps stable. */
 html {
   font-size: 16px;
 }
@@ -45,7 +54,7 @@ body {
   background: var(--color-ink-900);
   color: #e3e3e3;
   font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
-  font-size: 1rem;
+  font-size: var(--text-md);
   overflow: hidden;
 }
 
@@ -222,10 +231,10 @@ body {
    on every term crowded it. antd tags mode already pops the last tag on
    Backspace when the typed text is empty, so hiding the cross costs nothing. */
 .chat-pane-search .ant-select-selection-item {
-  height: 1.5rem;
+  height: 24px;
   border-radius: 999px;
-  padding-inline: 0.625rem;
-  line-height: 1.5rem;
+  padding-inline: 10px;
+  line-height: 24px;
 }
 
 /* antd reserves room after the label for the close cross; with the cross hidden

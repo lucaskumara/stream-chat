@@ -109,7 +109,7 @@ export default function App(): React.ReactElement {
                 onSearchDraft={(draft) => setSearchDraft(panes[0].id, draft)}
                 onAddSearchTerm={(term) => addSearchTerm(panes[0].id, term)}
                 fontSize={fontSize[panes[0].id] ?? CHAT_FONT_DEFAULT}
-                onFontStep={(delta) => stepFontSize(panes[0].id, delta)}
+                onFontStep={(steps) => stepFontSize(panes[0].id, steps)}
                 onFontReset={() => resetFontSize(panes[0].id)}
                 onClear={() => clearSource(panes[0].id)}
                 messages={bySource[panes[0].id] ?? []}
@@ -129,7 +129,7 @@ export default function App(): React.ReactElement {
                       onSearchDraft={(draft) => setSearchDraft(source.id, draft)}
                       onAddSearchTerm={(term) => addSearchTerm(source.id, term)}
                       fontSize={fontSize[source.id] ?? CHAT_FONT_DEFAULT}
-                      onFontStep={(delta) => stepFontSize(source.id, delta)}
+                      onFontStep={(steps) => stepFontSize(source.id, steps)}
                       onFontReset={() => resetFontSize(source.id)}
                       onClear={() => clearSource(source.id)}
                       messages={bySource[source.id] ?? []}

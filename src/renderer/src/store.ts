@@ -10,11 +10,9 @@ const DEFAULT_CAPACITY = 500
 
 const DELETED_LIMIT = 4000
 
-/** Chat row sizes in rem, against the 16px root pinned in index.css. */
-export const CHAT_FONT_DEFAULT = 1
-export const CHAT_FONT_MIN = 0.75
-export const CHAT_FONT_MAX = 2
-export const CHAT_FONT_STEP = 0.125
+/** The type scale from index.css, in px. Chat rows step through exactly these. */
+export const CHAT_FONT_SIZES = [14, 16, 18, 20]
+export const CHAT_FONT_DEFAULT = 16
 
 interface ChatState {
   sources: SourceState[]
@@ -32,7 +30,7 @@ interface ChatState {
   showTimestamps: boolean
   capacity: number
 
-  /** Chat row size per source, in rem. Missing means CHAT_FONT_DEFAULT. */
+  /** Chat row size per source, in px from CHAT_FONT_SIZES. Missing means the default. */
   fontSize: Record<string, number>
 
   twitchAuth: TwitchAuthState
@@ -46,7 +44,7 @@ interface ChatState {
   setSearch: (sourceId: string, terms: string[]) => void
   setSearchDraft: (sourceId: string, draft: string) => void
   addSearchTerm: (sourceId: string, term: string) => void
-  stepFontSize: (sourceId: string, delta: number) => void
+  stepFontSize: (sourceId: string, steps: number) => void
   resetFontSize: (sourceId: string) => void
   clearSource: (sourceId: string) => void
   forgetSource: (sourceId: string) => void
@@ -224,11 +222,13 @@ export const useStore = create<ChatState>()((set) => ({
       return { search: { ...s.search, [sourceId]: [...existing, term] } }
     }),
 
-  stepFontSize: (sourceId, delta) =>
+  stepFontSize: (sourceId, steps) =>
     set((s) => {
       const current = s.fontSize[sourceId] ?? CHAT_FONT_DEFAULT
-      const stepped = Math.round((current + delta) * 1000) / 1000
-      const next = Math.min(CHAT_FONT_MAX, Math.max(CHAT_FONT_MIN, stepped))
+      const at = CHAT_FONT_SIZES.indexOf(current)
+      const from = at === -1 ? CHAT_FONT_SIZES.indexOf(CHAT_FONT_DEFAULT) : at
+
+      const next = CHAT_FONT_SIZES[Math.min(CHAT_FONT_SIZES.length - 1, Math.max(0, from + steps))]
       if (next === current) return s
 
       return { fontSize: { ...s.fontSize, [sourceId]: next } }

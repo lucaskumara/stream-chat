@@ -89,7 +89,7 @@ function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
     return (
       <span
         title={badge.label}
-        className="mr-1 rounded-sm bg-neutral-700/60 px-1 text-[1rem] font-semibold tracking-wide text-neutral-300 uppercase"
+        className="mr-1 rounded-sm bg-neutral-700/60 px-1 text-[length:var(--text-sm)] font-semibold tracking-wide text-neutral-300 uppercase"
       >
         {badge.label.slice(0, 3)}
       </span>
@@ -166,14 +166,14 @@ function MessageRowImpl({
       ].join(' ')}
     >
       {msg.replyTo && (
-        <div className="truncate pl-1 text-[1rem] text-neutral-500">
+        <div className="truncate pl-1 text-[length:var(--text-sm)] text-neutral-500">
           ↳ replying to {msg.replyTo.authorName}: {msg.replyTo.excerpt}
         </div>
       )}
 
       <span className={deleted ? 'line-through' : undefined}>
         {showTimestamps && (
-          <span className="mr-1 text-[1rem] text-neutral-500 tabular-nums">
+          <span className="mr-1 text-[length:var(--text-sm)] text-neutral-500 tabular-nums">
             {formatTime(msg.timestamp)}
           </span>
         )}
@@ -187,7 +187,7 @@ function MessageRowImpl({
         )}
 
         {kindLabel && (
-          <span className="mr-1 rounded-sm bg-amber-500/20 px-1 text-[1rem] font-bold tracking-wide text-amber-300">
+          <span className="mr-1 rounded-sm bg-amber-500/20 px-1 text-[length:var(--text-sm)] font-bold tracking-wide text-amber-300">
             {kindLabel}
           </span>
         )}
@@ -207,7 +207,7 @@ function MessageRowImpl({
         <span className="text-neutral-500">: </span>
 
         {msg.monetary && (
-          <span className="mr-1 rounded-sm bg-emerald-500/20 px-1 text-[1rem] font-semibold text-emerald-300">
+          <span className="mr-1 rounded-sm bg-emerald-500/20 px-1 text-[length:var(--text-sm)] font-semibold text-emerald-300">
             {msg.monetary.currency === 'bits'
               ? `${msg.monetary.amount.toLocaleString()} bits`
               : `${msg.monetary.currency} ${msg.monetary.amount.toFixed(2)}`}
@@ -221,7 +221,7 @@ function MessageRowImpl({
         ))}
       </span>
 
-      {deleted && <span className="ml-1 text-[1rem] text-neutral-500">(deleted)</span>}
+      {deleted && <span className="ml-1 text-[length:var(--text-sm)] text-neutral-500">(deleted)</span>}
     </div>
   )
 }

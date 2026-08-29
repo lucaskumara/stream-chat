@@ -761,10 +761,11 @@ buttons, the pane bar — and 1.25rem (20px) reserved for the modal heading. ant
 `fontSize`/`titleFontSize` tokens are the exception that has to stay numeric (16 and 20)
 because the token type is a number, not a CSS length.
 
-**Chat text is the deliberate exception, and it is per pane.** The pane bar's `A↑`/`A↓`/`↺`
-buttons step `store.fontSize[sourceId]` between `CHAT_FONT_MIN` 0.75rem and `CHAT_FONT_MAX`
-2rem in `CHAT_FONT_STEP` 0.125rem, and reset drops the entry rather than writing the default
-back, so "unset" and "explicitly default" stay the same state. `ChatPane` writes
+**Chat text is adjustable, and it is per pane.** The pane bar's `A↑`/`A↓`/`↺` buttons walk
+`store.fontSize[sourceId]` along `CHAT_FONT_SIZES` — the same `[14, 16, 18, 20]` as the CSS
+scale — by index rather than by arithmetic, so a chat can only ever land on a value the scale
+already has. Reset drops the entry rather than writing the default back, so "unset" and
+"explicitly default" stay the same state. `ChatPane` writes
 `--chat-font-size` as an inline custom property on **its own root**, not on
 `document.documentElement` — that is what lets two panes in a split run at different sizes,
 and setting it globally (as an earlier version did) silently coupled them.

@@ -3,7 +3,7 @@ import { Button, Popconfirm, Select } from 'antd'
 import { AArrowDown, AArrowUp, RotateCcw, Search, Trash2 } from 'lucide-react'
 import { INK } from '../theme'
 import { termLabel } from '../search'
-import { CHAT_FONT_DEFAULT, CHAT_FONT_MAX, CHAT_FONT_MIN, CHAT_FONT_STEP } from '../store'
+import { CHAT_FONT_DEFAULT, CHAT_FONT_SIZES } from '../store'
 
 const SYNTAX_HINT =
   'Type a word to match message text, or author:name to match the sender. ' +
@@ -16,7 +16,7 @@ export interface ChatPaneBarProps {
   fontSize: number
   onTerms: (terms: string[]) => void
   onDraft: (draft: string) => void
-  onFontStep: (delta: number) => void
+  onFontStep: (steps: number) => void
   onFontReset: () => void
   onClear: () => void
 }
@@ -85,8 +85,8 @@ function ChatPaneBarImpl({
         type="text"
         className="chat-pane-bigger"
         icon={<AArrowUp size={16} />}
-        disabled={fontSize >= CHAT_FONT_MAX}
-        onClick={() => onFontStep(CHAT_FONT_STEP)}
+        disabled={fontSize >= CHAT_FONT_SIZES[CHAT_FONT_SIZES.length - 1]}
+        onClick={() => onFontStep(1)}
         title="Larger text in this chat"
         aria-label="Larger text in this chat"
         style={{ flex: 'none' }}
@@ -96,8 +96,8 @@ function ChatPaneBarImpl({
         type="text"
         className="chat-pane-smaller"
         icon={<AArrowDown size={16} />}
-        disabled={fontSize <= CHAT_FONT_MIN}
-        onClick={() => onFontStep(-CHAT_FONT_STEP)}
+        disabled={fontSize <= CHAT_FONT_SIZES[0]}
+        onClick={() => onFontStep(-1)}
         title="Smaller text in this chat"
         aria-label="Smaller text in this chat"
         style={{ flex: 'none' }}
