@@ -3,7 +3,7 @@ import { Button, Empty, Flex, Layout, Modal, Splitter } from 'antd'
 import { Plus } from 'lucide-react'
 import type { SourceState } from '@shared/types'
 import { bridge } from './bridge'
-import { useStore } from './store'
+import { CHAT_FONT_DEFAULT, useStore } from './store'
 import { AddChannel } from './components/AddChannel'
 import { ChannelTabs } from './components/ChannelTabs'
 import { ChatPane } from './components/ChatPane'
@@ -26,16 +26,14 @@ export default function App(): React.ReactElement {
   const setSearch = useStore((s) => s.setSearch)
   const setSearchDraft = useStore((s) => s.setSearchDraft)
   const addSearchTerm = useStore((s) => s.addSearchTerm)
+  const stepFontSize = useStore((s) => s.stepFontSize)
+  const resetFontSize = useStore((s) => s.resetFontSize)
   const clearSource = useStore((s) => s.clearSource)
   const showDeleted = useStore((s) => s.showDeleted)
   const showTimestamps = useStore((s) => s.showTimestamps)
   const fontSize = useStore((s) => s.fontSize)
 
   const [adding, setAdding] = useState(false)
-
-  useEffect(() => {
-    document.documentElement.style.setProperty('--chat-font-size', `${fontSize}rem`)
-  }, [fontSize])
 
   useEffect(() => {
     const { api } = bridge()
@@ -110,6 +108,9 @@ export default function App(): React.ReactElement {
                 onSearchTerms={(terms) => setSearch(panes[0].id, terms)}
                 onSearchDraft={(draft) => setSearchDraft(panes[0].id, draft)}
                 onAddSearchTerm={(term) => addSearchTerm(panes[0].id, term)}
+                fontSize={fontSize[panes[0].id] ?? CHAT_FONT_DEFAULT}
+                onFontStep={(delta) => stepFontSize(panes[0].id, delta)}
+                onFontReset={() => resetFontSize(panes[0].id)}
                 onClear={() => clearSource(panes[0].id)}
                 messages={bySource[panes[0].id] ?? []}
                 showPlatform={false}
@@ -127,6 +128,9 @@ export default function App(): React.ReactElement {
                       onSearchTerms={(terms) => setSearch(source.id, terms)}
                       onSearchDraft={(draft) => setSearchDraft(source.id, draft)}
                       onAddSearchTerm={(term) => addSearchTerm(source.id, term)}
+                      fontSize={fontSize[source.id] ?? CHAT_FONT_DEFAULT}
+                      onFontStep={(delta) => stepFontSize(source.id, delta)}
+                      onFontReset={() => resetFontSize(source.id)}
                       onClear={() => clearSource(source.id)}
                       messages={bySource[source.id] ?? []}
                       showPlatform={false}

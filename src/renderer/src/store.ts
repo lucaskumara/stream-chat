@@ -10,6 +10,12 @@ const DEFAULT_CAPACITY = 500
 
 const DELETED_LIMIT = 4000
 
+/** Chat row sizes in rem, against the 16px root pinned in index.css. */
+export const CHAT_FONT_DEFAULT = 1
+export const CHAT_FONT_MIN = 0.75
+export const CHAT_FONT_MAX = 2
+export const CHAT_FONT_STEP = 0.125
+
 interface ChatState {
   sources: SourceState[]
   bySource: Record<string, ChatMessage[]>
@@ -26,8 +32,8 @@ interface ChatState {
   showTimestamps: boolean
   capacity: number
 
-  /** Chat row size in rem, against the 16px root pinned in index.css. */
-  fontSize: number
+  /** Chat row size per source, in rem. Missing means CHAT_FONT_DEFAULT. */
+  fontSize: Record<string, number>
 
   twitchAuth: TwitchAuthState
 
@@ -40,6 +46,8 @@ interface ChatState {
   setSearch: (sourceId: string, terms: string[]) => void
   setSearchDraft: (sourceId: string, draft: string) => void
   addSearchTerm: (sourceId: string, term: string) => void
+  stepFontSize: (sourceId: string, delta: number) => void
+  resetFontSize: (sourceId: string) => void
   clearSource: (sourceId: string) => void
   forgetSource: (sourceId: string) => void
 }
@@ -64,7 +72,7 @@ export const useStore = create<ChatState>()((set) => ({
   showDeleted: true,
   showTimestamps: true,
   capacity: DEFAULT_CAPACITY,
-  fontSize: 1,
+  fontSize: {},
 
   twitchAuth: { status: 'signed-out' },
 
@@ -216,6 +224,26 @@ export const useStore = create<ChatState>()((set) => ({
       return { search: { ...s.search, [sourceId]: [...existing, term] } }
     }),
 
+  stepFontSize: (sourceId, delta) =>
+    set((s) => {
+      const current = s.fontSize[sourceId] ?? CHAT_FONT_DEFAULT
+      const stepped = Math.round((current + delta) * 1000) / 1000
+      const next = Math.min(CHAT_FONT_MAX, Math.max(CHAT_FONT_MIN, stepped))
+      if (next === current) return s
+
+      return { fontSize: { ...s.fontSize, [sourceId]: next } }
+    }),
+
+  resetFontSize: (sourceId) =>
+    set((s) => {
+      if (s.fontSize[sourceId] === undefined) return s
+
+      const fontSize = { ...s.fontSize }
+      delete fontSize[sourceId]
+
+      return { fontSize }
+    }),
+
   clearSource: (sourceId) =>
     set((s) => {
       if (!s.bySource[sourceId]?.length) return s
@@ -234,10 +262,14 @@ export const useStore = create<ChatState>()((set) => ({
       const searchDraft = { ...s.searchDraft }
       delete searchDraft[sourceId]
 
+      const fontSize = { ...s.fontSize }
+      delete fontSize[sourceId]
+
       return {
         bySource,
         search,
         searchDraft,
+        fontSize,
         visibleIds: s.visibleIds.filter((id) => id !== sourceId),
         groups: pruneGroups(s.groups, (id) => id !== sourceId)
       }

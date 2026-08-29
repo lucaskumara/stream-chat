@@ -1,8 +1,9 @@
 import { memo, useCallback, useMemo } from 'react'
-import { Button, Popconfirm, Select, Typography } from 'antd'
-import { Search, Trash2 } from 'lucide-react'
+import { Button, Popconfirm, Select } from 'antd'
+import { AArrowDown, AArrowUp, RotateCcw, Search, Trash2 } from 'lucide-react'
 import { INK } from '../theme'
 import { termLabel } from '../search'
+import { CHAT_FONT_DEFAULT, CHAT_FONT_MAX, CHAT_FONT_MIN, CHAT_FONT_STEP } from '../store'
 
 const SYNTAX_HINT =
   'Type a word to match message text, or author:name to match the sender. ' +
@@ -11,23 +12,26 @@ const SYNTAX_HINT =
 export interface ChatPaneBarProps {
   terms: string[]
   draft: string
-  matches: number
   total: number
+  fontSize: number
   onTerms: (terms: string[]) => void
   onDraft: (draft: string) => void
+  onFontStep: (delta: number) => void
+  onFontReset: () => void
   onClear: () => void
 }
 
 function ChatPaneBarImpl({
   terms,
   draft,
-  matches,
   total,
+  fontSize,
   onTerms,
   onDraft,
+  onFontStep,
+  onFontReset,
   onClear
 }: ChatPaneBarProps): React.ReactElement {
-  const filtering = terms.length > 0 || draft.trim() !== ''
 
   const options = useMemo(
     () => terms.map((term) => ({ value: term, label: termLabel(term) })),
@@ -77,13 +81,38 @@ function ChatPaneBarImpl({
         onKeyDown={handleKeyDown}
       />
 
-      <Typography.Text
-        type="secondary"
-        className="chat-pane-count"
-        style={{ fontSize: '1rem', whiteSpace: 'nowrap', flex: 'none' }}
-      >
-        {filtering ? `${matches} of ${total}` : `${total}`}
-      </Typography.Text>
+      <Button
+        type="text"
+        className="chat-pane-bigger"
+        icon={<AArrowUp size={16} />}
+        disabled={fontSize >= CHAT_FONT_MAX}
+        onClick={() => onFontStep(CHAT_FONT_STEP)}
+        title="Larger text in this chat"
+        aria-label="Larger text in this chat"
+        style={{ flex: 'none' }}
+      />
+
+      <Button
+        type="text"
+        className="chat-pane-smaller"
+        icon={<AArrowDown size={16} />}
+        disabled={fontSize <= CHAT_FONT_MIN}
+        onClick={() => onFontStep(-CHAT_FONT_STEP)}
+        title="Smaller text in this chat"
+        aria-label="Smaller text in this chat"
+        style={{ flex: 'none' }}
+      />
+
+      <Button
+        type="text"
+        className="chat-pane-font-reset"
+        icon={<RotateCcw size={16} />}
+        disabled={fontSize === CHAT_FONT_DEFAULT}
+        onClick={onFontReset}
+        title="Reset text size in this chat"
+        aria-label="Reset text size in this chat"
+        style={{ flex: 'none' }}
+      />
 
       <Popconfirm
         title="Are you sure?"

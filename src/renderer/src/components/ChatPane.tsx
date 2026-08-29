@@ -23,6 +23,9 @@ export interface ChatPaneProps {
   onSearchTerms: (terms: string[]) => void
   onSearchDraft: (draft: string) => void
   onAddSearchTerm: (term: string) => void
+  fontSize: number
+  onFontStep: (delta: number) => void
+  onFontReset: () => void
   onClear: () => void
 }
 
@@ -37,6 +40,9 @@ export function ChatPane({
   onSearchTerms,
   onSearchDraft,
   onAddSearchTerm,
+  fontSize,
+  onFontStep,
+  onFontReset,
   onClear
 }: ChatPaneProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -126,7 +132,13 @@ export function ChatPane({
   return (
     <div
       className="flex min-h-0 min-w-0 flex-1 flex-col"
-      style={{ height: '100%', background: INK.app }}
+      style={
+        {
+          height: '100%',
+          background: INK.app,
+          '--chat-font-size': `${fontSize}rem`
+        } as React.CSSProperties
+      }
     >
       <div className="relative min-h-0 flex-1">
         <div
@@ -203,10 +215,12 @@ export function ChatPane({
       <ChatPaneBar
         terms={searchTerms}
         draft={searchDraft}
-        matches={visible.length}
         total={list.length}
+        fontSize={fontSize}
         onTerms={onSearchTerms}
         onDraft={onSearchDraft}
+        onFontStep={onFontStep}
+        onFontReset={onFontReset}
         onClear={onClear}
       />
     </div>

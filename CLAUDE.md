@@ -756,17 +756,22 @@ Lucide defaults to 24px, so every usage passes `size={16}` to match the 1rem tex
 
 **Every text size is 1rem or 1.25rem, against a root pinned at 16px.** `index.css` sets
 `html { font-size: 16px }` so the rem is not at the mercy of a browser default, and the whole
-app uses exactly two sizes: **1rem (16px) for everything** — chat messages, author names,
-tabs, inputs, buttons, timestamps, badge chips, the pane bar — and 1.25rem (20px) reserved for
-the modal heading. Verified by walking every visible text node in the running app: one
-distinct computed size, 16px, with 20px appearing only when a modal is open. antd's
+the app *chrome* uses exactly two sizes: **1rem (16px) for everything** — tabs, inputs,
+buttons, the pane bar — and 1.25rem (20px) reserved for the modal heading. antd's
 `fontSize`/`titleFontSize` tokens are the exception that has to stay numeric (16 and 20)
 because the token type is a number, not a CSS length.
 
+**Chat text is the deliberate exception, and it is per pane.** The pane bar's `A↑`/`A↓`/`↺`
+buttons step `store.fontSize[sourceId]` between `CHAT_FONT_MIN` 0.75rem and `CHAT_FONT_MAX`
+2rem in `CHAT_FONT_STEP` 0.125rem, and reset drops the entry rather than writing the default
+back, so "unset" and "explicitly default" stay the same state. `ChatPane` writes
+`--chat-font-size` as an inline custom property on **its own root**, not on
+`document.documentElement` — that is what lets two panes in a split run at different sizes,
+and setting it globally (as an earlier version did) silently coupled them.
+
 The em units left in `MessageRow` are deliberate and are *not* text: they size emote images
 (`1.55em`) and badge images (`1.1em`) so those still scale with `--chat-font-size`. The store's
-`fontSize` now holds **rem**, not px — `App` writes it as `${fontSize}rem` — so a future
-size control moves the chat tier without breaking the two-size rule.
+`fontSize` holds **rem**, not px.
 
 **The theme is one object, not scattered inline styles.** `theme.ts` maps the ink palette
 onto antd tokens and exports `INK` for the few places that still need a raw hex. Reach for a
