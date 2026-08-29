@@ -16,7 +16,13 @@ files:
 
 win:
   executableName: stream-chat
-  target: nsis
+  target:
+    - nsis
+    - portable
+
+portable:
+  artifactName: ${name}-${version}-portable.${ext}
+  unpackDirName: stream-chat-${version}
 
 nsis:
   artifactName: ${name}-${version}-setup.${ext}

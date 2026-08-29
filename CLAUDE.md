@@ -925,9 +925,19 @@ nothing. Drive real inputs and real buttons.
 ### Packaging
 
 **`electron-builder.yml` is the config and `npm run dist` is the command.** Windows is the
-only target actually produced — `release/stream-chat-<version>-setup.exe`, an NSIS installer
-that lets the user pick a directory. The mac (dmg) and linux (AppImage) blocks are declared
-but have never been run, the same status as the `frameOptions()` branches they would ship.
+only target actually produced, and it produces two: `release/stream-chat-<version>-setup.exe`,
+an NSIS installer that lets the user pick a directory, and
+`release/stream-chat-<version>-portable.exe`, a self-extracting single file. `unpackDirName`
+pins the portable build's extraction folder so it unpacks once rather than on every launch —
+left unset, electron-builder uses a fresh temp directory each run and a 113MB app pays for it
+every time. The mac (dmg) and linux (AppImage) blocks are declared but have never been run,
+the same status as the `frameOptions()` branches they would ship.
+
+**The portable build is portable in delivery, not in state.** It still writes the Twitch token
+to `%APPDATA%/stream-chat` like every other build; nothing lands beside the exe. That only
+stays true while the Twitch token is the one persisted thing — see "Nothing is persisted but
+the Twitch token". Making it self-contained means reading electron-builder's
+`PORTABLE_EXECUTABLE_DIR` env var in `config.ts`, which is a code change, not a config one.
 
 **A packaged build is a different program from `npm run dev`, and one dependency proved it.**
 electron-builder rewrites every dependency's `package.json` as it packs them, which is what
