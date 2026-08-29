@@ -17,8 +17,13 @@ npm run typecheck  # both tsconfig projects; the fastest correctness gate
 npm run build      # typecheck, then build main + preload + renderer
 ```
 
-`npm run pack` / `npm run dist` exist but electron-builder has no config block yet, so they
-are untested.
+```bash
+npm run pack       # electron-builder --dir — an unpacked app under release/, no installer
+npm run dist       # the full installer for the host platform
+```
+
+Both run `npm run build` first, so `dist` is also a typecheck. Artifacts land in `release/`,
+which is gitignored. Only the Windows target has been produced — see "Packaging" below.
 
 There is **no test runner configured**. See "Verifying changes" below for how work in this
 repo actually gets checked.
@@ -384,8 +389,17 @@ the bundle — main stays ~79KB rather than absorbing 16MB. Do not "fix" this by
 **`retrieve_player: false`** on `Innertube.create` skips the signature-cipher work (and the
 `meriyah` parse) that only video playback needs. Chat does not.
 
-**youtube.js JIT-generates classes for renderers it does not know** and logs a multi-line
-stack for each one. Noisy, non-fatal, self-healing — do not mistake it for a crash.
+**We own youtube.js's parser error handler, and in a packaged build that is not cosmetic.**
+`connection.ts` calls `Parser.setParserErrorHandler` before the session is created. The
+library's default handler builds its message out of `packageInfo.bugs.url` — and
+**electron-builder strips `bugs` from every dependency's `package.json` on the way into
+`app.asar`** — so `packageInfo.bugs` is `undefined` and *the error handler itself throws*.
+Live chat carries unknown renderers constantly (`GiftMessageView`,
+`LiveChatReportModerationStateCommand`), so in the installed app every poll threw and every
+YouTube tab sat at `error: Cannot read properties of undefined (reading 'url')`. `npm run dev`
+cannot reproduce it: `node_modules` on disk still has the field. Our handler also replaces the
+default's multi-page JIT-generated TypeScript class dump with one deduped line per fault —
+those faults are still non-fatal and self-healing, just quiet now.
 
 **Poll at 500ms, not the `timeoutMs` the server suggests.** YouTube answers `timeoutMs: 10000`;
 honoring it delivers in 10s bursts. `clampPoll` pins the server's suggestion into
@@ -744,8 +758,9 @@ platform dropdown needs a `mousedown` dispatched on `.ant-select-content` — a 
 
 **antd is a devDependency, not a dependency.** The renderer is bundled (no
 `externalizeDepsPlugin` on that target), so it belongs beside `react`, `zustand` and
-`lucide-react`. Only main-process packages that stay external — `electron-store`, `ws`,
-`youtubei.js` — are real dependencies.
+`lucide-react`. Only main-process packages that stay external — `ws` and `youtubei.js` —
+are real dependencies, and electron-builder prunes everything else out of the installer, so
+a package in the wrong list is a shipping bug rather than a style question.
 
 **antd's tab chrome needs three CSS corrections, all of them in `index.css`.** They are
 overrides of antd internals, so re-check them on an antd upgrade. `.ant-tabs-nav-add` sizes
@@ -859,8 +874,9 @@ problem rather than tuning it. `Config.read()` therefore projects onto the field
 instead of being written back out. Do not reintroduce channel persistence without asking —
 it is a privacy decision, not an oversight.
 
-**`electron-store` v11 is ESM-only** and this build emits CJS for main, hence the hand-rolled
-`config.ts`. Tokens are encrypted with `safeStorage` (DPAPI on Windows). If no encryption
+**`config.ts` is hand-rolled because `electron-store` v11 is ESM-only** and this build emits
+CJS for main. The package itself is gone from `package.json` — it was a dependency that
+nothing imported. Tokens are encrypted with `safeStorage` (DPAPI on Windows). If no encryption
 backend exists, tokens are kept in memory for the session rather than written in the clear.
 
 **The config file is written then renamed**, so a crash mid-write cannot truncate it.
@@ -905,6 +921,42 @@ with `chr(92)`. This has caused both fake test failures and real syntax errors.
 **Testing the IPC surface is not testing the app.** Calling `window.api.addSource(...)` over
 CDP bypasses the components entirely and once hid a bug where the add button silently did
 nothing. Drive real inputs and real buttons.
+
+### Packaging
+
+**`electron-builder.yml` is the config and `npm run dist` is the command.** Windows is the
+only target actually produced — `release/stream-chat-<version>-setup.exe`, an NSIS installer
+that lets the user pick a directory. The mac (dmg) and linux (AppImage) blocks are declared
+but have never been run, the same status as the `frameOptions()` branches they would ship.
+
+**A packaged build is a different program from `npm run dev`, and one dependency proved it.**
+electron-builder rewrites every dependency's `package.json` as it packs them, which is what
+broke YouTube in the installed app only — see the youtube.js parser-handler invariant. Run the
+packaged exe before believing a release works. It accepts `--remote-debugging-port`, so the
+same CDP driving used in dev works against `release/win-unpacked/stream-chat.exe`.
+
+**Dev and the installed app share one userData directory, so they cannot run at once.**
+`app.getName()` falls back to package.json's `name` — electron-builder's `productName` names
+the installer and the Start-menu entry, but never reaches the packed manifest — so both
+resolve to `%APPDATA%/stream-chat` and the single-instance lock in `main/index.ts` makes the
+second one exit silently with status 0. That is indistinguishable from a packaged app that
+crashes on launch. Kill `npm run dev` first.
+
+**The renderer's CSP is rewritten at build time.** `src/renderer/index.html` carries the *dev*
+policy; `packagedCsp()` in `electron.vite.config.ts` swaps in `PACKAGED_CSP` under
+`apply: 'build'`. That drops `script-src 'unsafe-inline'`, which only the dev server's React
+Refresh preamble ever needed, and the localhost/ws allowances in `connect-src`, which nothing
+needed — the renderer makes no network calls at all, main does. `style-src 'unsafe-inline'`
+has to stay: antd's cssinjs injects `<style>` at runtime. Verified against the built
+`out/renderer/index.html`, which contains no inline script.
+
+**Only `ws` and `youtubei.js` reach the installer.** electron-builder ships `dependencies` and
+prunes `devDependencies`, so the packed `node_modules` is `ws`, `youtubei.js` and its three
+transitive packages — nothing else. A package in the wrong list is a shipping bug.
+
+**The build is unsigned and has no icon of its own.** electron-builder reports `default
+Electron icon is used`; a `build/icon.png` of 256px or more is all it needs. Unsigned means
+Windows SmartScreen warns on first run.
 
 ## Platform notes
 
@@ -1001,9 +1053,8 @@ Nothing survives a restart. The app opens with no channels every time, by design
 "Nothing is persisted but the Twitch token".
 
 Deliberately not done yet: no persistence of any kind beyond the Twitch token, no
-message sending,
-`electron-builder` has no config block, and CSP keeps `script-src 'unsafe-inline'` because
-the dev server injects the React Refresh preamble (tighten to a nonce when packaging).
+message sending, and no auto-update. Packaging now works — see "Packaging" — but the build
+is unsigned and has no icon of its own.
 YouTube super-chats and memberships are **not** mapped at all — see the YouTube invariant on
 `LiveChatTextMessage`. **Twitch is the only platform that emits a `MessageKind` other than
 `chat`** — `subscription`, `raid`, `announcement` and `system` come from IRC `USERNOTICE`
