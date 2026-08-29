@@ -554,11 +554,13 @@ three-letter badge chip that stands in for a badge with no image — there the t
 place the full label exists. Do not reintroduce tooltips on the bar; they were removed on
 purpose.
 
-**The pin is not rendered when it cannot do anything.** The split control disappears on a tab
-that is shown while it is the only one shown, because clicking it there is refused anyway (the
-visible set must never empty). It still renders on every hidden tab, and on a shown tab once a
-second chat is open, which is what removes a chat from a split — the only route for that, since
-membership never changes by dragging.
+**The pin shows state, not just an action: filled means on screen.** Every tab renders the
+split control, and `<Pin fill>` is `currentColor` when the tab is shown and `none` when it is
+not, so the strip reads as "these chats are pinned open" at a glance. The click is still
+refused on a shown tab that is the only one shown — the visible set must never empty — but the
+icon stays rather than vanishing, because a control that disappears exactly when you look at
+it reads as a bug. Clicking a shown tab's pin once a second chat is open is what removes it
+from a split, and that is the only route: membership never changes by dragging.
 
 **The pane bar is per source, and its state lives in the store, not the pane.**
 `ChatPaneBar` sits along the bottom of every `ChatPane` and does two things: filters that

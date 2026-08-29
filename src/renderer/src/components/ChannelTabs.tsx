@@ -349,19 +349,17 @@ const TabLabel = memo(function TabLabel({
         </Tooltip>
       )}
 
-      {!inert && (
-        <span
-          role="button"
-          className={['tab-split', shown ? 'tab-split-on' : ''].filter(Boolean).join(' ')}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            onSplit(source.id)
-          }}
-        >
-          <Pin size={16} />
-        </span>
-      )}
+      <span
+        role="button"
+        className={['tab-split', shown ? 'tab-split-on' : ''].filter(Boolean).join(' ')}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (!inert) onSplit(source.id)
+        }}
+      >
+        <Pin size={16} fill={shown ? 'currentColor' : 'none'} />
+      </span>
     </Flex>
   )
 })
