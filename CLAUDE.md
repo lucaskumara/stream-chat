@@ -161,15 +161,35 @@ client does. Do not invent a colour in main; a message either carries the user's
 carries nothing.
 
 **`Badge.id` is what a badge with no image falls back *through*, and it is the platform's own
-set name — not the label.** `BADGE_GLYPH` in `MessageRow` maps `broadcaster`, `moderator`,
-`vip`, `subscriber`, `founder`, `og`, `sub_gifter`, `verified`, `partner`, `staff`, `admin`,
-`global_mod`, `bits`, `turbo` and `premium` onto a coloured lucide glyph; anything unmapped
-still gets the three-letter chip, which is the only `title` left in a message row. The id has
-to come from main because the label does not identify anything — Kick sends `text:
-"Broadcaster"`, Twitch's unresolved fallback carries the set id, and a label match would break
-the moment a platform changed its wording. Verified live: Kick draws a green sword for
-`moderator`, a purple gift for `sub_gifter` and a blue check for `verified`, all at 17.6px
-against a 16px row, with zero chips left over.
+set name — not the label.** `BADGE_GLYPH` in `MessageRow` maps a set name onto a coloured
+lucide glyph; anything unmapped still gets the three-letter chip, which is the only `title`
+left in a message row. The id has to come from main because the label does not identify
+anything — Kick sends `text: "Broadcaster"`, Twitch's unresolved fallback carries the set id,
+and a label match would break the moment a platform changed its wording.
+
+**The glyph map is tuned to Kick's artwork, because Kick is the only platform that reaches
+it.** Twitch resolves every badge to a real image, so its half of the map is a fallback for a
+failed GQL query; Kick ships no image for its whole role set and hits the glyph on every
+message. So where the two platforms disagree, Kick wins — and they do disagree: Twitch's
+broadcaster badge is a camera and its VIP a gem, while Kick's are a **microphone** and a
+**crown**. Guessing from the Twitch shapes is what put a camera on Kick's broadcaster.
+
+Kick's own icons are the source of truth, and they are readable without an account:
+`kick.com`'s Next chunks carry a design-system icon set keyed `data-ds-icon`, where each entry
+is `name:"…Badge",viewBox:…,body:'<svg paths>'`. The names do **not** match the wire types —
+the broadcaster's icon is `HostBadge` — so the join is Kick's own
+`{broadcaster:3, moderator:4, vip:5, og:6, subscriber:7, founder:8, sub_gifter:9, sidekick:10,
+verified:11}` type map, in the same bundle. Read off there: broadcaster a microphone
+(`#ff1cd2`→`#b20dff`), moderator a hammer (`#0095ff`→`#00c7ff`), vip a gold crown, subscriber a
+four-point sparkle (`#e1ff00`→`#2aa300`), founder a gold "1" medal, og the letters OG in cyan,
+verified and staff in Kick green (`#1eff00`→`#00ff8c`), bot blue. Only the *shape and colour*
+are copied — the paths are Kick's, and the app draws lucide equivalents instead.
+
+`sub_gifter` is the one Kick colours by *count*, through its own `getGiftBadgeMainColor`
+(1-4 green, 5-9 teal, 10-24 purple, 25-49 pink, 50-99 amber, and up); `Badge` carries no
+colour, so the app draws one purple gift for every tier rather than modelling the ramp.
+Measured on eight live chatrooms, 2461 messages: the wire types that actually appear are
+`subscriber`, `sub_gifter`, `moderator`, `vip`, `founder`, `verified`, `og` and `bot`.
 
 **The legibility lift blends toward white — it must not scale channels.** Chat runs on
 `#12151a`, and platform-chosen names are picked against lighter backgrounds. `readableColor`
