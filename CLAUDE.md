@@ -14,7 +14,7 @@ lives — read it before touching the message pipeline, emotes, or either Twitch
 ```bash
 npm run dev        # electron-vite dev — launches the app and the renderer dev server
 npm run typecheck  # all three tsconfig projects; the fastest correctness gate
-npm run test       # vitest, the pure-logic suite — 370 cases in ~1.5s
+npm run test       # vitest, the pure-logic suite — 401 cases in ~1.5s
 npm run test:watch # the same suite, re-running as files change
 npm run build      # typecheck, then build main + preload + renderer
 ```
@@ -167,27 +167,36 @@ left in a message row. The id has to come from main because the label does not i
 anything — Kick sends `text: "Broadcaster"`, Twitch's unresolved fallback carries the set id,
 and a label match would break the moment a platform changed its wording.
 
-**The glyph map is tuned to Kick's artwork, because Kick is the only platform that reaches
-it.** Twitch resolves every badge to a real image, so its half of the map is a fallback for a
-failed GQL query; Kick ships no image for its whole role set and hits the glyph on every
-message. So where the two platforms disagree, Kick wins — and they do disagree: Twitch's
-broadcaster badge is a camera and its VIP a gem, while Kick's are a **microphone** and a
-**crown**. Guessing from the Twitch shapes is what put a camera on Kick's broadcaster.
+**Kick's badges are drawn from Kick's own artwork, inlined as `data:` SVG.** Kick ships no
+image URL for its role badges — its UI draws them as inline SVG — so `badge-art.ts` carries
+each one as a self-contained `data:image/svg+xml` URI and `BadgeView` feeds it through the
+*same* `<img>` branch a Twitch badge uses. Three reasons it is a data URI rather than inline
+`<svg>` in the component: an inline gradient needs an `id`, and a virtualized list renders the
+same badge dozens of times, so `url(#HostBadge__a)` would collide and break the moment the
+first copy scrolled out; an `<img>` costs one node per badge instead of a `<defs>` tree; and
+the OBS dock reuses `MessageRow` with no extra mounting. `img-src` already allows `data:` in
+all three CSPs.
 
-Kick's own icons are the source of truth, and they are readable without an account:
-`kick.com`'s Next chunks carry a design-system icon set keyed `data-ds-icon`, where each entry
-is `name:"…Badge",viewBox:…,body:'<svg paths>'`. The names do **not** match the wire types —
-the broadcaster's icon is `HostBadge` — so the join is Kick's own
+**The art is generated from Kick's bundle, and the names do not match the wire types.**
+`kick.com`'s Next chunks carry a design-system icon set as
+`name:"…Badge",viewBox:…,body:'<paths>'`. The broadcaster's icon is `HostBadge` — a
+**microphone**, not a camera — so the join is Kick's own
 `{broadcaster:3, moderator:4, vip:5, og:6, subscriber:7, founder:8, sub_gifter:9, sidekick:10,
-verified:11}` type map, in the same bundle. Read off there: broadcaster a microphone
-(`#ff1cd2`→`#b20dff`), moderator a hammer (`#0095ff`→`#00c7ff`), vip a gold crown, subscriber a
-four-point sparkle (`#e1ff00`→`#2aa300`), founder a gold "1" medal, og the letters OG in cyan,
-verified and staff in Kick green (`#1eff00`→`#00ff8c`), bot blue. Only the *shape and colour*
-are copied — the paths are Kick's, and the app draws lucide equivalents instead.
+verified:11}` map in the same bundle. Guessing the shapes from Twitch's badges is what put a
+camera on Kick's broadcaster; Twitch's is a camera and its VIP a gem, while Kick's are a
+microphone and a crown. Two things had to be stripped on the way in: the founder badge hangs a
+240px base64 noise texture off an SVG `pattern` for a soft-light sheen — 66KB of its 67KB, and
+invisible at 17.6px — and every `<image>`/`<pattern>` goes with it. Everything else is kept
+verbatim, gradients included, so the badges are Kick's own rather than a lookalike.
 
-`sub_gifter` is the one Kick colours by *count*, through its own `getGiftBadgeMainColor`
-(1-4 green, 5-9 teal, 10-24 purple, 25-49 pink, 50-99 amber, and up); `Badge` carries no
-colour, so the app draws one purple gift for every tier rather than modelling the ramp.
+**`BADGE_GLYPH` is now Twitch's fallback, not Kick's.** With Kick drawing real art, the lucide
+map is only reached when Twitch's GQL badge query fails — so its icons are Twitch-shaped
+(camera, sword, gem) and must not be re-tuned to Kick's. `BadgeView` therefore takes
+`msg.platform`: Kick art is used only for Kick messages, or a Twitch outage would render a
+magenta Kick microphone next to a Twitch name. `sub_gifter` is the one Kick badge still on a
+glyph — Kick colours it by *count* through its own `getGiftBadgeMainColor` (1-4 green, 5-9
+teal, 10-24 purple, 25-49 pink, and up), which one static icon cannot express.
+
 Measured on eight live chatrooms, 2461 messages: the wire types that actually appear are
 `subscriber`, `sub_gifter`, `moderator`, `vip`, `founder`, `verified`, `og` and `bot`.
 
@@ -1282,6 +1291,7 @@ tests, so nothing bundles them. What is covered:
 | the whole zustand store, groups included | `renderer/store.ts` |
 | the tab-strip drag geometry | `renderer/components/tab-strip.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
+| Kick's inlined badge artwork | `renderer/components/badge-art.ts` |
 
 **Keep the tests out of `src/renderer`, and not only for tidiness.** Tailwind v4 scans the
 renderer root for class candidates and takes them from prose, not just from JSX. Four test

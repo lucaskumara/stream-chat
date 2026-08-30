@@ -1,23 +1,21 @@
 import { memo, useState } from 'react'
 import {
-  Award,
   BadgeCheck,
-  Bot,
   Coins,
   Crown,
+  Gem,
   Gift,
-  Hammer,
-  Medal,
-  Mic,
   Shield,
   ShieldCheck,
-  Sparkle,
-  Swords,
+  Star,
+  Sword,
+  Video,
   Wrench,
   Zap,
   type LucideIcon
 } from 'lucide-react'
-import type { Badge, ChatMessage, Fragment } from '@shared/types'
+import type { Badge, ChatMessage, Fragment, Platform } from '@shared/types'
+import { KICK_BADGE_ICON } from './badge-art'
 import { PLATFORM_COLOR } from './PlatformIcon'
 
 const KIND_LABEL: Partial<Record<ChatMessage['kind'], string>> = {
@@ -37,25 +35,21 @@ const KIND_ACCENT: Partial<Record<ChatMessage['kind'], string>> = {
 }
 
 const BADGE_GLYPH: Record<string, { icon: LucideIcon; color: string }> = {
-  broadcaster: { icon: Mic, color: '#ff4bd6' },
-  moderator: { icon: Hammer, color: '#38c8ff' },
-  sidekick: { icon: Swords, color: '#ff6a4a' },
-  vip: { icon: Crown, color: '#ffc900' },
-  subscriber: { icon: Sparkle, color: '#b8e03a' },
-  founder: { icon: Medal, color: '#feb635' },
-  og: { icon: Award, color: '#00e5db' },
-  sub_gifter: { icon: Gift, color: '#c070ff' },
-  verified: { icon: BadgeCheck, color: '#2ee86b' },
-  staff: { icon: Wrench, color: '#2ee86b' },
-  bot: { icon: Bot, color: '#4fd8ff' },
-
-  'sub-gifter': { icon: Gift, color: '#c070ff' },
-  global_mod: { icon: Shield, color: '#38c8ff' },
+  broadcaster: { icon: Video, color: '#f0685f' },
+  moderator: { icon: Sword, color: '#4ade80' },
+  global_mod: { icon: Shield, color: '#4ade80' },
+  vip: { icon: Gem, color: '#f472b6' },
+  subscriber: { icon: Star, color: '#a78bfa' },
+  founder: { icon: Crown, color: '#e0b252' },
+  staff: { icon: Wrench, color: '#b794f6' },
   admin: { icon: ShieldCheck, color: '#fbbf24' },
   partner: { icon: BadgeCheck, color: '#b794f6' },
+  verified: { icon: BadgeCheck, color: '#60a5fa' },
   bits: { icon: Coins, color: '#e0b252' },
   turbo: { icon: Zap, color: '#b794f6' },
-  premium: { icon: Crown, color: '#60a5fa' }
+  premium: { icon: Crown, color: '#60a5fa' },
+  sub_gifter: { icon: Gift, color: '#c070ff' },
+  'sub-gifter': { icon: Gift, color: '#c070ff' }
 }
 
 const DEFAULT_NAME_COLORS = [
@@ -129,13 +123,22 @@ function Emote({ name, url }: { name: string; url: string }): React.ReactElement
   )
 }
 
-function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
+function BadgeView({
+  badge,
+  platform
+}: {
+  badge: Badge
+  platform: Platform
+}): React.ReactElement {
   const [failed, setFailed] = useState(false)
 
-  if (badge.url && !failed) {
+  const src =
+    badge.url ?? (platform === 'kick' ? KICK_BADGE_ICON[badge.id ?? ''] : undefined)
+
+  if (src && !failed) {
     return (
       <img
-        src={badge.url}
+        src={src}
         srcSet={badge.srcSet}
         alt={badge.label}
         loading="lazy"
@@ -263,7 +266,7 @@ function MessageRowImpl({
         )}
 
         {msg.badges?.map((badge, i) => (
-          <BadgeView key={`${badge.label}-${i}`} badge={badge} />
+          <BadgeView key={`${badge.label}-${i}`} badge={badge} platform={msg.platform} />
         ))}
 
         <span
