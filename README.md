@@ -185,4 +185,4 @@ changes something.
 
 ## License
 
-MIT.
+[MIT](LICENSE).
