@@ -347,6 +347,7 @@ function badgesFor(channelLogin: string, badges: TwitchBadge[]): Badge[] {
     (badge) =>
       twitchBadges.lookup(channelLogin, badge.set_id, badge.id) ?? {
         label: badge.set_id,
+        id: badge.set_id,
       },
   );
 }
@@ -406,6 +407,7 @@ function buildSubscriptions(
 
 export class TwitchEventSubFeed implements ChatFeed {
   private registered = false;
+  private stopped = false;
 
   constructor(
     private readonly sourceId: string,
@@ -416,14 +418,15 @@ export class TwitchEventSubFeed implements ChatFeed {
   ) {}
 
   async start(): Promise<void> {
-    twitchBadges.load(this.channel.login);
-
     const viewerId = this.auth.getTokens()?.userId;
 
     if (!viewerId) {
       this.sink.failed("Twitch session is missing a user id. Sign in again.");
       return;
     }
+
+    await twitchBadges.ready(this.channel.login);
+    if (this.stopped) return;
 
     try {
       await this.hub.register(
@@ -438,6 +441,7 @@ export class TwitchEventSubFeed implements ChatFeed {
   }
 
   stop(): void {
+    this.stopped = true;
     if (!this.registered) return;
 
     this.registered = false;

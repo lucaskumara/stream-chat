@@ -43,6 +43,8 @@ interface ChatState {
   showSource: (sourceId: string) => void
   toggleSplit: (sourceId: string) => void
   ingest: (batch: ChatBatch) => void
+  setShowDeleted: (showDeleted: boolean) => void
+  setShowTimestamps: (showTimestamps: boolean) => void
   setSearch: (sourceId: string, terms: string[]) => void
   setSearchDraft: (sourceId: string, draft: string) => void
   addSearchTerm: (sourceId: string, term: string) => void
@@ -229,6 +231,10 @@ export const useStore = create<ChatState>()((set) => ({
 
       return { bySource: messages, deleted: sweptDeleted(deleted, messages) }
     }),
+
+  setShowDeleted: (showDeleted) => set({ showDeleted }),
+
+  setShowTimestamps: (showTimestamps) => set({ showTimestamps }),
 
   setSearch: (sourceId, terms) =>
     set((s) => ({ search: { ...s.search, [sourceId]: terms } })),

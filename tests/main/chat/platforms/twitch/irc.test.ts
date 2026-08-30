@@ -335,9 +335,21 @@ describe("normalizeIrcPrivmsg", () => {
     );
 
     expect(message.badges).toEqual([
-      { label: "subscriber" },
-      { label: "moderator" },
+      { label: "subscriber", id: "subscriber" },
+      { label: "moderator", id: "moderator" },
     ]);
+  });
+
+  // An unresolved badge keeps the set id so the renderer can draw its own glyph
+  // rather than a three-letter chip.
+  it("keeps the set id on a badge the set could not resolve", () => {
+    const [badge] = normalizeIrcPrivmsg(
+      privmsg({ badges: "broadcaster/1" }, "hi"),
+      "s",
+      "chan",
+    ).badges!;
+
+    expect(badge).toEqual({ label: "broadcaster", id: "broadcaster" });
   });
 
   it("leaves badges off entirely when the tag is empty", () => {

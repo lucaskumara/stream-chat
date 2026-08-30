@@ -1,6 +1,8 @@
 import type { Badge } from "@shared/types";
 import { twitchGql } from "./gql";
 
+const READY_DEADLINE_MS = 1_500;
+
 interface GqlBadge {
   setID: string;
   version: string;
@@ -28,16 +30,27 @@ class TwitchBadges {
 
   private readonly byChannel = new Map<string, Map<string, Badge>>();
 
-  private readonly loading = new Set<string>();
+  private readonly loading = new Map<string, Promise<void>>();
 
-  load(login: string): void {
-    if (this.byChannel.has(login) || this.loading.has(login)) return;
+  load(login: string): Promise<void> {
+    const running = this.loading.get(login);
+    if (running) return running;
 
-    this.loading.add(login);
+    if (this.byChannel.has(login)) return Promise.resolve();
 
-    void this.fetchFor(login)
-      .catch(() => this.byChannel.delete(login))
+    const fetching = this.fetchFor(login)
+      .catch(() => {
+        this.byChannel.delete(login);
+      })
       .finally(() => this.loading.delete(login));
+
+    this.loading.set(login, fetching);
+
+    return fetching;
+  }
+
+  ready(login: string): Promise<void> {
+    return Promise.race([this.load(login), expire(READY_DEADLINE_MS)]);
   }
 
   lookup(login: string, setId: string, version: string): Badge | null {
@@ -68,6 +81,10 @@ class TwitchBadges {
 
     return indexed;
   }
+}
+
+function expire(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs).unref());
 }
 
 export const twitchBadges = new TwitchBadges();

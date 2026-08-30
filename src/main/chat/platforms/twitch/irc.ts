@@ -223,7 +223,10 @@ function badgesFor(channelLogin: string, tag: string | undefined): Badge[] {
     const version = entry.slice(slash + 1);
 
     badges.push(
-      twitchBadges.lookup(channelLogin, setId, version) ?? { label: setId },
+      twitchBadges.lookup(channelLogin, setId, version) ?? {
+        label: setId,
+        id: setId,
+      },
     );
   }
 
@@ -340,6 +343,7 @@ const FATAL_NOTICE_IDS = ["msg_channel_suspended", "msg_banned"];
 
 export class TwitchIrcFeed implements ChatFeed {
   private leaveRoom: (() => void) | null = null;
+  private stopped = false;
 
   constructor(
     private readonly sourceId: string,
@@ -348,8 +352,9 @@ export class TwitchIrcFeed implements ChatFeed {
     private readonly hub: IrcHub,
   ) {}
 
-  start(): void {
-    twitchBadges.load(this.channel.login);
+  async start(): Promise<void> {
+    await twitchBadges.ready(this.channel.login);
+    if (this.stopped) return;
 
     this.leaveRoom = this.hub.join(this.channel.login, (_event, payload) =>
       this.route(payload as IrcMessage),
@@ -357,6 +362,8 @@ export class TwitchIrcFeed implements ChatFeed {
   }
 
   stop(): void {
+    this.stopped = true;
+
     this.leaveRoom?.();
     this.leaveRoom = null;
   }

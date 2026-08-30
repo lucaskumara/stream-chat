@@ -66,7 +66,10 @@ export class KickChannel extends Channel {
   }
 
   subscriberBadge(months: number): Badge {
-    let earned: Badge = { label: KickChannel.subscriberLabel(months) }
+    let earned: Badge = {
+      label: KickChannel.subscriberLabel(months),
+      id: 'subscriber'
+    }
 
     for (const tier of this.subscriberBadges) {
       if (tier.months > months) break

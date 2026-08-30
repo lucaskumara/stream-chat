@@ -423,3 +423,24 @@ describe('forgetSource', () => {
     expect(state().bySource['src-2']).toHaveLength(1)
   })
 })
+
+describe('display options', () => {
+  it('starts with both on', () => {
+    expect(state().showTimestamps).toBe(true)
+    expect(state().showDeleted).toBe(true)
+  })
+
+  // Both are app-wide, not per source: the pane bar's popover offers them to every chat.
+  it('toggles timestamps and deleted messages independently', () => {
+    state().setShowTimestamps(false)
+
+    expect(state().showTimestamps).toBe(false)
+    expect(state().showDeleted).toBe(true)
+
+    state().setShowDeleted(false)
+    state().setShowTimestamps(true)
+
+    expect(state().showTimestamps).toBe(true)
+    expect(state().showDeleted).toBe(false)
+  })
+})

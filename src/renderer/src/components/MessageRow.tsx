@@ -1,4 +1,20 @@
 import { memo, useState } from 'react'
+import {
+  BadgeCheck,
+  Coins,
+  Crown,
+  Gem,
+  Gift,
+  Shield,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Sword,
+  Video,
+  Wrench,
+  Zap,
+  type LucideIcon
+} from 'lucide-react'
 import type { Badge, ChatMessage, Fragment } from '@shared/types'
 import { PLATFORM_COLOR } from './PlatformIcon'
 
@@ -8,6 +24,33 @@ const KIND_LABEL: Partial<Record<ChatMessage['kind'], string>> = {
   raid: 'RAID',
   announcement: 'NOTICE',
   system: 'SYS'
+}
+
+const KIND_ACCENT: Partial<Record<ChatMessage['kind'], string>> = {
+  subscription: '#a78bfa',
+  donation: '#34d399',
+  raid: '#fbbf24',
+  announcement: '#60a5fa',
+  system: '#9ca3af'
+}
+
+const BADGE_GLYPH: Record<string, { icon: LucideIcon; color: string }> = {
+  broadcaster: { icon: Video, color: '#f0685f' },
+  moderator: { icon: Sword, color: '#4ade80' },
+  global_mod: { icon: Shield, color: '#4ade80' },
+  vip: { icon: Gem, color: '#f472b6' },
+  subscriber: { icon: Star, color: '#a78bfa' },
+  founder: { icon: Crown, color: '#e0b252' },
+  og: { icon: Sparkles, color: '#5eead4' },
+  sub_gifter: { icon: Gift, color: '#a78bfa' },
+  'sub-gifter': { icon: Gift, color: '#a78bfa' },
+  verified: { icon: BadgeCheck, color: '#60a5fa' },
+  partner: { icon: BadgeCheck, color: '#b794f6' },
+  staff: { icon: Wrench, color: '#b794f6' },
+  admin: { icon: ShieldCheck, color: '#fbbf24' },
+  bits: { icon: Coins, color: '#e0b252' },
+  turbo: { icon: Zap, color: '#b794f6' },
+  premium: { icon: Crown, color: '#60a5fa' }
 }
 
 const DEFAULT_NAME_COLORS = [
@@ -84,27 +127,43 @@ function Emote({ name, url }: { name: string; url: string }): React.ReactElement
 function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
   const [failed, setFailed] = useState(false)
 
-  if (!badge.url || failed) {
+  if (badge.url && !failed) {
     return (
-      <span
-        title={badge.label}
-        className="mr-1 rounded-sm bg-neutral-700/60 px-1 text-[length:var(--text-sm)] font-semibold tracking-wide text-neutral-300 uppercase"
-      >
-        {badge.label.slice(0, 3)}
-      </span>
+      <img
+        src={badge.url}
+        srcSet={badge.srcSet}
+        alt={badge.label}
+        loading="lazy"
+        draggable={false}
+        className="mr-1 inline-block h-[1.1em] w-[1.1em] align-middle"
+        onError={() => setFailed(true)}
+      />
+    )
+  }
+
+  const glyph = badge.id ? BADGE_GLYPH[badge.id] : undefined
+
+  if (glyph) {
+    const Glyph = glyph.icon
+
+    return (
+      <Glyph
+        size="1.1em"
+        strokeWidth={2.5}
+        aria-label={badge.label}
+        className="mr-1 inline-block align-middle"
+        style={{ color: glyph.color }}
+      />
     )
   }
 
   return (
-    <img
-      src={badge.url}
-      srcSet={badge.srcSet}
-      alt={badge.label}
-      loading="lazy"
-      draggable={false}
-      className="mr-1 inline-block h-[1.1em] w-[1.1em] align-middle"
-      onError={() => setFailed(true)}
-    />
+    <span
+      title={badge.label}
+      className="mr-1 rounded-sm bg-neutral-700/60 px-1 text-[length:var(--text-sm)] font-semibold tracking-wide text-neutral-300 uppercase"
+    >
+      {badge.label.slice(0, 3)}
+    </span>
   )
 }
 
@@ -155,13 +214,18 @@ function MessageRowImpl({
   onOpenLink
 }: MessageRowProps): React.ReactElement {
   const kindLabel = KIND_LABEL[msg.kind]
+  const accent = KIND_ACCENT[msg.kind]
 
   return (
     <div
       className={[
-        'px-2 py-[3px] text-[length:var(--chat-font-size)] leading-snug break-words',
+        'border-l-[3px] py-[3px] pr-2 pl-[5px] text-[length:var(--chat-font-size)] leading-snug break-words',
         deleted ? 'opacity-40' : ''
       ].join(' ')}
+      style={{
+        borderLeftColor: accent ?? 'transparent',
+        background: accent ? `${accent}14` : undefined
+      }}
     >
       {msg.replyTo && (
         <div className="truncate pl-1 text-[length:var(--text-sm)] text-neutral-500">
@@ -185,7 +249,10 @@ function MessageRowImpl({
         )}
 
         {kindLabel && (
-          <span className="mr-1 rounded-sm bg-amber-500/20 px-1 text-[length:var(--text-sm)] font-bold tracking-wide text-amber-300">
+          <span
+            className="mr-1 rounded-sm px-1 text-[length:var(--text-sm)] font-bold tracking-wide"
+            style={{ background: `${accent}2e`, color: accent }}
+          >
             {kindLabel}
           </span>
         )}

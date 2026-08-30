@@ -42,7 +42,7 @@ export function ChatLink({ sourceId }: { sourceId: string }): React.ReactElement
   }
 
   return (
-    <div style={{ width: 380 }}>
+    <div>
       <Typography.Text type="secondary">
         Add this in OBS as a custom browser dock, or a browser source.
       </Typography.Text>

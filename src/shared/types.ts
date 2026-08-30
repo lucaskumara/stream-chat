@@ -20,6 +20,8 @@ export type Fragment =
 export interface Badge {
   label: string
 
+  id?: string
+
   url?: string
   srcSet?: string
 }

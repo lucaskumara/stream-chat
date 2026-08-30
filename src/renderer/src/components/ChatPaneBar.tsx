@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo } from 'react'
 import { Button, Popconfirm, Popover, Select } from 'antd'
 import { AArrowDown, AArrowUp, RotateCcw, Search, Settings, Trash2 } from 'lucide-react'
 import { INK } from '../theme'
-import { ChatLink } from './ChatLink'
+import { ChatSettings } from './ChatSettings'
 import { termLabel } from '../search'
 import { CHAT_FONT_DEFAULT, CHAT_FONT_SIZES } from '../store'
 
@@ -109,8 +109,8 @@ function ChatPaneBarImpl({
       />
 
       <Popover
-        content={<ChatLink sourceId={sourceId} />}
-        title="Chat link"
+        content={<ChatSettings sourceId={sourceId} />}
+        title="Chat settings"
         trigger="click"
         placement="bottomRight"
         destroyOnHidden

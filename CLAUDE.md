@@ -14,7 +14,7 @@ lives — read it before touching the message pipeline, emotes, or either Twitch
 ```bash
 npm run dev        # electron-vite dev — launches the app and the renderer dev server
 npm run typecheck  # all three tsconfig projects; the fastest correctness gate
-npm run test       # vitest, the pure-logic suite — 362 cases in ~1.5s
+npm run test       # vitest, the pure-logic suite — 370 cases in ~1.5s
 npm run test:watch # the same suite, re-running as files change
 npm run build      # typecheck, then build main + preload + renderer
 ```
@@ -150,15 +150,26 @@ out.** Running the URL regex over the whole message is exactly what the fragment
 exists to avoid.
 
 **Badges are resolved to image URLs in the main process; the renderer only decides colour.**
-Every platform emits `ChatMessage.badges` as `{ label, url?, srcSet? }` — already looked up
-against that channel's badge set. A badge with no `url` is not a bug: Kick's `moderator`,
+Every platform emits `ChatMessage.badges` as `{ label, id?, url?, srcSet? }` — already looked
+up against that channel's badge set. A badge with no `url` is not a bug: Kick's `moderator`,
 `vip`, `og`, `sub_gifter` and `verified` have no image anywhere in its API (its own UI draws
-inline SVG), so `MessageRow` falls back to a three-letter chip. `authorColor`, by contrast,
+inline SVG). `authorColor`, by contrast,
 is set **only when the platform actually sends one** — Twitch's `color` tag is empty for
 users who never picked one, and YouTube has no such concept at all. The renderer fills the
 gap from `DEFAULT_NAME_COLORS` keyed on a hash of `authorId`, which is what Twitch's own
 client does. Do not invent a colour in main; a message either carries the user's choice or
 carries nothing.
+
+**`Badge.id` is what a badge with no image falls back *through*, and it is the platform's own
+set name — not the label.** `BADGE_GLYPH` in `MessageRow` maps `broadcaster`, `moderator`,
+`vip`, `subscriber`, `founder`, `og`, `sub_gifter`, `verified`, `partner`, `staff`, `admin`,
+`global_mod`, `bits`, `turbo` and `premium` onto a coloured lucide glyph; anything unmapped
+still gets the three-letter chip, which is the only `title` left in a message row. The id has
+to come from main because the label does not identify anything — Kick sends `text:
+"Broadcaster"`, Twitch's unresolved fallback carries the set id, and a label match would break
+the moment a platform changed its wording. Verified live: Kick draws a green sword for
+`moderator`, a purple gift for `sub_gifter` and a blue check for `verified`, all at 17.6px
+against a 16px row, with zero chips left over.
 
 **The legibility lift blends toward white — it must not scale channels.** Chat runs on
 `#12151a`, and platform-chosen names are picked against lighter backgrounds. `readableColor`
@@ -324,11 +335,17 @@ key. A channel's `broadcastBadges` only ever contains `subscriber` and `bits` �
 set is global — but subscriber tiers and cheer tiers are exactly the ones that differ per
 channel, so checking the channel map first is not optional.
 
-**`TwitchBadges.load()` is fire-and-forget, called from each feed's `start()`.** Nothing
-awaits it, so the first second of a channel renders unbadged and then fills in. That is
-deliberate: `ChatFeed.start()` is synchronous for IRC, and blocking a chat connection on a
-cosmetic fetch is the wrong trade. `lookup()` is synchronous and returns `{ label: setId }`
-when the fetch has not landed yet.
+**Both Twitch feeds `await twitchBadges.ready()` before they join, and the deadline is the
+whole point.** `lookup()` is synchronous and resolution happens once, at map time, into an
+immutable `ChatMessage` — so a message mapped before the badge fetch lands keeps
+`{ label: setId, id: setId }` **forever**. It does not fill in later; an earlier version of
+this note claimed it did. That window is not theoretical: `IrcHub` is shared, so the second
+Twitch channel added joins an already-open socket in ~50ms while the GQL badge query takes
+200-400ms, and the first second of a busy chat rendered as chips. `ready()` races `load()`
+against `READY_DEADLINE_MS` (1.5s), so a dead or slow gql.twitch.tv costs a bounded delay
+before joining rather than a permanently unbadged first second. Both feeds also need a
+`stopped` guard, because `stop()` can now land during that await. Verified live on a 50k-viewer
+channel: 26 badge images including channel subscriber tiers, zero fallbacks in the first frame.
 
 **`user:read:chat` alone is enough to read *any* channel's chat.** Moderator status is only
 required for app access tokens. This is what makes "add a channel by name" work after a
@@ -676,6 +693,14 @@ the first source on cold start. Panes render inside a `Splitter` with no per-pan
 the tab strip already names every open channel and columns map left to right onto tab order —
 but each pane does carry a `ChatPaneBar` along its top edge (see "The pane bar").
 
+**A message kind is drawn as an accent, not just a chip.** `KIND_ACCENT` in `MessageRow`
+gives `subscription`, `donation`, `raid`, `announcement` and `system` a colour, painted as a
+3px left border, a ~8% background wash and the `KIND_LABEL` chip's own tint. The border is
+always in the layout — `chat` rows carry it transparent — so a notice arriving mid-scroll
+cannot shift the text of every other row sideways. Both maps are keyed on the same five kinds;
+a kind in one and not the other renders a chip with `undefined` colours. Twitch is still the
+only platform that emits any of them, so this whole path is dark on Kick and YouTube.
+
 **The chrome does not explain itself on hover.** The pane bar's icon buttons, the search
 field, the pin, and emote and badge *images* all carry `aria-label` but no `title`, so nothing
 pops a caption while you read chat. The one `title` left in a message row is on the
@@ -699,6 +724,13 @@ hands out that chat's OBS link. Both are keyed by `sourceId` — `store.search[s
 `clearSource(sourceId)` — because `App` renders a different tree for one pane than for
 several, so a pane *remounts* when the split changes and local `useState` would silently drop
 the search. `forgetSource` deletes both search entries alongside the messages.
+
+**Two things in that popover are *not* per source, and it says so.** `ChatSettings` puts the
+`showTimestamps` and `showDeleted` switches above the OBS link, under an "Every chat" caption,
+because both are single flags on the store rather than records keyed by `sourceId` — flipping
+one in any pane flips it in all of them, and the caption is the only thing that makes that
+predictable. They read the store directly rather than arriving as props, so `ChatPaneBar`'s
+prop list (and its `memo`) is untouched by them.
 
 **The filter is a comma-separated term list, parsed in `search.ts`.** A bare term matches
 message text; `author:` (or `from:`) matches the sender; terms are ANDed, so
@@ -1185,10 +1217,9 @@ its OBS link.
 Every chat is also readable outside the app, at a loopback URL OBS can dock — see "OBS
 links".
 
-Next: polish — settings persistence, sending messages back, auto-update. `fontSize` is now
-driven by the pane bar, but the store still carries `showDeleted` and `showTimestamps` with
-**no UI bound to them** — an antd `Popover` of `Switch`es hung off the tab strip is the
-obvious home when settings persistence lands.
+Next: polish — settings persistence, sending messages back, auto-update. `fontSize`,
+`showDeleted` and `showTimestamps` are all driven from the pane bar now; nothing in the store
+is unbound.
 
 Nothing survives a restart. The app opens with no channels every time, by design — see
 "Nothing is persisted but the Twitch token".
@@ -1202,10 +1233,6 @@ YouTube super-chats and memberships are **not** mapped at all — see the YouTub
 `chat`** — `subscription`, `raid`, `announcement` and `system` come from IRC `USERNOTICE`
 (and the EventSub equivalent), `donation` from the `bits` tag. Kick and YouTube hard-code
 `kind: 'chat'`, so any UI keyed on message kind is Twitch-only in practice.
-
-Known rough edge: Kick reply excerpts are the raw `content` sliced at 60 chars, so a reply to
-an emote-only message shows a bare `[emote:12345:name]` token. Pre-existing; fix by running
-the excerpt through `toFragments` in `platforms/kick/index.ts`.
 
 ## Verifying changes
 
@@ -1225,7 +1252,7 @@ tests, so nothing bundles them. What is covered:
 | link splitting, plain text, backoff, replay guard, id composition | `chat/links.ts`, `chat/fragments.ts`, `chat/backoff.ts`, `chat/recent-ids.ts`, `chat/watcher.ts` |
 | IRC parsing and both message mappings | `platforms/twitch/irc.ts` |
 | the emote URL builder both transports share | `platforms/twitch/emotes.ts` |
-| Kick's inline emote tokens | `platforms/kick/index.ts` |
+| Kick's inline emote tokens, badge ids and reply excerpts | `platforms/kick/index.ts` |
 | YouTube's poll clamp | `platforms/youtube/index.ts` |
 | third-party emote substitution | `emotes/index.ts` |
 | the dock backlog and the batching bus | `backlog.ts`, `bus.ts` |
@@ -1262,8 +1289,8 @@ Give these hooks braces. `vi.useFakeTimers()` and `vi.unstubAllGlobals()` are sa
 either way — they return the `vi` object, which is not callable.
 
 **Some functions are exported only so a test can reach them.** `parseIrcLine`,
-`buildIrcFragments`, the two IRC normalizers, Kick's `toFragments`, YouTube's `clampPoll`
-and the five `ipc.ts` validators are not imported anywhere else. Removing an export because
+`buildIrcFragments`, the two IRC normalizers, Kick's `toFragments` and `toChatMessage`,
+YouTube's `clampPoll` and the five `ipc.ts` validators are not imported anywhere else. Removing an export because
 "nothing uses it" will break the suite.
 
 **What the suite does not cover**, and what therefore still needs the running app: every

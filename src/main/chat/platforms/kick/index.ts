@@ -146,7 +146,7 @@ class KickChatFeed implements ChatFeed {
   }
 }
 
-function toChatMessage(
+export function toChatMessage(
   event: ChatMessageEvent,
   sourceId: string,
   channel: KickChannel,
@@ -195,7 +195,7 @@ function toBadges(
     badges.push(
       badge.type === "subscriber"
         ? channel.subscriberBadge(badge.count ?? 1)
-        : { label: badge.text ?? badge.type },
+        : { label: badge.text ?? badge.type, id: badge.type },
     );
   }
 
@@ -248,7 +248,10 @@ function toReply(
   return {
     messageId: messageId("kick", sourceId, original.id),
     authorName: author,
-    excerpt: (original.content ?? "").slice(0, REPLY_EXCERPT_LIMIT),
+    excerpt: plainTextOf(toFragments(original.content ?? "")).slice(
+      0,
+      REPLY_EXCERPT_LIMIT,
+    ),
   };
 }
 
