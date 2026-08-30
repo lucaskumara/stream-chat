@@ -458,19 +458,27 @@ Providers self-stagger because each schedules its next poll after its own respon
 would re-resolve in lockstep every 120s, each pulling ~130KB. Resolve is ~130KB on the wire
 gzipped (1.2MB raw), not free.
 
-**Resolving the handle is also the existence check, and the only place a name is
-learned.** `resolveURL('/@handle/live')` answers a browse endpoint carrying
-`browseId` when the channel exists and 404s when it does not — which
-`classifyFailure` turns into the terminal `missing`. It carries `videoId` only
-while the channel is live, so a dark channel yields a `browseId` and nothing
-else. `channelName(browseId)` then fetches the title through `getChannel`, cached
-in a module-level `Map` because an offline channel re-resolves every couple of
-minutes and its title is the one thing that does not change. Without this a
-YouTube tab shows the raw identifier — `@theburntpeanut` rather than
-`TheBurntPeanut` — until the channel happens to go live, because
-`info.basic_info.author` only exists on a live video. `ChannelLookup`'s `offline`
-variant carries the optional `displayName` for exactly this, and
-`BaseChatWatcher` renames on it before firing the status event.
+**Resolving the handle is also the existence check, and the name is learned on two
+different paths — both of which have to carry it.** `resolveURL('/@handle/live')`
+answers a browse endpoint carrying `browseId` when the channel exists and 404s when
+it does not, which `classifyFailure` turns into the terminal `missing`. Which id
+comes back is **not** a clean live-versus-dark split, and assuming it was is what
+left tabs showing raw handles: a channel whose stream has recently *ended* still
+resolves to that stream's `videoId` and carries no `browseId` at all — measured on
+`@excorpse`, which answered `videoId` with `is_live: false`. So:
+
+- **`browseId` only** — `channelName(browseId)` fetches the title through
+  `getChannel`, cached in a module-level `Map` because an offline channel
+  re-resolves every couple of minutes and its title is the one thing that does not
+  change.
+- **`videoId`** — `inspectStream` reads `info.basic_info.author`, which is present
+  whether or not the video is live, and must put it on its two `offline` returns as
+  well as the `ok` one. Dropping it there is exactly the bug above: the name was in
+  hand and thrown away, so the tab read `@excorpse` instead of `Excorpse` until the
+  channel happened to go live again.
+
+`ChannelLookup`'s `offline` variant carries the optional `displayName` for exactly
+this, and `BaseChatWatcher` renames on it before firing the status event.
 
 **Never percent-encode the `@` in a handle URL.** `resolveURL` is given
 `youtube.com/@handle/live`; running the whole handle through `encodeURIComponent` yields

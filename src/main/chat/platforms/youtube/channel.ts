@@ -110,8 +110,10 @@ async function inspectStream(
   const youtube = await innertube();
   const info = await youtube.getInfo(videoId);
 
+  const displayName = info.basic_info.author;
+
   if (!info.basic_info.is_live) {
-    return { state: "offline", reason: "not streaming right now" };
+    return { state: "offline", reason: "not streaming right now", displayName };
   }
 
   const continuation = info.livechat?.continuation;
@@ -119,13 +121,14 @@ async function inspectStream(
     return {
       state: "offline",
       reason: "live chat is turned off for this stream",
+      displayName,
     };
   }
 
   return {
     state: "ok",
     channel: new YouTubeChannel(
-      info.basic_info.author ?? "",
+      displayName ?? "",
       continuation,
       info.basic_info.channel_id ?? "",
     ),

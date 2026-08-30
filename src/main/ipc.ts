@@ -141,9 +141,11 @@ export function parseSourceIds(value: unknown): string[] {
 }
 
 export function parseWebUrl(value: unknown): string {
+  const raw = requireString(value, 'url')
+
   let parsed: URL
   try {
-    parsed = new URL(requireString(value, 'url'))
+    parsed = new URL(raw)
   } catch {
     throw new Error('invalid url')
   }

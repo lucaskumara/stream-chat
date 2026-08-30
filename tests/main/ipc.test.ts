@@ -71,11 +71,9 @@ describe('parseWebUrl', () => {
     expect(() => parseWebUrl('not a url')).toThrow(/invalid url/)
   })
 
-  // requireString is called inside the try, so its "url must be a string" message
-  // is swallowed and every bad input reads as "invalid url". Refused either way.
-  it('refuses a non-string', () => {
+  it('names the field when handed a non-string, rather than reporting a bad url', () => {
     for (const value of [null, undefined, 7, {}]) {
-      expect(() => parseWebUrl(value)).toThrow(/invalid url/)
+      expect(() => parseWebUrl(value)).toThrow(/url must be a string/)
     }
   })
 })
