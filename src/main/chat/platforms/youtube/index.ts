@@ -18,6 +18,7 @@ import {
 } from "../../watcher";
 import type { ChannelLookup, RetryPolicy } from "../../channel";
 import { splitLinks } from "../../links";
+import { plainTextOf } from "../../fragments";
 import { RecentIds } from "../../recent-ids";
 import { resolveChannel, type YouTubeChannel } from "./channel";
 import { innertube } from "./connection";
@@ -226,7 +227,7 @@ function toChatMessage(
     authorId: item.author?.id ?? "",
     authorName: item.author?.name?.toString() ?? "unknown",
     fragments,
-    plainText: fragments.map(fragmentText).join(""),
+    plainText: plainTextOf(fragments),
     timestamp: toTimestamp(item.timestamp),
   };
 
@@ -238,31 +239,29 @@ function toChatMessage(
   return message;
 }
 
+function scaledImage(
+  thumbnails: Thumbnail[] | undefined,
+): { url: string; srcSet: string } | null {
+  const scales = [...(thumbnails ?? [])].sort(
+    (a, b) => (a.width ?? 0) - (b.width ?? 0),
+  );
+  if (scales.length === 0) return null;
+
+  return {
+    url: scales[0]?.url ?? "",
+    srcSet: scales
+      .map((scale, index) => `${scale.url} ${index + 1}x`)
+      .join(", "),
+  };
+}
+
 function toBadges(authorBadges: AuthorBadge[]): Badge[] {
-  const badges: Badge[] = [];
-
-  for (const badge of authorBadges) {
+  return authorBadges.map((badge) => {
     const label = badge.tooltip ?? badge.label ?? badge.icon_type ?? "";
+    const image = scaledImage(badge.custom_thumbnail);
 
-    const scales = [...(badge.custom_thumbnail ?? [])].sort(
-      (a, b) => (a.width ?? 0) - (b.width ?? 0),
-    );
-
-    if (scales.length === 0) {
-      badges.push({ label });
-      continue;
-    }
-
-    badges.push({
-      label,
-      url: scales[0]?.url ?? "",
-      srcSet: scales
-        .map((scale, index) => `${scale.url} ${index + 1}x`)
-        .join(", "),
-    });
-  }
-
-  return badges;
+    return image ? { label, ...image } : { label };
+  });
 }
 
 function toFragments(item: YTNodes.LiveChatTextMessage): Fragment[] {
@@ -283,24 +282,11 @@ function toFragments(item: YTNodes.LiveChatTextMessage): Fragment[] {
 
 function toEmojiFragment(emoji: NonNullable<EmojiRun["emoji"]>): Fragment {
   const name = emoji.shortcuts?.[0] ?? emoji.emoji_id ?? "";
+  const image = emoji.is_custom ? scaledImage(emoji.image) : null;
 
-  const scales = [...(emoji.image ?? [])].sort(
-    (a, b) => (a.width ?? 0) - (b.width ?? 0),
-  );
+  if (!image) return { kind: "text", text: emoji.emoji_id ?? name };
 
-  if (!emoji.is_custom || scales.length === 0) {
-    return { kind: "text", text: emoji.emoji_id ?? name };
-  }
-
-  return {
-    kind: "emote",
-    name,
-    url: scales[0]?.url ?? "",
-    srcSet: scales
-      .map((scale, index) => `${scale.url} ${index + 1}x`)
-      .join(", "),
-    provider: "native",
-  };
+  return { kind: "emote", name, ...image, provider: "native" };
 }
 
 function mergeAdjacentText(fragments: Fragment[]): Fragment[] {
@@ -320,10 +306,6 @@ function mergeAdjacentText(fragments: Fragment[]): Fragment[] {
   return merged.filter(
     (fragment) => fragment.kind !== "text" || fragment.text.length > 0,
   );
-}
-
-function fragmentText(fragment: Fragment): string {
-  return fragment.kind === "emote" ? fragment.name : fragment.text;
 }
 
 function toTimestamp(timestamp: number | undefined): number {

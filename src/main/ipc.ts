@@ -35,6 +35,17 @@ export const IPC = {
   twitchAuth: 'twitch:auth'
 } as const
 
+type IpcHandler = Parameters<typeof ipcMain.handle>[1]
+
+const registered = new Set<string>()
+
+/** One registration list, so a handler cannot be added without also becoming
+    removable — the second, hand-copied list this replaced could drift silently. */
+function handle(channel: string, listener: IpcHandler): void {
+  registered.add(channel)
+  ipcMain.handle(channel, listener)
+}
+
 export function registerIpc(sources: SourceManager, auth: TwitchAuth, obs: ObsServer): void {
   registerSourceHandlers(sources)
   registerShellHandlers()
@@ -44,27 +55,27 @@ export function registerIpc(sources: SourceManager, auth: TwitchAuth, obs: ObsSe
 }
 
 function registerSourceHandlers(sources: SourceManager): void {
-  ipcMain.handle(IPC.listSources, () => sources.list())
+  handle(IPC.listSources, () => sources.list())
 
-  ipcMain.handle(IPC.addSource, async (_e, request: unknown) =>
+  handle(IPC.addSource, async (_e, request: unknown) =>
     sources.add(parseAddSource(request))
   )
 
-  ipcMain.handle(IPC.removeSource, async (_e, sourceId: unknown) => {
+  handle(IPC.removeSource, async (_e, sourceId: unknown) => {
     await sources.remove(requireString(sourceId, 'sourceId'))
   })
 
-  ipcMain.handle(IPC.reorderSources, (_e, orderedIds: unknown) => {
+  handle(IPC.reorderSources, (_e, orderedIds: unknown) => {
     sources.reorder(parseSourceIds(orderedIds))
   })
 }
 
 function registerShellHandlers(): void {
-  ipcMain.handle(IPC.openExternal, async (_e, url: unknown) => {
+  handle(IPC.openExternal, async (_e, url: unknown) => {
     await shell.openExternal(parseWebUrl(url))
   })
 
-  ipcMain.handle(IPC.copyText, (_e, text: unknown) => {
+  handle(IPC.copyText, (_e, text: unknown) => {
     clipboard.writeText(requireString(text, 'text').slice(0, MAX_COPY_LENGTH))
   })
 }
@@ -72,7 +83,7 @@ function registerShellHandlers(): void {
 /** Main owns the port and the key spelling, so the renderer asks for a finished
     link rather than assembling one. Null means the link server never bound. */
 function registerObsHandlers(sources: SourceManager, obs: ObsServer): void {
-  ipcMain.handle(IPC.obsLink, (_e, sourceId: unknown) => {
+  handle(IPC.obsLink, (_e, sourceId: unknown) => {
     const base = obs.baseUrl()
     if (!base) return null
 
@@ -84,9 +95,9 @@ function registerObsHandlers(sources: SourceManager, obs: ObsServer): void {
 }
 
 function registerWindowHandlers(): void {
-  ipcMain.handle(IPC.windowMinimize, (event) => senderWindow(event)?.minimize())
+  handle(IPC.windowMinimize, (event) => senderWindow(event)?.minimize())
 
-  ipcMain.handle(IPC.windowToggleMaximize, (event) => {
+  handle(IPC.windowToggleMaximize, (event) => {
     const window = senderWindow(event)
     if (!window) return
 
@@ -94,9 +105,9 @@ function registerWindowHandlers(): void {
     else window.maximize()
   })
 
-  ipcMain.handle(IPC.windowClose, (event) => senderWindow(event)?.close())
+  handle(IPC.windowClose, (event) => senderWindow(event)?.close())
 
-  ipcMain.handle(IPC.windowIsMaximized, (event) => senderWindow(event)?.isMaximized() ?? false)
+  handle(IPC.windowIsMaximized, (event) => senderWindow(event)?.isMaximized() ?? false)
 }
 
 function senderWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow | null {
@@ -104,33 +115,18 @@ function senderWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow | null 
 }
 
 function registerTwitchAuthHandlers(sources: SourceManager, auth: TwitchAuth): void {
-  ipcMain.handle(IPC.twitchAuthState, () => buildAuthState(auth))
-  ipcMain.handle(IPC.twitchStartLogin, async () => auth.startDeviceFlow())
-  ipcMain.handle(IPC.twitchSignOut, async () => {
+  handle(IPC.twitchAuthState, () => buildAuthState(auth))
+  handle(IPC.twitchStartLogin, async () => auth.startDeviceFlow())
+  handle(IPC.twitchSignOut, async () => {
     await sources.removeByPlatform('twitch')
     auth.signOut()
   })
 }
 
 export function unregisterIpc(): void {
-  for (const channel of [
-    IPC.listSources,
-    IPC.addSource,
-    IPC.removeSource,
-    IPC.reorderSources,
-    IPC.openExternal,
-    IPC.copyText,
-    IPC.obsLink,
-    IPC.windowMinimize,
-    IPC.windowToggleMaximize,
-    IPC.windowClose,
-    IPC.windowIsMaximized,
-    IPC.twitchAuthState,
-    IPC.twitchStartLogin,
-    IPC.twitchSignOut
-  ]) {
-    ipcMain.removeHandler(channel)
-  }
+  for (const channel of registered) ipcMain.removeHandler(channel)
+
+  registered.clear()
 }
 
 function requireString(value: unknown, field: string): string {

@@ -72,6 +72,26 @@ export default function App(): React.ReactElement {
 
   const panes = sources.filter((source) => visibleIds.includes(source.id))
 
+  const renderPane = (source: SourceState): React.ReactElement => (
+    <ChatPane
+      sourceId={source.id}
+      messages={bySource[source.id] ?? []}
+      deleted={deleted}
+      showDeleted={showDeleted}
+      showTimestamps={showTimestamps}
+      showPlatform={false}
+      searchTerms={search[source.id] ?? EMPTY_TERMS}
+      searchDraft={searchDraft[source.id] ?? ''}
+      onSearchTerms={(terms) => setSearch(source.id, terms)}
+      onSearchDraft={(draft) => setSearchDraft(source.id, draft)}
+      onAddSearchTerm={(term) => addSearchTerm(source.id, term)}
+      fontSize={fontSize[source.id] ?? CHAT_FONT_DEFAULT}
+      onFontStep={(steps) => stepFontSize(source.id, steps)}
+      onFontReset={() => resetFontSize(source.id)}
+      onClear={() => clearSource(source.id)}
+    />
+  )
+
   return (
     <Layout style={{ height: '100%' }}>
       <TitleBar />
@@ -99,44 +119,12 @@ export default function App(): React.ReactElement {
 
           <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
             {panes.length === 1 ? (
-              <ChatPane
-                sourceId={panes[0].id}
-                deleted={deleted}
-                showDeleted={showDeleted}
-                showTimestamps={showTimestamps}
-                searchTerms={search[panes[0].id] ?? EMPTY_TERMS}
-                searchDraft={searchDraft[panes[0].id] ?? ''}
-                onSearchTerms={(terms) => setSearch(panes[0].id, terms)}
-                onSearchDraft={(draft) => setSearchDraft(panes[0].id, draft)}
-                onAddSearchTerm={(term) => addSearchTerm(panes[0].id, term)}
-                fontSize={fontSize[panes[0].id] ?? CHAT_FONT_DEFAULT}
-                onFontStep={(steps) => stepFontSize(panes[0].id, steps)}
-                onFontReset={() => resetFontSize(panes[0].id)}
-                onClear={() => clearSource(panes[0].id)}
-                messages={bySource[panes[0].id] ?? []}
-                showPlatform={false}
-              />
+              renderPane(panes[0])
             ) : (
               <Splitter style={{ height: '100%', width: '100%' }}>
                 {panes.map((source) => (
                   <Splitter.Panel key={source.id} min={220}>
-                    <ChatPane
-                      sourceId={source.id}
-                      deleted={deleted}
-                      showDeleted={showDeleted}
-                      showTimestamps={showTimestamps}
-                      searchTerms={search[source.id] ?? EMPTY_TERMS}
-                      searchDraft={searchDraft[source.id] ?? ''}
-                      onSearchTerms={(terms) => setSearch(source.id, terms)}
-                      onSearchDraft={(draft) => setSearchDraft(source.id, draft)}
-                      onAddSearchTerm={(term) => addSearchTerm(source.id, term)}
-                      fontSize={fontSize[source.id] ?? CHAT_FONT_DEFAULT}
-                      onFontStep={(steps) => stepFontSize(source.id, steps)}
-                      onFontReset={() => resetFontSize(source.id)}
-                      onClear={() => clearSource(source.id)}
-                      messages={bySource[source.id] ?? []}
-                      showPlatform={false}
-                    />
+                    {renderPane(source)}
                   </Splitter.Panel>
                 ))}
               </Splitter>

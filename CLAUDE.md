@@ -54,8 +54,8 @@ under the **same filenames**. If you know one folder you know all three:
 `channel.ts` and `index.ts` are mandatory; `connection.ts` exists only where a socket or
 session is shared across channels (Kick's Pusher socket, YouTube's `Innertube`). Twitch
 carries two transports, so each gets its own file — `irc.ts` and `eventsub.ts` — holding
-that transport's hub, feed and mapping together, plus `badges.ts`, which both transports
-share. Mapping is **not** a separate file: it
+that transport's hub, feed and mapping together, plus `badges.ts` and `emotes.ts`, which
+both transports share. Mapping is **not** a separate file: it
 lives beside the feed that produces it, as module-level `toChatMessage` / `toFragments`
 functions under the exported class.
 
@@ -68,6 +68,7 @@ src/main/chat/       the framework:
   channel.ts           Channel (abstract base), ChannelLookup, RetryPolicy
   socket.ts            RoomSocket — join/leave/keepalive/reconnect for multiplexed sockets
   links.ts             splitLinks
+  fragments.ts         plainTextOf + REPLY_EXCERPT_LIMIT, shared by every mapping
   backoff.ts           reconnectDelayMs, shared by every socket
   recent-ids.ts        bounded replay guard (YouTube only, today)
   index.ts             createWatcher registry + PlatformServices
@@ -78,7 +79,8 @@ src/main/obs/         server.ts — the loopback link server OBS docks connect t
 src/main/twitch/      auth.ts, helix.ts, state.ts, clientId.ts — account only, no wire code
 src/main/emotes/      7TV + BTTV, reached through Channel.emotes — see "Emotes" below
 src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the antd ThemeConfig),
-                      search.ts (the pane filter grammar), components/
+                      search.ts (the pane filter grammar), components/ — whose
+                      tab-strip.ts holds the drag geometry ChannelTabs.tsx draws with
 src/renderer/src/obs/ the OBS dock page — a second renderer entry, no antd
 ```
 

@@ -8,6 +8,7 @@ import {
 } from "../../watcher";
 import type { ChannelLookup, RetryPolicy } from "../../channel";
 import { splitLinks } from "../../links";
+import { plainTextOf, REPLY_EXCERPT_LIMIT } from "../../fragments";
 import { resolveChannel, type KickChannel } from "./channel";
 import { kickSocket } from "./connection";
 
@@ -20,8 +21,6 @@ const EVENT = {
 
 const EMOTE_TOKEN = /\[emote:(\d+):([^\]]*)\]/g;
 const EMOTE_CDN = "https://files.kick.com/emotes";
-
-const REPLY_EXCERPT_LIMIT = 60;
 
 interface KickBadge {
   type?: string;
@@ -167,7 +166,7 @@ function toChatMessage(
     authorId: sender.id === undefined ? sender.username : String(sender.id),
     authorName: sender.username,
     fragments,
-    plainText: fragments.map(fragmentText).join(""),
+    plainText: plainTextOf(fragments),
     timestamp: toTimestamp(event.created_at),
   };
 
@@ -251,10 +250,6 @@ function toReply(
     authorName: author,
     excerpt: (original.content ?? "").slice(0, REPLY_EXCERPT_LIMIT),
   };
-}
-
-function fragmentText(fragment: Fragment): string {
-  return fragment.kind === "emote" ? fragment.name : fragment.text;
 }
 
 function toTimestamp(createdAt: string | undefined): number {

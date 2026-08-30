@@ -74,8 +74,4 @@ export class BttvEmotes {
   lookup(twitchId: string, name: string): ThirdPartyEmote | undefined {
     return this.byChannel.get(twitchId)?.get(name) ?? this.global?.get(name)
   }
-
-  count(twitchId: string): number {
-    return this.byChannel.get(twitchId)?.size ?? 0
-  }
 }

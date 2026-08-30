@@ -30,7 +30,7 @@ type Reference =
   | { kind: "video"; videoId: string }
   | { kind: "page"; url: string; label: string };
 
-export function referenceFor(identifier: string): Reference {
+function referenceFor(identifier: string): Reference {
   const value = identifier.trim();
 
   if (VIDEO_ID.test(value) && !value.startsWith("@")) {

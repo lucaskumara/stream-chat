@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type {
   ChatBatch,
   ChatMessage,
+  ModerationEvent,
   SourceState,
   TwitchAuthState
 } from '@shared/types'
@@ -17,12 +18,12 @@ export const CHAT_FONT_DEFAULT = 16
 
 interface ChatState {
   sources: SourceState[]
-  bySource: Record<string, ChatMessage[]>
+  bySource: Messages
 
   visibleIds: string[]
   groups: string[][]
 
-  deleted: Record<string, true>
+  deleted: Deleted
 
   search: Record<string, string[]>
   searchDraft: Record<string, string>
@@ -51,12 +52,94 @@ interface ChatState {
   forgetSource: (sourceId: string) => void
 }
 
+type Messages = Record<string, ChatMessage[]>
+type Deleted = Record<string, true>
+
 function capped(arr: ChatMessage[], capacity: number): ChatMessage[] {
   return arr.length > capacity ? arr.slice(arr.length - capacity) : arr
 }
 
 function pruneGroups(groups: string[][], keep: (sourceId: string) => boolean): string[][] {
   return groups.map((group) => group.filter(keep)).filter((group) => group.length > 1)
+}
+
+function omit<T>(record: Record<string, T>, key: string): Record<string, T> {
+  const next = { ...record }
+  delete next[key]
+
+  return next
+}
+
+function appended(held: Messages, incoming: ChatMessage[], capacity: number): Messages {
+  if (incoming.length === 0) return held
+
+  const grouped = new Map<string, ChatMessage[]>()
+  for (const msg of incoming) {
+    const list = grouped.get(msg.sourceId)
+    if (list) list.push(msg)
+    else grouped.set(msg.sourceId, [msg])
+  }
+
+  const next = { ...held }
+  for (const [sourceId, msgs] of grouped) {
+    next[sourceId] = capped((next[sourceId] ?? []).concat(msgs), capacity)
+  }
+
+  return next
+}
+
+function moderated(
+  held: Messages,
+  deleted: Deleted,
+  events: ModerationEvent[]
+): { messages: Messages; deleted: Deleted } {
+  if (events.length === 0) return { messages: held, deleted }
+
+  let messages = held
+  const struck: Deleted = { ...deleted }
+  let struckAny = false
+
+  for (const event of events) {
+    switch (event.type) {
+      case 'delete-message':
+        struck[event.messageId] = true
+        struckAny = true
+        break
+
+      case 'clear-user':
+        for (const msg of messages[event.sourceId] ?? []) {
+          if (msg.authorId !== event.userId) continue
+
+          struck[msg.id] = true
+          struckAny = true
+        }
+        break
+
+      case 'clear-chat':
+        messages = { ...messages, [event.sourceId]: [] }
+        break
+    }
+  }
+
+  return { messages, deleted: struckAny ? struck : deleted }
+}
+
+/** Ids of messages already evicted from every ring buffer can never be looked up
+    again, so the strike set is swept back down to what is still on screen. */
+function sweptDeleted(deleted: Deleted, messages: Messages): Deleted {
+  if (Object.keys(deleted).length <= DELETED_LIMIT) return deleted
+
+  const live = new Set<string>()
+  for (const list of Object.values(messages)) {
+    for (const msg of list) live.add(msg.id)
+  }
+
+  const kept: Deleted = {}
+  for (const id of Object.keys(deleted)) {
+    if (live.has(id)) kept[id] = true
+  }
+
+  return kept
 }
 
 export const useStore = create<ChatState>()((set) => ({
@@ -141,68 +224,10 @@ export const useStore = create<ChatState>()((set) => ({
     set((s) => {
       if (batch.messages.length === 0 && batch.moderation.length === 0) return s
 
-      const capacity = s.capacity
-      let bySource = s.bySource
-      let deleted = s.deleted
+      const appendedTo = appended(s.bySource, batch.messages, s.capacity)
+      const { messages, deleted } = moderated(appendedTo, s.deleted, batch.moderation)
 
-      if (batch.messages.length > 0) {
-        const grouped = new Map<string, ChatMessage[]>()
-        for (const msg of batch.messages) {
-          const list = grouped.get(msg.sourceId)
-          if (list) list.push(msg)
-          else grouped.set(msg.sourceId, [msg])
-        }
-
-        bySource = { ...bySource }
-        for (const [sourceId, msgs] of grouped) {
-          bySource[sourceId] = capped((bySource[sourceId] ?? []).concat(msgs), capacity)
-        }
-      }
-
-      if (batch.moderation.length > 0) {
-        let deletedChanged = false
-        const nextDeleted: Record<string, true> = { ...deleted }
-
-        for (const evt of batch.moderation) {
-          switch (evt.type) {
-            case 'delete-message': {
-              nextDeleted[evt.messageId] = true
-              deletedChanged = true
-              break
-            }
-            case 'clear-user': {
-              for (const msg of bySource[evt.sourceId] ?? []) {
-                if (msg.authorId === evt.userId) {
-                  nextDeleted[msg.id] = true
-                  deletedChanged = true
-                }
-              }
-              break
-            }
-            case 'clear-chat': {
-              if (bySource === s.bySource) bySource = { ...bySource }
-              bySource[evt.sourceId] = []
-              break
-            }
-          }
-        }
-
-        if (deletedChanged) deleted = nextDeleted
-      }
-
-      if (Object.keys(deleted).length > DELETED_LIMIT) {
-        const live = new Set<string>()
-        for (const list of Object.values(bySource)) {
-          for (const m of list) live.add(m.id)
-        }
-        const pruned: Record<string, true> = {}
-        for (const id of Object.keys(deleted)) {
-          if (live.has(id)) pruned[id] = true
-        }
-        deleted = pruned
-      }
-
-      return { bySource, deleted }
+      return { bySource: messages, deleted: sweptDeleted(deleted, messages) }
     }),
 
   setSearch: (sourceId, terms) =>
@@ -239,10 +264,7 @@ export const useStore = create<ChatState>()((set) => ({
     set((s) => {
       if (s.fontSize[sourceId] === undefined) return s
 
-      const fontSize = { ...s.fontSize }
-      delete fontSize[sourceId]
-
-      return { fontSize }
+      return { fontSize: omit(s.fontSize, sourceId) }
     }),
 
   clearSource: (sourceId) =>
@@ -253,26 +275,12 @@ export const useStore = create<ChatState>()((set) => ({
     }),
 
   forgetSource: (sourceId) =>
-    set((s) => {
-      const bySource = { ...s.bySource }
-      delete bySource[sourceId]
-
-      const search = { ...s.search }
-      delete search[sourceId]
-
-      const searchDraft = { ...s.searchDraft }
-      delete searchDraft[sourceId]
-
-      const fontSize = { ...s.fontSize }
-      delete fontSize[sourceId]
-
-      return {
-        bySource,
-        search,
-        searchDraft,
-        fontSize,
-        visibleIds: s.visibleIds.filter((id) => id !== sourceId),
-        groups: pruneGroups(s.groups, (id) => id !== sourceId)
-      }
-    }),
+    set((s) => ({
+      bySource: omit(s.bySource, sourceId),
+      search: omit(s.search, sourceId),
+      searchDraft: omit(s.searchDraft, sourceId),
+      fontSize: omit(s.fontSize, sourceId),
+      visibleIds: s.visibleIds.filter((id) => id !== sourceId),
+      groups: pruneGroups(s.groups, (id) => id !== sourceId)
+    })),
 }))

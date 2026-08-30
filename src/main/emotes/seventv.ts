@@ -6,8 +6,6 @@ const CDN_SCALES = ['1x', '2x', '3x'] as const
 
 export type SevenTvPlatform = 'twitch' | 'kick' | 'google'
 
-export type SevenTvEmote = ThirdPartyEmote
-
 interface ApiFile {
   name: string
   format?: string
@@ -25,7 +23,7 @@ interface ApiEmoteSet {
   emotes?: ApiEmote[]
 }
 
-function toEmote(raw: ApiEmote): SevenTvEmote | null {
+function toEmote(raw: ApiEmote): ThirdPartyEmote | null {
   const host = raw.data?.host
   if (!raw.name || !host?.url) return null
 
@@ -54,8 +52,8 @@ function toEmote(raw: ApiEmote): SevenTvEmote | null {
   }
 }
 
-function index(set: ApiEmoteSet | undefined): Map<string, SevenTvEmote> {
-  const map = new Map<string, SevenTvEmote>()
+function index(set: ApiEmoteSet | undefined): Map<string, ThirdPartyEmote> {
+  const map = new Map<string, ThirdPartyEmote>()
   for (const raw of set?.emotes ?? []) {
     const emote = toEmote(raw)
 
@@ -65,8 +63,8 @@ function index(set: ApiEmoteSet | undefined): Map<string, SevenTvEmote> {
 }
 
 export class SevenTvEmotes {
-  private global: Map<string, SevenTvEmote> | null = null
-  private byChannel = new Map<string, Map<string, SevenTvEmote>>()
+  private global: Map<string, ThirdPartyEmote> | null = null
+  private byChannel = new Map<string, Map<string, ThirdPartyEmote>>()
   private inFlight = new Map<string, Promise<void>>()
 
   async loadGlobal(): Promise<void> {
@@ -96,17 +94,9 @@ export class SevenTvEmotes {
     return task
   }
 
-  lookup(platform: SevenTvPlatform, channelId: string, name: string): SevenTvEmote | undefined {
+  lookup(platform: SevenTvPlatform, channelId: string, name: string): ThirdPartyEmote | undefined {
     return (
       this.byChannel.get(`${platform}:${channelId}`)?.get(name) ?? this.global?.get(name)
     )
-  }
-
-  count(platform: SevenTvPlatform, channelId: string): number {
-    return this.byChannel.get(`${platform}:${channelId}`)?.size ?? 0
-  }
-
-  forget(platform: SevenTvPlatform, channelId: string): void {
-    this.byChannel.delete(`${platform}:${channelId}`)
   }
 }

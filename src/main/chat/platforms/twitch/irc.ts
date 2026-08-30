@@ -2,7 +2,9 @@ import type { Badge, ChatMessage, Fragment, MessageKind } from "@shared/types";
 import { RoomSocket } from "../../socket";
 import { messageId, withEmotes, type ChatFeed, type FeedSink } from "../../watcher";
 import { splitLinks } from "../../links";
+import { REPLY_EXCERPT_LIMIT } from "../../fragments";
 import { twitchBadges } from "./badges";
+import { twitchEmote } from "./emotes";
 import type { TwitchChannel } from "./channel";
 
 interface IrcMessage {
@@ -162,17 +164,6 @@ export class IrcHub extends RoomSocket {
   }
 }
 
-const EMOTE_CDN = "https://static-cdn.jtvnw.net/emoticons/v2";
-
-function emoteUrls(id: string): { url: string; srcSet: string } {
-  const at = (scale: string): string =>
-    `${EMOTE_CDN}/${id}/default/dark/${scale}`;
-  return {
-    url: at("1.0"),
-    srcSet: `${at("1.0")} 1x, ${at("2.0")} 2x, ${at("3.0")} 3x`,
-  };
-}
-
 function buildIrcFragments(
   text: string,
   emoteTag: string | undefined,
@@ -192,9 +183,7 @@ function buildIrcFragments(
       out.push(...splitLinks(chars.slice(cursor, span.start).join("")));
     }
 
-    const name = chars.slice(span.start, end + 1).join("");
-    const { url, srcSet } = emoteUrls(span.id);
-    out.push({ kind: "emote", name, url, srcSet, provider: "native" });
+    out.push(twitchEmote(span.id, chars.slice(span.start, end + 1).join("")));
     cursor = end + 1;
   }
 
@@ -241,36 +230,64 @@ function badgesFor(channelLogin: string, tag: string | undefined): Badge[] {
   return badges;
 }
 
+interface IrcAuthor {
+  authorId: string;
+  authorName: string;
+  authorDisplayName?: string;
+  authorColor?: string;
+  badges?: Badge[];
+}
+
+function authorOf(
+  msg: IrcMessage,
+  login: string,
+  channelLogin: string,
+): IrcAuthor {
+  const author: IrcAuthor = {
+    authorId: msg.tags["user-id"] ?? login,
+    authorName: login,
+  };
+
+  const display = msg.tags["display-name"];
+  if (display) author.authorDisplayName = display;
+
+  const color = msg.tags["color"];
+  if (color) author.authorColor = color;
+
+  const badges = badgesFor(channelLogin, msg.tags["badges"]);
+  if (badges.length > 0) author.badges = badges;
+
+  return author;
+}
+
+function nativeIdOf(msg: IrcMessage): string {
+  return (
+    msg.tags["id"] ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  );
+}
+
+function sentAt(msg: IrcMessage): number {
+  return Number(msg.tags["tmi-sent-ts"]) || Date.now();
+}
+
 function normalizeIrcPrivmsg(
   msg: IrcMessage,
   sourceId: string,
   channelLogin: string,
-): ChatMessage | null {
+): ChatMessage {
   const text = msg.trailing ?? "";
   const login = msg.nick ?? msg.tags["login"] ?? "unknown";
-  const nativeId =
-    msg.tags["id"] ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   const out: ChatMessage = {
-    id: messageId("twitch", sourceId, nativeId),
+    id: messageId("twitch", sourceId, nativeIdOf(msg)),
     sourceId,
     platform: "twitch",
     kind: msg.tags["bits"] ? "donation" : "chat",
-    authorId: msg.tags["user-id"] ?? login,
-    authorName: login,
     fragments: buildIrcFragments(text, msg.tags["emotes"]),
     plainText: text,
-    timestamp: Number(msg.tags["tmi-sent-ts"]) || Date.now(),
+    timestamp: sentAt(msg),
+    ...authorOf(msg, login, channelLogin),
   };
-
-  const display = msg.tags["display-name"];
-  if (display) out.authorDisplayName = display;
-
-  const color = msg.tags["color"];
-  if (color) out.authorColor = color;
-
-  const badges = badgesFor(channelLogin, msg.tags["badges"]);
-  if (badges.length > 0) out.badges = badges;
 
   const bits = Number(msg.tags["bits"]);
   if (Number.isFinite(bits) && bits > 0)
@@ -284,7 +301,7 @@ function normalizeIrcPrivmsg(
         msg.tags["reply-parent-display-name"] ??
         msg.tags["reply-parent-user-login"] ??
         "",
-      excerpt: (msg.tags["reply-parent-msg-body"] ?? "").slice(0, 60),
+      excerpt: (msg.tags["reply-parent-msg-body"] ?? "").slice(0, REPLY_EXCERPT_LIMIT),
     };
   }
 
@@ -300,8 +317,6 @@ function normalizeIrcUsernotice(
   if (!systemMsg) return null;
 
   const login = msg.tags["login"] ?? "twitch";
-  const nativeId =
-    msg.tags["id"] ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const userText = msg.trailing ?? "";
 
   const fragments: Fragment[] = [{ kind: "text", text: systemMsg }];
@@ -309,28 +324,16 @@ function normalizeIrcUsernotice(
     fragments.push(...buildIrcFragments(userText, msg.tags["emotes"]));
   }
 
-  const out: ChatMessage = {
-    id: messageId("twitch", sourceId, nativeId),
+  return {
+    id: messageId("twitch", sourceId, nativeIdOf(msg)),
     sourceId,
     platform: "twitch",
     kind: noticeKind(msg.tags["msg-id"]),
-    authorId: msg.tags["user-id"] ?? login,
-    authorName: login,
     fragments,
     plainText: userText === "" ? systemMsg : `${systemMsg} ${userText}`,
-    timestamp: Number(msg.tags["tmi-sent-ts"]) || Date.now(),
+    timestamp: sentAt(msg),
+    ...authorOf(msg, login, channelLogin),
   };
-
-  const display = msg.tags["display-name"];
-  if (display) out.authorDisplayName = display;
-
-  const color = msg.tags["color"];
-  if (color) out.authorColor = color;
-
-  const badges = badgesFor(channelLogin, msg.tags["badges"]);
-  if (badges.length > 0) out.badges = badges;
-
-  return out;
 }
 
 const FATAL_NOTICE_IDS = ["msg_channel_suspended", "msg_banned"];
@@ -378,12 +381,9 @@ export class TwitchIrcFeed implements ChatFeed {
   }
 
   private publishMessage(message: IrcMessage): void {
-    const chat = normalizeIrcPrivmsg(
-      message,
-      this.sourceId,
-      this.channel.login,
-    );
-    if (chat) this.sink.message(withEmotes(chat, this.channel));
+    const chat = normalizeIrcPrivmsg(message, this.sourceId, this.channel.login);
+
+    this.sink.message(withEmotes(chat, this.channel));
   }
 
   private publishNotice(message: IrcMessage): void {

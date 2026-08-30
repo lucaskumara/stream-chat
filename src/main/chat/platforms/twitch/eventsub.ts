@@ -3,10 +3,12 @@ import type { Badge, ChatMessage, Fragment, MessageKind } from "@shared/types";
 import { reconnectDelayMs } from "../../backoff";
 import { messageId, withEmotes, type ChatFeed, type FeedSink } from "../../watcher";
 import { splitLinks } from "../../links";
+import { REPLY_EXCERPT_LIMIT } from "../../fragments";
 import { ignoreTeardownFailure } from "../../../lifecycle";
 import type { TwitchAuth } from "../../../twitch/auth";
 import type { Helix } from "../../../twitch/helix";
 import { twitchBadges } from "./badges";
+import { twitchEmote } from "./emotes";
 import type { TwitchChannel } from "./channel";
 
 const DEFAULT_URL = "wss://eventsub.wss.twitch.tv/ws";
@@ -54,7 +56,6 @@ export class EventSubHub {
   private keepaliveTimer: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private reconnectAttempt = 0;
-  private status: HubStatus = "idle";
   private closing = false;
   private keepaliveSeconds = 10;
 
@@ -94,15 +95,10 @@ export class EventSubHub {
     if (this.registrations.size === 0) this.shutdown();
   }
 
-  private setStatus(status: HubStatus, error?: string): void {
-    this.status = status;
-    this.onStatus(status, error);
-  }
-
   private connect(url = DEFAULT_URL): Promise<void> {
     return new Promise((resolve) => {
       this.closing = false;
-      this.setStatus(this.reconnectAttempt > 0 ? "reconnecting" : "connecting");
+      this.onStatus(this.reconnectAttempt > 0 ? "reconnecting" : "connecting");
 
       const ws = new WebSocket(url);
       this.ws = ws;
@@ -114,7 +110,7 @@ export class EventSubHub {
 
       ws.on("error", (err: Error) => {
         if (this.ws !== ws) return;
-        this.setStatus("error", err.message);
+        this.onStatus("error", err.message);
       });
 
       ws.on("close", () => {
@@ -151,7 +147,7 @@ export class EventSubHub {
       case "session_reconnect":
         return this.onReconnectRequested(message);
       case "revocation":
-        return this.setStatus(
+        return this.onStatus(
           "error",
           "Twitch revoked a subscription (token or permission changed).",
         );
@@ -169,7 +165,7 @@ export class EventSubHub {
     if (!session) return;
     this.sessionId = session.id;
     this.reconnectAttempt = 0;
-    this.setStatus("connected");
+    this.onStatus("connected");
     await this.subscribeAll();
     resolveConnect();
   }
@@ -217,7 +213,7 @@ export class EventSubHub {
     if (this.reconnectTimer || this.registrations.size === 0) return;
 
     this.reconnectAttempt++;
-    this.setStatus("reconnecting");
+    this.onStatus("reconnecting");
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.sessionId = null;
@@ -250,7 +246,7 @@ export class EventSubHub {
         const message = err instanceof Error ? err.message : String(err);
 
         console.warn(`[eventsub] ${req.type} failed:`, message);
-        this.setStatus("error", `${req.type}: ${message}`);
+        this.onStatus("error", `${req.type}: ${message}`);
       }
     }
   }
@@ -263,15 +259,9 @@ export class EventSubHub {
     this.ws?.close();
     this.ws = null;
     this.sessionId = null;
-    this.setStatus("idle");
-  }
-
-  getStatus(): HubStatus {
-    return this.status;
+    this.onStatus("idle");
   }
 }
-
-const EMOTE_CDN = "https://static-cdn.jtvnw.net/emoticons/v2";
 
 interface TwitchFragment {
   type: "text" | "cheermote" | "emote" | "mention";
@@ -309,19 +299,6 @@ interface TwitchChatEvent {
   } | null;
 }
 
-function emoteUrls(
-  id: string,
-  formats: string[] | undefined,
-): { url: string; srcSet: string } {
-  const format = formats?.includes("animated") ? "animated" : "static";
-  const at = (scale: string): string =>
-    `${EMOTE_CDN}/${id}/${format}/dark/${scale}`;
-  return {
-    url: at("1.0"),
-    srcSet: `${at("1.0")} 1x, ${at("2.0")} 2x, ${at("3.0")} 3x`,
-  };
-}
-
 function toFragments(fragments: TwitchFragment[]): Fragment[] {
   const out: Fragment[] = [];
 
@@ -329,14 +306,7 @@ function toFragments(fragments: TwitchFragment[]): Fragment[] {
     switch (frag.type) {
       case "emote": {
         if (!frag.emote) break;
-        const { url, srcSet } = emoteUrls(frag.emote.id, frag.emote.format);
-        out.push({
-          kind: "emote",
-          name: frag.text,
-          url,
-          srcSet,
-          provider: "native",
-        });
+        out.push(twitchEmote(frag.emote.id, frag.text, frag.emote.format ?? []));
         continue;
       }
       case "mention": {
@@ -409,7 +379,7 @@ function normalizeChatMessage(
     msg.replyTo = {
       messageId: messageId("twitch", sourceId, event.reply.parent_message_id),
       authorName: event.reply.parent_user_name,
-      excerpt: event.reply.parent_message_body.slice(0, 60),
+      excerpt: event.reply.parent_message_body.slice(0, REPLY_EXCERPT_LIMIT),
     };
   }
 
