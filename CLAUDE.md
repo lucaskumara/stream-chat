@@ -14,9 +14,19 @@ lives — read it before touching the message pipeline, emotes, or either Twitch
 ```bash
 npm run dev        # electron-vite dev — launches the app and the renderer dev server
 npm run typecheck  # all three tsconfig projects; the fastest correctness gate
-npm run test       # vitest, the pure-logic suite — 329 cases in ~1.5s
+npm run test       # vitest, the pure-logic suite — 362 cases in ~1.5s
 npm run test:watch # the same suite, re-running as files change
 npm run build      # typecheck, then build main + preload + renderer
+```
+
+Narrowing the suite while working on one thing — the whole run is ~1.5s, so this is for
+focus rather than speed:
+
+```bash
+npx vitest run tests/main/chat/platforms/twitch/irc.test.ts   # one file
+npx vitest run tests/main/chat/platforms                      # one directory
+npx vitest run -t "code point"                                # one case, matched by name
+npx vitest tests/renderer/store.test.ts                       # one file, watched
 ```
 
 ```bash
