@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { messageId } from "./watcher";
+import { messageId } from "@main/chat/watcher";
 
 describe("messageId", () => {
   it("composes platform, source and native id in that order", () => {

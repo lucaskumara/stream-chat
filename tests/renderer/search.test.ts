@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatMessage } from '@shared/types'
-import { authorTerm, matchesSearch, parseSearch, parseTerm, termLabel } from './search'
+import { authorTerm, matchesSearch, parseSearch, parseTerm, termLabel } from '@/search'
 
 function message(plainText: string, authorName = 'someone'): ChatMessage {
   return {

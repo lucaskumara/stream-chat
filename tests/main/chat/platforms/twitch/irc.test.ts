@@ -9,7 +9,7 @@ import {
   parseIrcLine,
   unescapeTag,
   type IrcMessage,
-} from "./irc";
+} from "@main/chat/platforms/twitch/irc";
 
 const BACKSLASH = String.fromCharCode(92);
 

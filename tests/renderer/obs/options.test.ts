@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { CHAT_FONT_DEFAULT, CHAT_FONT_SIZES } from '../store'
-import { readOptions } from './options'
+import { CHAT_FONT_DEFAULT, CHAT_FONT_SIZES } from '@/store'
+import { readOptions } from '@/obs/options'
 
 function at(pathname: string, search = ''): Location {
   return { pathname, search } as Location

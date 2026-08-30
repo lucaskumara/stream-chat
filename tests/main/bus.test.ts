@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import type { ChatBatch, ChatMessage } from '@shared/types'
-import { MessageBus } from './bus'
+import { MessageBus } from '@main/bus'
 
 const FLUSH_INTERVAL_MS = 100
 

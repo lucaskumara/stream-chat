@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampPoll } from "./index";
+import { clampPoll } from "@main/chat/platforms/youtube";
 
 const MIN_POLL_MS = 250;
 const MAX_POLL_MS = 500;

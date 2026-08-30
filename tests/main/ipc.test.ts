@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
 }))
 
 const { parseAddSource, parsePlatform, parseSourceIds, parseWebUrl, requireString } =
-  await import('./ipc')
+  await import('@main/ipc')
 
 describe('requireString', () => {
   it('passes a string through', () => {

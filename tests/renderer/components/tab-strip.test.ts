@@ -10,7 +10,7 @@ import {
   spanOver,
   travelBounds,
   type Span
-} from './tab-strip'
+} from '@/components/tab-strip'
 
 const TAB_WIDTH = 50
 

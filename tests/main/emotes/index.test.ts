@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Fragment } from '@shared/types'
-import { applyEmotes } from './index'
-import type { ThirdPartyEmote } from './types'
+import { applyEmotes } from '@main/emotes'
+import type { ThirdPartyEmote } from '@main/emotes/types'
 
 const GIGACHAD: ThirdPartyEmote = {
   name: 'GIGACHAD',

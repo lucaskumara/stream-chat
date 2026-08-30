@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toFragments } from "./index";
+import { toFragments } from "@main/chat/platforms/kick";
 
 describe("kick toFragments", () => {
   it("keeps plain text as one fragment", () => {

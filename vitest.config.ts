@@ -1,18 +1,21 @@
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
-// A third place the aliases are spelled — see "Path aliases are declared twice"
-// in CLAUDE.md, which is now three. Keep this in step with electron.vite.config.ts
-// and the two tsconfigs, and keep '@shared' ahead of '@' so the longer key wins.
+// Tests live outside src, so they reach the app through aliases rather than through
+// a stack of ../../.. — see "Path aliases" in CLAUDE.md, which this is one of the
+// four homes for. '@main' exists only here and in tsconfig.test.json: nothing under
+// src uses it, so the build configs have no reason to know it. Keep the longer keys
+// ahead of '@', because Vite matches a string alias by prefix.
 export default defineConfig({
   resolve: {
     alias: {
       '@shared': resolve('src/shared'),
+      '@main': resolve('src/main'),
       '@': resolve('src/renderer/src')
     }
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts']
+    include: ['tests/**/*.test.ts']
   }
 })

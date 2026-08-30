@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RecentIds } from "./recent-ids";
+import { RecentIds } from "@main/chat/recent-ids";
 
 describe("RecentIds", () => {
   it("remembers what it has been given", () => {

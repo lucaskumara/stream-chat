@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitLinks } from "./links";
+import { splitLinks } from "@main/chat/links";
 
 describe("splitLinks", () => {
   it("returns one text fragment when there is no link", () => {

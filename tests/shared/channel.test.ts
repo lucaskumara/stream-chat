@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseChannelInput } from './channel'
+import { parseChannelInput } from '@shared/channel'
 
 describe('parseChannelInput', () => {
   describe('links', () => {

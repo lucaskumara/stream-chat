@@ -13,7 +13,7 @@ lives — read it before touching the message pipeline, emotes, or either Twitch
 
 ```bash
 npm run dev        # electron-vite dev — launches the app and the renderer dev server
-npm run typecheck  # both tsconfig projects; the fastest correctness gate
+npm run typecheck  # all three tsconfig projects; the fastest correctness gate
 npm run test       # vitest, the pure-logic suite — 329 cases in ~1.5s
 npm run test:watch # the same suite, re-running as files change
 npm run build      # typecheck, then build main + preload + renderer
@@ -31,11 +31,18 @@ which is gitignored. Only the Windows target has been produced — see "Packagin
 "Verifying changes" below for what the suite does and does not cover, and for how the
 rest of this repo gets checked.
 
-## Two TypeScript projects
+## Three TypeScript projects
 
 `tsconfig.node.json` (main + preload + shared) and `tsconfig.web.json` (renderer + shared).
 `npm run typecheck` runs both and **both must pass** — a change to `src/shared` is checked
 twice, under different `lib`/`types`. Shared code therefore cannot use Node or DOM APIs.
+
+`tsconfig.test.json` is the third, covering `tests/` alone. It exists because the suite lives
+outside `src` and would otherwise be typechecked by nothing. It is deliberately **not**
+`composite` and **not** referenced from `tsconfig.json`: a composite project must list every
+file in its program, and the tests pull half of `src` in through their imports, so composite
+makes `tsc` demand `src` be added to the test project's `include` as well. It is a checking
+pass, not a build input.
 
 ## Architecture
 
@@ -988,11 +995,13 @@ in the same folder. **Match the file you are editing**, and do not reformat a fi
 as a side effect of another change; `npm run typecheck` will not catch it and the diff buries
 the real work.
 
-**Path aliases are declared in four places now.** `@shared` (and `@` for the renderer) live
-in `electron.vite.config.ts`, the two tsconfigs, and `vitest.config.ts`. Adding or renaming
+**Path aliases are declared in five places now.** `@shared` (and `@` for the renderer) live
+in `electron.vite.config.ts`, the three tsconfigs, and `vitest.config.ts`. Adding or renaming
 one means editing all of them, or the build, the typecheck and the tests disagree about
-whether the import resolves. In the vitest config `'@shared'` must stay ahead of `'@'` —
-Vite matches a string alias by prefix, so the shorter key would otherwise swallow it.
+whether the import resolves. `@main` is the exception: it exists only in `vitest.config.ts`
+and `tsconfig.test.json`, because nothing under `src` uses it and the build has no reason to
+know it. In both configs the longer keys must stay ahead of `'@'` — Vite matches a string
+alias by prefix, so the shorter key would otherwise swallow them.
 
 **Dependency versions are load-bearing.** `electron-vite@5` peer-caps at Vite 7, while
 `@vitejs/plugin-react@6` requires Vite 8. Pinned: `vite@^7`, `@vitejs/plugin-react@^5`.
@@ -1024,6 +1033,11 @@ pins the portable build's extraction folder so it unpacks once rather than on ev
 left unset, electron-builder uses a fresh temp directory each run and a 113MB app pays for it
 every time. The mac (dmg) and linux (AppImage) blocks are declared but have never been run,
 the same status as the `frameOptions()` branches they would ship.
+
+**`files:` in that config is an exclusion list, so anything new at the repo root ships unless
+it is named.** `tests/`, `vitest.config.ts` and `tsconfig.test.json` are excluded there for
+that reason. Verified by unpacking `app.asar` after `npm run pack`: zero test files, zero
+configs. Add a root-level directory and it goes in the installer until you say otherwise.
 
 **The portable build is portable in delivery, not in state.** It still writes the Twitch token
 to `%APPDATA%/stream-chat` like every other build; nothing lands beside the exe. That only
@@ -1181,10 +1195,10 @@ the excerpt through `toFragments` in `platforms/kick/index.ts`.
 `npm run test` is the second. Neither proves the app works; that still takes the running
 app, below.
 
-**The suite is `vitest run`, and it covers pure logic only.** Tests are colocated as
-`*.test.ts` beside what they test, so they are typechecked by the same two tsconfig
-projects as everything else, and nothing imports them so nothing bundles them (verified
-against the built output). What is covered:
+**The suite is `vitest run`, and it covers pure logic only.** `tests/` sits outside `src` and
+mirrors it — `tests/main/chat/links.test.ts` covers `src/main/chat/links.ts` — and reaches the
+app through `@main`, `@shared` and `@` rather than a stack of `../../..`. Nothing imports the
+tests, so nothing bundles them. What is covered:
 
 | Area | File under test |
 |---|---|
@@ -1202,6 +1216,14 @@ against the built output). What is covered:
 | the whole zustand store, groups included | `renderer/store.ts` |
 | the tab-strip drag geometry | `renderer/components/tab-strip.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
+
+**Keep the tests out of `src/renderer`, and not only for tidiness.** Tailwind v4 scans the
+renderer root for class candidates and takes them from prose, not just from JSX. Four test
+files briefly lived under `src/renderer/src`; the words *filter* and *hidden* — one in a test
+name, one in a comment — were enough to emit `.filter`, `.hidden` and the whole `--tw-blur` /
+`--tw-drop-shadow` `@property` block into the bundle: **1.5KB of CSS no element ever used**
+(20.10KB against 18.57KB, measured both ways). Moving `tests/` to the repo root put the built
+CSS back to byte-identical with the build from before the suite existed.
 
 **Tests are written against the invariants in this file, not against the implementation.**
 Where a rule above cost real time to discover — IRC's code-point emote offsets, `showSource`

@@ -7,10 +7,11 @@ directories:
 
 files:
   - '!src/*'
-  - '!electron.vite.config.ts'
   - '!electron-builder.yml'
   - '!CLAUDE.md'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{tests,tests/**}'
+  - '!{vitest.config.ts,electron.vite.config.ts}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,tsconfig.test.json}'
   - '!{.env,.env.*,.npmrc,.gitattributes}'
   - '!**/*.tsbuildinfo'
 

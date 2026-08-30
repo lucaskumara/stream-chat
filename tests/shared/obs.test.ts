@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { OBS_CHAT_PREFIX, obsChatPath, obsMatchKey, parseObsChatPath } from './obs'
+import { OBS_CHAT_PREFIX, obsChatPath, obsMatchKey, parseObsChatPath } from '@shared/obs'
 
 describe('obsMatchKey', () => {
   it('drops a leading @ and folds case', () => {

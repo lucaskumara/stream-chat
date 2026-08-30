@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reconnectDelayMs } from "./backoff";
+import { reconnectDelayMs } from "@main/chat/backoff";
 
 const JITTER_MS = 500;
 

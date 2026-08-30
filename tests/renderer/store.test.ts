@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { ChatMessage, SourceState } from '@shared/types'
-import { CHAT_FONT_DEFAULT, CHAT_FONT_SIZES, useStore } from './store'
+import { CHAT_FONT_DEFAULT, CHAT_FONT_SIZES, useStore } from '@/store'
 
 const pristine = useStore.getState()
 

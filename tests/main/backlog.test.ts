@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatMessage } from '@shared/types'
-import { Backlog } from './backlog'
+import { Backlog } from '@main/backlog'
 
 function message(id: string, sourceId = 'src-1', authorId = 'author-1'): ChatMessage {
   return {

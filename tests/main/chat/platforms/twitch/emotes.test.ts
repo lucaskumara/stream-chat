@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { twitchEmote } from "./emotes";
+import { twitchEmote } from "@main/chat/platforms/twitch/emotes";
 
 const CDN = "https://static-cdn.jtvnw.net/emoticons/v2";
 

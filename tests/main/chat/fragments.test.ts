@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { REPLY_EXCERPT_LIMIT, plainTextOf } from "./fragments";
+import { REPLY_EXCERPT_LIMIT, plainTextOf } from "@main/chat/fragments";
 
 describe("plainTextOf", () => {
   it("joins text fragments untouched", () => {
