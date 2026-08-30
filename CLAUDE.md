@@ -1220,6 +1220,7 @@ tests, so nothing bundles them. What is covered:
 | third-party emote substitution | `emotes/index.ts` |
 | the dock backlog and the batching bus | `backlog.ts`, `bus.ts` |
 | every IPC argument validator | `ipc.ts` |
+| resolve and naming on all three platforms | `platforms/*/channel.ts` |
 | the pane filter grammar | `renderer/search.ts` |
 | the whole zustand store, groups included | `renderer/store.ts` |
 | the tab-strip drag geometry | `renderer/components/tab-strip.ts` |
@@ -1238,6 +1239,17 @@ Where a rule above cost real time to discover — IRC's code-point emote offsets
 refusing to hide a visible chat, `Number(null)` snapping every dock to the smallest font,
 whole-token case-sensitive emote matching — there is a case for it carrying a comment that
 says which invariant it pins. That is what makes the suite worth keeping.
+
+**A concise-arrow `beforeEach` that returns a mock silently becomes a teardown.**
+Vitest treats a function returned from a hook as an after-test cleanup, and
+`mockReset()` / `mockClear()` return the mock itself for chaining — so
+`beforeEach(() => fn.mockReset())` makes Vitest *call the mock* after every test in
+that block. Harmless while the mock resolves; the moment one test sets
+`mockRejectedValue`, that call rejects with nobody awaiting it and the run fails
+with the bare error, blamed on the test that queued it rather than on the hook.
+It reads exactly like "my rejection escaped a try/catch it plainly cannot escape."
+Give these hooks braces. `vi.useFakeTimers()` and `vi.unstubAllGlobals()` are safe
+either way — they return the `vi` object, which is not callable.
 
 **Some functions are exported only so a test can reach them.** `parseIrcLine`,
 `buildIrcFragments`, the two IRC normalizers, Kick's `toFragments`, YouTube's `clampPoll`
