@@ -14,6 +14,8 @@ lives — read it before touching the message pipeline, emotes, or either Twitch
 ```bash
 npm run dev        # electron-vite dev — launches the app and the renderer dev server
 npm run typecheck  # both tsconfig projects; the fastest correctness gate
+npm run test       # vitest, the pure-logic suite — 329 cases in ~1.5s
+npm run test:watch # the same suite, re-running as files change
 npm run build      # typecheck, then build main + preload + renderer
 ```
 
@@ -25,8 +27,9 @@ npm run dist       # the full installer for the host platform
 Both run `npm run build` first, so `dist` is also a typecheck. Artifacts land in `release/`,
 which is gitignored. Only the Windows target has been produced — see "Packaging" below.
 
-There is **no test runner configured**. See "Verifying changes" below for how work in this
-repo actually gets checked.
+**Vitest** runs the pure-logic suite; there is no DOM or component testing yet. See
+"Verifying changes" below for what the suite does and does not cover, and for how the
+rest of this repo gets checked.
 
 ## Two TypeScript projects
 
@@ -985,9 +988,11 @@ in the same folder. **Match the file you are editing**, and do not reformat a fi
 as a side effect of another change; `npm run typecheck` will not catch it and the diff buries
 the real work.
 
-**Path aliases are declared twice.** `@shared` (and `@` for the renderer) live in both
-`electron.vite.config.ts` and the two tsconfigs. Adding or renaming one means editing both,
-or the build and the typecheck disagree about whether the import resolves.
+**Path aliases are declared in four places now.** `@shared` (and `@` for the renderer) live
+in `electron.vite.config.ts`, the two tsconfigs, and `vitest.config.ts`. Adding or renaming
+one means editing all of them, or the build, the typecheck and the tests disagree about
+whether the import resolves. In the vitest config `'@shared'` must stay ahead of `'@'` —
+Vite matches a string alias by prefix, so the shorter key would otherwise swallow it.
 
 **Dependency versions are load-bearing.** `electron-vite@5` peer-caps at Vite 7, while
 `@vitejs/plugin-react@6` requires Vite 8. Pinned: `vite@^7`, `@vitejs/plugin-react@^5`.
@@ -1172,17 +1177,57 @@ the excerpt through `toFragments` in `platforms/kick/index.ts`.
 
 ## Verifying changes
 
-`npm run typecheck` is the first gate — both tsconfig projects must pass — but it does not
-prove behaviour. Two techniques are used throughout this repo's history:
+`npm run typecheck` is the first gate — both tsconfig projects must pass — and
+`npm run test` is the second. Neither proves the app works; that still takes the running
+app, below.
 
-**Pure logic** — bundle a throwaway script with the already-installed esbuild and run it:
+**The suite is `vitest run`, and it covers pure logic only.** Tests are colocated as
+`*.test.ts` beside what they test, so they are typechecked by the same two tsconfig
+projects as everything else, and nothing imports them so nothing bundles them (verified
+against the built output). What is covered:
+
+| Area | File under test |
+|---|---|
+| the "add a channel" parser | `shared/channel.ts` |
+| the dock URL grammar | `shared/obs.ts` |
+| link splitting, plain text, backoff, replay guard, id composition | `chat/links.ts`, `chat/fragments.ts`, `chat/backoff.ts`, `chat/recent-ids.ts`, `chat/watcher.ts` |
+| IRC parsing and both message mappings | `platforms/twitch/irc.ts` |
+| the emote URL builder both transports share | `platforms/twitch/emotes.ts` |
+| Kick's inline emote tokens | `platforms/kick/index.ts` |
+| YouTube's poll clamp | `platforms/youtube/index.ts` |
+| third-party emote substitution | `emotes/index.ts` |
+| the dock backlog and the batching bus | `backlog.ts`, `bus.ts` |
+| every IPC argument validator | `ipc.ts` |
+| the pane filter grammar | `renderer/search.ts` |
+| the whole zustand store, groups included | `renderer/store.ts` |
+| the tab-strip drag geometry | `renderer/components/tab-strip.ts` |
+| the dock's query-parameter options | `renderer/obs/options.ts` |
+
+**Tests are written against the invariants in this file, not against the implementation.**
+Where a rule above cost real time to discover — IRC's code-point emote offsets, `showSource`
+refusing to hide a visible chat, `Number(null)` snapping every dock to the smallest font,
+whole-token case-sensitive emote matching — there is a case for it carrying a comment that
+says which invariant it pins. That is what makes the suite worth keeping.
+
+**Some functions are exported only so a test can reach them.** `parseIrcLine`,
+`buildIrcFragments`, the two IRC normalizers, Kick's `toFragments`, YouTube's `clampPoll`
+and the five `ipc.ts` validators are not imported anywhere else. Removing an export because
+"nothing uses it" will break the suite.
+
+**What the suite does not cover**, and what therefore still needs the running app: every
+React component, all three transports end to end, resolve against the live platforms,
+`config.ts` (needs `safeStorage`), `obs/server.ts`, and anything about how the chrome looks.
+
+**Anything that is not pure logic** — bundle a throwaway script with the already-installed
+esbuild and run it:
 
 ```bash
 npx esbuild ./.t.ts --bundle --platform=node --format=esm --outfile=./.t.mjs --external:electron
 node ./.t.mjs
 ```
 
-Good for parsers and mappers. Delete the scratch files afterwards.
+Delete the scratch files afterwards. Prefer a real test to a scratch script whenever the
+thing under test is pure.
 
 **The running app** — launch with a debugging port and drive the real UI over CDP:
 

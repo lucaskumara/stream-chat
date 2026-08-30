@@ -206,7 +206,7 @@ function unfilteredToken(header: Helpers.YTNode | undefined): string | null {
   return view?.continuation ?? null;
 }
 
-function clampPoll(timeoutMs: number): number {
+export function clampPoll(timeoutMs: number): number {
   return Math.min(MAX_POLL_MS, Math.max(MIN_POLL_MS, timeoutMs || MAX_POLL_MS));
 }
 

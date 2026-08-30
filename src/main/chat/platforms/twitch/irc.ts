@@ -7,7 +7,7 @@ import { twitchBadges } from "./badges";
 import { twitchEmote } from "./emotes";
 import type { TwitchChannel } from "./channel";
 
-interface IrcMessage {
+export interface IrcMessage {
   tags: Record<string, string>;
 
   nick?: string;
@@ -17,7 +17,7 @@ interface IrcMessage {
   trailing?: string;
 }
 
-function unescapeTag(value: string): string {
+export function unescapeTag(value: string): string {
   let out = "";
   for (let i = 0; i < value.length; i++) {
     if (value[i] !== "\\") {
@@ -36,7 +36,7 @@ function unescapeTag(value: string): string {
   return out;
 }
 
-function parseIrcLine(line: string): IrcMessage | null {
+export function parseIrcLine(line: string): IrcMessage | null {
   if (line === "") return null;
   let rest = line;
 
@@ -90,7 +90,7 @@ interface EmoteSpan {
   end: number;
 }
 
-function parseEmoteTag(tag: string | undefined): EmoteSpan[] {
+export function parseEmoteTag(tag: string | undefined): EmoteSpan[] {
   if (!tag) return [];
   const spans: EmoteSpan[] = [];
 
@@ -164,7 +164,7 @@ export class IrcHub extends RoomSocket {
   }
 }
 
-function buildIrcFragments(
+export function buildIrcFragments(
   text: string,
   emoteTag: string | undefined,
 ): Fragment[] {
@@ -192,7 +192,7 @@ function buildIrcFragments(
   return out;
 }
 
-function noticeKind(msgId: string | undefined): MessageKind {
+export function noticeKind(msgId: string | undefined): MessageKind {
   switch (msgId) {
     case "sub":
     case "resub":
@@ -270,7 +270,7 @@ function sentAt(msg: IrcMessage): number {
   return Number(msg.tags["tmi-sent-ts"]) || Date.now();
 }
 
-function normalizeIrcPrivmsg(
+export function normalizeIrcPrivmsg(
   msg: IrcMessage,
   sourceId: string,
   channelLogin: string,
@@ -308,7 +308,7 @@ function normalizeIrcPrivmsg(
   return out;
 }
 
-function normalizeIrcUsernotice(
+export function normalizeIrcUsernotice(
   msg: IrcMessage,
   sourceId: string,
   channelLogin: string,

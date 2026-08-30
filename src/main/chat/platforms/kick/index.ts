@@ -208,7 +208,7 @@ function toBadges(
   return badges;
 }
 
-function toFragments(content: string): Fragment[] {
+export function toFragments(content: string): Fragment[] {
   const fragments: Fragment[] = [];
   let cursor = 0;
 

@@ -129,18 +129,18 @@ export function unregisterIpc(): void {
   registered.clear()
 }
 
-function requireString(value: unknown, field: string): string {
+export function requireString(value: unknown, field: string): string {
   if (typeof value !== 'string') throw new Error(`${field} must be a string`)
   return value
 }
 
-function parseSourceIds(value: unknown): string[] {
+export function parseSourceIds(value: unknown): string[] {
   if (!Array.isArray(value)) throw new Error('orderedIds must be an array')
 
   return value.map((entry, index) => requireString(entry, `orderedIds[${index}]`))
 }
 
-function parseWebUrl(value: unknown): string {
+export function parseWebUrl(value: unknown): string {
   let parsed: URL
   try {
     parsed = new URL(requireString(value, 'url'))
@@ -153,13 +153,13 @@ function parseWebUrl(value: unknown): string {
   return parsed.toString()
 }
 
-function parsePlatform(value: unknown): Platform {
+export function parsePlatform(value: unknown): Platform {
   const platform = PLATFORMS.find((candidate) => candidate === value)
   if (!platform) throw new Error(`unknown platform: ${String(value)}`)
   return platform
 }
 
-function parseAddSource(value: unknown): AddSourceRequest {
+export function parseAddSource(value: unknown): AddSourceRequest {
   if (typeof value !== 'object' || value === null) {
     throw new Error('request must be an object')
   }
