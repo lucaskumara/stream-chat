@@ -14,8 +14,7 @@ import {
   Zap,
   type LucideIcon
 } from 'lucide-react'
-import type { Badge, ChatMessage, Fragment, Platform } from '@shared/types'
-import { KICK_BADGE_ICON } from './badge-art'
+import type { Badge, ChatMessage, Fragment } from '@shared/types'
 import { PLATFORM_COLOR } from './PlatformIcon'
 
 const KIND_LABEL: Partial<Record<ChatMessage['kind'], string>> = {
@@ -123,22 +122,13 @@ function Emote({ name, url }: { name: string; url: string }): React.ReactElement
   )
 }
 
-function BadgeView({
-  badge,
-  platform
-}: {
-  badge: Badge
-  platform: Platform
-}): React.ReactElement {
+function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
   const [failed, setFailed] = useState(false)
 
-  const src =
-    badge.url ?? (platform === 'kick' ? KICK_BADGE_ICON[badge.id ?? ''] : undefined)
-
-  if (src && !failed) {
+  if (badge.url && !failed) {
     return (
       <img
-        src={src}
+        src={badge.url}
         srcSet={badge.srcSet}
         alt={badge.label}
         loading="lazy"
@@ -266,7 +256,7 @@ function MessageRowImpl({
         )}
 
         {msg.badges?.map((badge, i) => (
-          <BadgeView key={`${badge.label}-${i}`} badge={badge} platform={msg.platform} />
+          <BadgeView key={`${badge.label}-${i}`} badge={badge} />
         ))}
 
         <span

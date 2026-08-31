@@ -22,6 +22,7 @@ export class KickChannel extends Channel {
 
   constructor(
     displayName: string,
+    readonly slug: string,
     readonly chatroomId: number,
     readonly userId: number,
     private readonly subscriberBadges: SubscriberBadge[]
@@ -55,6 +56,7 @@ export class KickChannel extends Channel {
 
     return new KickChannel(
       raw.user?.username ?? raw.slug ?? requestedSlug,
+      raw.slug ?? requestedSlug,
       chatroomId,
       raw.user_id ?? 0,
       tiers

@@ -10,6 +10,7 @@ import type { ChannelLookup, RetryPolicy } from "../../channel";
 import { splitLinks } from "../../links";
 import { plainTextOf, REPLY_EXCERPT_LIMIT } from "../../fragments";
 import { resolveChannel, type KickChannel } from "./channel";
+import { kickBadges } from "./badges";
 import { kickSocket } from "./connection";
 
 const EVENT = {
@@ -81,6 +82,7 @@ export class KickChatWatcher extends BaseChatWatcher<KickChannel> {
 
 class KickChatFeed implements ChatFeed {
   private leaveRoom: (() => void) | null = null;
+  private stopped = false;
 
   constructor(
     private readonly sourceId: string,
@@ -88,13 +90,18 @@ class KickChatFeed implements ChatFeed {
     private readonly sink: FeedSink,
   ) {}
 
-  start(): void {
+  async start(): Promise<void> {
+    await kickBadges.ready(this.channel.slug);
+    if (this.stopped) return;
+
     this.leaveRoom = kickSocket.join(this.channel.room, (event, payload) =>
       this.route(event, payload),
     );
   }
 
   stop(): void {
+    this.stopped = true;
+
     this.leaveRoom?.();
     this.leaveRoom = null;
   }
@@ -193,9 +200,11 @@ function toBadges(
     if (!badge.type) continue;
 
     badges.push(
-      badge.type === "subscriber"
-        ? channel.subscriberBadge(badge.count ?? 1)
-        : { label: badge.text ?? badge.type, id: badge.type },
+      withArt(
+        badge.type === "subscriber"
+          ? channel.subscriberBadge(badge.count ?? 1)
+          : { label: badge.text ?? badge.type, id: badge.type },
+      ),
     );
   }
 
@@ -206,6 +215,16 @@ function toBadges(
   }
 
   return badges;
+}
+
+/** A channel's own subscriber tier image wins; everything else Kick draws itself, so it
+    falls through to the artwork pulled off kick.com. */
+function withArt(badge: Badge): Badge {
+  if (badge.url || !badge.id) return badge;
+
+  const art = kickBadges.lookup(badge.id);
+
+  return art ? { ...badge, url: art } : badge;
 }
 
 export function toFragments(content: string): Fragment[] {

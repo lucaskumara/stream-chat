@@ -14,7 +14,7 @@ lives — read it before touching the message pipeline, emotes, or either Twitch
 ```bash
 npm run dev        # electron-vite dev — launches the app and the renderer dev server
 npm run typecheck  # all three tsconfig projects; the fastest correctness gate
-npm run test       # vitest, the pure-logic suite — 401 cases in ~1.5s
+npm run test       # vitest, the pure-logic suite — 384 cases in ~1.5s
 npm run test:watch # the same suite, re-running as files change
 npm run build      # typecheck, then build main + preload + renderer
 ```
@@ -72,7 +72,9 @@ under the **same filenames**. If you know one folder you know all three:
 | `index.ts` | *how does chat arrive, and in what shape?* the `BaseChatWatcher` subclass, the `ChatFeed`, and the raw-event -> `ChatMessage` mapping — and the only module anything outside the folder imports |
 
 `channel.ts` and `index.ts` are mandatory; `connection.ts` exists only where a socket or
-session is shared across channels (Kick's Pusher socket, YouTube's `Innertube`). Twitch
+session is shared across channels (Kick's Pusher socket, YouTube's `Innertube`), and
+`badges.ts` wherever the platform's badge art has to be resolved rather than read off the
+message — which is now all three. Twitch
 carries two transports, so each gets its own file — `irc.ts` and `eventsub.ts` — holding
 that transport's hub, feed and mapping together, plus `badges.ts` and `emotes.ts`, which
 both transports share. Mapping is **not** a separate file: it
@@ -167,38 +169,60 @@ left in a message row. The id has to come from main because the label does not i
 anything — Kick sends `text: "Broadcaster"`, Twitch's unresolved fallback carries the set id,
 and a label match would break the moment a platform changed its wording.
 
-**Kick's badges are drawn from Kick's own artwork, inlined as `data:` SVG.** Kick ships no
-image URL for its role badges — its UI draws them as inline SVG — so `badge-art.ts` carries
-each one as a self-contained `data:image/svg+xml` URI and `BadgeView` feeds it through the
-*same* `<img>` branch a Twitch badge uses. Three reasons it is a data URI rather than inline
-`<svg>` in the component: an inline gradient needs an `id`, and a virtualized list renders the
-same badge dozens of times, so `url(#HostBadge__a)` would collide and break the moment the
-first copy scrolled out; an `<img>` costs one node per badge instead of a `<defs>` tree; and
-the OBS dock reuses `MessageRow` with no extra mounting. `img-src` already allows `data:` in
-all three CSPs.
+**Kick and YouTube draw their own badge artwork, pulled off the site at runtime.** Neither
+platform gives chat an image url for its role badges — both draw them as inline SVG in their
+own UI — so `platforms/kick/badges.ts` and `platforms/youtube/badges.ts` fetch the site's icon
+set, turn each icon into a `data:image/svg+xml` uri, and hand it back as `Badge.url`. Nothing
+downstream changed: it flows through the same `<img>` that renders a Twitch badge, into the
+dock backlog, into the OBS page. `img-src` already allows `data:` in all three CSPs. Both
+modules are named and shaped like `platforms/twitch/badges.ts` — `load` / `ready` / `lookup`,
+a module singleton, a bounded `ready()` deadline — so the three read the same.
 
-**The art is generated from Kick's bundle, and the names do not match the wire types.**
-`kick.com`'s Next chunks carry a design-system icon set as
-`name:"…Badge",viewBox:…,body:'<paths>'`. The broadcaster's icon is `HostBadge` — a
-**microphone**, not a camera — so the join is Kick's own
+**A checked-in copy of the art was the wrong answer, and the reason is staleness.** An earlier
+version generated `renderer/components/badge-art.ts` once and committed it; it goes out of date
+the day either site redraws a badge, silently and with nothing to notice it. Fetching costs one
+sweep per session, only when that platform is actually open, and a failure degrades to the
+`BADGE_GLYPH` lucide fallback — which is where the app was anyway.
+
+**The wire type is not the icon name on either platform, and that is the trap.** Kick's
+broadcaster icon is `HostBadge` — a **microphone**, not a camera — so a name match finds
+nothing and a guess from Twitch's shapes gets it wrong. Kick's own
 `{broadcaster:3, moderator:4, vip:5, og:6, subscriber:7, founder:8, sub_gifter:9, sidekick:10,
-verified:11}` map in the same bundle. Guessing the shapes from Twitch's badges is what put a
-camera on Kick's broadcaster; Twitch's is a camera and its VIP a gem, while Kick's are a
-microphone and a crown. Two things had to be stripped on the way in: the founder badge hangs a
-240px base64 noise texture off an SVG `pattern` for a soft-light sheen — 66KB of its 67KB, and
-invisible at 17.6px — and every `<image>`/`<pattern>` goes with it. Everything else is kept
-verbatim, gradients included, so the badges are Kick's own rather than a lookalike.
+verified:11}` map, in the same bundle, is what joins the two. YouTube is the same shape:
+`MODERATOR` resolves to `live-chat-badges:moderator` (a wrench, a 16px set) and `VERIFIED` to
+`yt-sys-icons:check_circle_thick` (a 24px set) — two different sets with two different sizes,
+so the viewBox has to come from the set rather than a constant.
 
-**`BADGE_GLYPH` is now Twitch's fallback, not Kick's.** With Kick drawing real art, the lucide
-map is only reached when Twitch's GQL badge query fails — so its icons are Twitch-shaped
-(camera, sword, gem) and must not be re-tuned to Kick's. `BadgeView` therefore takes
-`msg.platform`: Kick art is used only for Kick messages, or a Twitch outage would render a
-magenta Kick microphone next to a Twitch name. `sub_gifter` is the one Kick badge still on a
-glyph — Kick colours it by *count* through its own `getGiftBadgeMainColor` (1-4 green, 5-9
-teal, 10-24 purple, 25-49 pink, and up), which one static icon cannot express.
+**Three things make these fetches work, and each one fails quietly if missed.**
 
-Measured on eight live chatrooms, 2461 messages: the wire types that actually appear are
-`subscriber`, `sub_gifter`, `moderator`, `vip`, `founder`, `verified`, `og` and `bot`.
+- **Kick's set is split across chunks.** The icons live in ~70 hashed Next chunks with no
+  stable name, and *not all in one*: `HostBadge` and `VerifiedBadge` are in different files.
+  Stopping at the first chunk that answers loses `verified` and `bot` without an error.
+  `sweepChunks` runs 8 workers, merges, and stops once every wanted name is in hand — ~5MB in
+  under a second.
+- **YouTube's bundle is 8MB and must be streamed.** The sets sit ~1.4MB in, so the body is read
+  and abandoned as soon as every wanted set has *closed*. Stopping on the first `name=\"`
+  instead — the obvious mark — halts before the sets even begin and yields nothing.
+- **YouTube's `live_chat` page needs a browser User-Agent.** Without one it answers a 1.4KB
+  stub with no script tags, at `200 OK`, so it reads as "the icons moved" rather than "we were
+  served the no-JS page". With one it is ~227KB.
+
+**The founder badge's texture has to go.** Kick hangs a 240px base64 png off an SVG `pattern`
+for a soft-light sheen: 66KB of its 67KB, invisible at 17.6px, and it would otherwise sit in
+every message carrying that badge. `stripTexture` drops every `<image>`, `<pattern>` and
+`mix-blend-mode` path. Everything else is kept verbatim, gradients included.
+
+**`Badge.url` carrying a data uri is affordable because role badges are rare.** Measured on
+eight live Kick chatrooms, 2461 messages: 1211 `subscriber`, 376 `sub_gifter`, 72 `moderator`,
+48 `vip`, 36 `founder`, 15 `verified`, 5 `og`, 3 `bot`. Only ~7% of messages carry a badge whose
+art is inlined, so at 50 msg/s the extra IPC is single-digit KB/s — far cheaper than the
+out-of-band delivery it replaced the need for.
+
+**`BADGE_GLYPH` is the fallback for all three platforms now, and it is Twitch-shaped.** It is
+reached when a fetch has not landed or has failed, and by the badges no site ships art for:
+Kick's `sub_gifter`, which Kick colours by *count* through its own `getGiftBadgeMainColor`
+(1-4 green, 5-9 teal, 10-24 purple, 25-49 pink, and up), and YouTube's `OWNER`, which has no
+icon at all — YouTube tints the owner's *name* instead, so it keeps the text chip.
 
 **The legibility lift blends toward white — it must not scale channels.** Chat runs on
 `#12151a`, and platform-chosen names are picked against lighter backgrounds. `readableColor`
@@ -546,10 +570,12 @@ handle body, keep the `@` literal.
 **YouTube identifiers are case-sensitive.** `UCSJ4gkVC6NrvII8umztf0Ow` and an 11-char video id
 both break when lowercased, so `SourceManager` lowercases identifiers for Twitch only.
 
-**YouTube author badges are member badges or nothing.** `LiveChatAuthorBadge` carries
+**YouTube author badges are member badges, or art fetched off youtube.com.** `LiveChatAuthorBadge` carries
 `custom_thumbnail` (a member badge, `tooltip: "Member (5 years)"`, thumbnails at 16px and
 32px and **not sorted by width** — sort before building `srcSet`) or, for moderator, owner
-and verified, only an `icon_type` with no image. Those become text chips. YouTube has no
+and verified, only an `icon_type` with no image. Moderator and verified are filled in from
+YouTube's own icon sets — see "Kick and YouTube draw their own badge artwork" above — and
+`owner` stays a text chip because YouTube has no owner icon to fetch. YouTube has no
 per-author colour of any kind, so every YouTube name is coloured from the renderer's default
 palette.
 
@@ -1291,7 +1317,7 @@ tests, so nothing bundles them. What is covered:
 | the whole zustand store, groups included | `renderer/store.ts` |
 | the tab-strip drag geometry | `renderer/components/tab-strip.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
-| Kick's inlined badge artwork | `renderer/components/badge-art.ts` |
+| the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |
 
 **Keep the tests out of `src/renderer`, and not only for tidiness.** Tailwind v4 scans the
 renderer root for class candidates and takes them from prose, not just from JSX. Four test

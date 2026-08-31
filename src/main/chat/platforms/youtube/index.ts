@@ -21,6 +21,7 @@ import { splitLinks } from "../../links";
 import { plainTextOf } from "../../fragments";
 import { RecentIds } from "../../recent-ids";
 import { resolveChannel, type YouTubeChannel } from "./channel";
+import { youtubeBadges } from "./badges";
 import { innertube } from "./connection";
 
 const UNFILTERED_VIEW = "Live chat";
@@ -97,6 +98,8 @@ class YouTubeChatFeed extends PollingFeed {
   }
 
   protected async poll(): Promise<PollResult> {
+    if (!this.primed) await youtubeBadges.ready(this.channel.videoId);
+
     const contents = await this.request();
 
     if (!contents?.continuation?.token) {
@@ -255,12 +258,24 @@ function scaledImage(
   };
 }
 
+/** A member badge carries its own thumbnail; moderator and verified carry only an
+    `icon_type`, so they fall through to the artwork pulled off youtube.com. `OWNER` is
+    neither — YouTube tints the owner's name rather than giving them a badge, so it keeps
+    the text chip. */
 function toBadges(authorBadges: AuthorBadge[]): Badge[] {
   return authorBadges.map((badge) => {
     const label = badge.tooltip ?? badge.label ?? badge.icon_type ?? "";
     const image = scaledImage(badge.custom_thumbnail);
 
-    return image ? { label, ...image } : { label };
+    if (image) return { label, ...image };
+
+    const iconType = badge.icon_type;
+    if (!iconType) return { label };
+
+    const id = iconType.toLowerCase();
+    const art = youtubeBadges.lookup(id);
+
+    return art ? { label, id, url: art } : { label, id };
   });
 }
 

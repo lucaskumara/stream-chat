@@ -13,6 +13,7 @@ export class YouTubeChannel extends Channel {
 
   constructor(
     displayName: string,
+    readonly videoId: string,
     readonly continuation: string,
     readonly channelId: string,
   ) {
@@ -129,6 +130,7 @@ async function inspectStream(
     state: "ok",
     channel: new YouTubeChannel(
       displayName ?? "",
+      videoId,
       continuation,
       info.basic_info.channel_id ?? "",
     ),
