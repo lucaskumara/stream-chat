@@ -41,7 +41,21 @@ export default function App(): React.ReactElement {
     const offSources = api.onSources(setSources)
     const offAuth = api.onTwitchAuth(setTwitchAuth)
 
-    void api.listSources().then(setSources)
+    // A renderer reload — after a crash, or the watchdog recovering a blank window —
+    // starts with an empty store, so the replay main already keeps for OBS docks is
+    // pulled back in rather than leaving the pane blank until the next message.
+    void api.listSources().then((states) => {
+      setSources(states)
+
+      for (const state of states) {
+        void api
+          .sourceBacklog(state.id)
+          .then((messages) => {
+            if (messages.length > 0) ingest({ messages, moderation: [] })
+          })
+          .catch(() => {})
+      }
+    })
     void api
       .twitchAuthState()
       .then(setTwitchAuth)

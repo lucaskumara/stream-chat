@@ -8,6 +8,7 @@ import { ObsServer } from './obs/server'
 import { TwitchAuth } from './twitch/auth'
 import { Helix } from './twitch/helix'
 import { EventSubHub, IrcHub } from './chat/platforms/twitch'
+import { keepRendererAlive } from './lifecycle'
 import { buildAuthState } from './twitch/state'
 
 const isDev = !app.isPackaged
@@ -78,6 +79,8 @@ function createWindow(): BrowserWindow {
 
   window.on('ready-to-show', () => window.show())
 
+  keepRendererAlive(window)
+
   const reportMaximized = (): void => {
     window.webContents.send(IPC.windowMaximized, window.isMaximized())
   }
@@ -128,7 +131,7 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     app.setAppUserModelId('com.lucaskumara.streamchat')
 
-    registerIpc(sources, auth, obs)
+    registerIpc(sources, auth, obs, bus)
 
     void obs.start()
 

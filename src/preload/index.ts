@@ -3,6 +3,7 @@ import type {
   AddSourceRequest,
   ChatApi,
   ChatBatch,
+  ChatMessage,
   DeviceCodePrompt,
   HostPlatform,
   SourceState,
@@ -14,6 +15,7 @@ const IPC = {
   addSource: 'sources:add',
   removeSource: 'sources:remove',
   reorderSources: 'sources:reorder',
+  sourceBacklog: 'sources:backlog',
   openExternal: 'shell:open-external',
   copyText: 'clipboard:write',
   obsLink: 'obs:link',
@@ -47,6 +49,9 @@ const api: ChatApi = {
 
   reorderSources: (orderedIds: string[]): Promise<void> =>
     ipcRenderer.invoke(IPC.reorderSources, orderedIds),
+
+  sourceBacklog: (sourceId: string): Promise<ChatMessage[]> =>
+    ipcRenderer.invoke(IPC.sourceBacklog, sourceId),
 
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke(IPC.openExternal, url),

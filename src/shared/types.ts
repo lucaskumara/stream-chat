@@ -124,6 +124,7 @@ export interface ChatApi {
   addSource(req: AddSourceRequest): Promise<string>
   removeSource(sourceId: string): Promise<void>
   reorderSources(orderedIds: string[]): Promise<void>
+  sourceBacklog(sourceId: string): Promise<ChatMessage[]>
   openExternal(url: string): Promise<void>
   copyText(text: string): Promise<void>
 

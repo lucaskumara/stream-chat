@@ -1083,6 +1083,28 @@ backend exists, tokens are kept in memory for the session rather than written in
 
 **The config file is written then renamed**, so a crash mid-write cannot truncate it.
 
+**A dead renderer does not close the window — it goes blank, and nothing used to bring it
+back.** The `BrowserWindow` keeps painting its `backgroundColor` (`#141414`), so a crashed
+renderer looks like a dark empty app rather than an error, and it stays that way until the
+app is restarted. Windows reaps background processes across suspend/hibernate, which is why
+it showed up after sleep. `keepRendererAlive` in `lifecycle.ts` handles `render-process-gone`
+and `did-fail-load` by reloading, capped at 3 reloads a minute so a renderer that dies on
+every load cannot spin. `clean-exit` and `ERR_ABORTED` (-3, a superseded navigation) are
+both normal and ignored.
+
+**A lost GPU reports nothing, so `resume` repaints unconditionally.** Suspend can leave a
+live renderer with no surface — no crash event fires and `isCrashed()` is false — so the
+`powerMonitor` `resume` handler reloads if the renderer is actually crashed and otherwise
+just calls `webContents.invalidate()`. `child-process-gone` is an **`app`** event, not a
+`webContents` one; registering it on the window silently typechecks against a different
+overload and never fires.
+
+**The reload is only half a fix without the backlog.** The renderer store is in memory, so
+a recovered window came back with the tab list (main owns that) and an empty pane. `App`
+therefore pulls `sources:backlog` for each source on mount and ingests it — the same 200
+message replay `obs/server.ts` already sends a dock on connect. Verified by crashing the
+renderer under load: 184 rows back rather than 0.
+
 **Single-instance lock matters here** — a second instance would race the first for the same
 window and the same token store.
 

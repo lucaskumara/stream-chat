@@ -2,6 +2,7 @@ import { BrowserWindow, clipboard, ipcMain, shell } from 'electron'
 import type { AddSourceRequest, Platform } from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { obsChatPath } from '@shared/obs'
+import type { MessageBus } from './bus'
 import type { ObsServer } from './obs/server'
 import type { SourceManager } from './sources'
 import type { TwitchAuth } from './twitch/auth'
@@ -16,6 +17,7 @@ export const IPC = {
   addSource: 'sources:add',
   removeSource: 'sources:remove',
   reorderSources: 'sources:reorder',
+  sourceBacklog: 'sources:backlog',
   openExternal: 'shell:open-external',
   copyText: 'clipboard:write',
   obsLink: 'obs:link',
@@ -46,16 +48,25 @@ function handle(channel: string, listener: IpcHandler): void {
   ipcMain.handle(channel, listener)
 }
 
-export function registerIpc(sources: SourceManager, auth: TwitchAuth, obs: ObsServer): void {
-  registerSourceHandlers(sources)
+export function registerIpc(
+  sources: SourceManager,
+  auth: TwitchAuth,
+  obs: ObsServer,
+  bus: MessageBus
+): void {
+  registerSourceHandlers(sources, bus)
   registerShellHandlers()
   registerWindowHandlers()
   registerTwitchAuthHandlers(sources, auth)
   registerObsHandlers(sources, obs)
 }
 
-function registerSourceHandlers(sources: SourceManager): void {
+function registerSourceHandlers(sources: SourceManager, bus: MessageBus): void {
   handle(IPC.listSources, () => sources.list())
+
+  handle(IPC.sourceBacklog, (_e, sourceId: unknown) =>
+    bus.backlog.history(requireString(sourceId, 'sourceId'))
+  )
 
   handle(IPC.addSource, async (_e, request: unknown) =>
     sources.add(parseAddSource(request))
