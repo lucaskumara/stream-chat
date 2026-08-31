@@ -218,6 +218,14 @@ eight live Kick chatrooms, 2461 messages: 1211 `subscriber`, 376 `sub_gifter`, 7
 art is inlined, so at 50 msg/s the extra IPC is single-digit KB/s — far cheaper than the
 out-of-band delivery it replaced the need for.
 
+**Badge images keep a square box but must not be stretched into it.** The box is
+`h-[1.1em] w-[1.1em]` so the row reserves space before the image loads and nothing shifts
+when it does — but the default `object-fit: fill` then stretches art that is not square.
+Measured across 48 live Kick badge images, 47 are square and one is not: level 52 is
+258x283, and was being widened 10%. `object-contain` letterboxes it instead, which keeps
+both the reserved box and the artwork's proportions. `w-auto` would also fix the stretch
+and reintroduce the layout shift.
+
 **`BADGE_GLYPH` is the fallback for all three platforms now, and it is Twitch-shaped.** It is
 reached when a fetch has not landed or has failed, and by the badges no site ships art for:
 Kick's `sub_gifter`, which Kick colours by *count* through its own `getGiftBadgeMainColor`

@@ -133,7 +133,7 @@ function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
         alt={badge.label}
         loading="lazy"
         draggable={false}
-        className="mr-1 inline-block h-[1.1em] w-[1.1em] align-middle"
+        className="mr-1 inline-block h-[1.1em] w-[1.1em] object-contain align-middle"
         onError={() => setFailed(true)}
       />
     )
