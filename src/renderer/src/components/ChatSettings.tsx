@@ -27,6 +27,7 @@ export interface ChatSettingsProps {
   onFontStep: (steps: number) => void
   onFontReset: () => void
   onClear: () => void
+  onDisconnect: () => void
 }
 
 export function ChatSettings({
@@ -34,7 +35,8 @@ export function ChatSettings({
   fontSize,
   onFontStep,
   onFontReset,
-  onClear
+  onClear,
+  onDisconnect
 }: ChatSettingsProps): React.ReactElement {
   const showTimestamps = useStore((s) => s.showTimestamps)
   const showDeleted = useStore((s) => s.showDeleted)
@@ -94,6 +96,16 @@ export function ChatSettings({
       <Group label="OBS dock link">
         <ChatLink sourceId={sourceId} />
       </Group>
+
+      <Rule />
+
+      <button
+        type="button"
+        className="ghost-button chat-pane-disconnect h-[28px] w-full text-[13px]"
+        onClick={onDisconnect}
+      >
+        Disconnect channel
+      </button>
     </div>
   )
 }

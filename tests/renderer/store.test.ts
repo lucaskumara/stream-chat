@@ -4,8 +4,8 @@ import { CHAT_FONT_DEFAULT, CHAT_FONT_SIZES, useStore } from '@/store'
 
 const pristine = useStore.getState()
 
-function source(id: string, label = id): SourceState {
-  return { id, platform: 'twitch', label, status: 'connected' }
+function source(id: string, label = id, platform: SourceState['platform'] = 'twitch'): SourceState {
+  return { id, platform, label, status: 'connected' }
 }
 
 function message(id: string, sourceId = 'src-1', authorId = 'author-1'): ChatMessage {
@@ -27,124 +27,65 @@ const state = (): ReturnType<typeof useStore.getState> => useStore.getState()
 beforeEach(() => useStore.setState(pristine, true))
 
 describe('setSources', () => {
-  it('shows the first source on a cold start', () => {
-    state().setSources([source('src-1'), source('src-2')])
+  // The connect form would otherwise sit over a live chat after a renderer crash,
+  // since the store comes back empty while main still holds the source.
+  it('adopts the platform main already has on a cold start', () => {
+    state().setSources([source('src-1', 'lofi', 'youtube')])
 
-    expect(state().visibleIds).toEqual(['src-1'])
+    expect(state().activePlatform).toBe('youtube')
   })
 
-  it('jumps to a genuinely new channel', () => {
+  // A status event on one platform must not pull the user off the form they are
+  // typing into on another.
+  it('leaves the tab alone once the list is known', () => {
     state().setSources([source('src-1')])
-    state().setSources([source('src-1'), source('src-2')])
+    state().setActivePlatform('kick')
 
-    expect(state().visibleIds).toEqual(['src-2'])
+    state().setSources([source('src-1'), source('src-2', 'someone', 'youtube')])
+
+    expect(state().activePlatform).toBe('kick')
   })
 
-  it('keeps what is on screen when the list only changes status', () => {
-    state().setSources([source('src-1'), source('src-2')])
-    state().toggleSplit('src-2')
+  it('keeps the tab when main has nothing yet', () => {
+    state().setSources([])
 
-    state().setSources([source('src-1'), { ...source('src-2'), status: 'error' }])
-
-    expect(state().visibleIds).toEqual(['src-1', 'src-2'])
-  })
-
-  it('drops ids that are no longer there', () => {
-    state().setSources([source('src-1'), source('src-2')])
-    state().toggleSplit('src-2')
-
-    state().setSources([source('src-1')])
-
-    expect(state().visibleIds).toEqual(['src-1'])
-  })
-
-  it('falls back to the first source when everything visible has gone', () => {
-    state().setSources([source('src-1')])
-    state().setSources([source('src-2'), source('src-3')])
-
-    expect(state().visibleIds).toEqual(['src-2'])
-  })
-
-  it('drops a chat out of the split when it disappears', () => {
-    state().setSources([source('src-1'), source('src-2')])
-    state().toggleSplit('src-2')
-    expect(state().visibleIds).toEqual(['src-1', 'src-2'])
-
-    state().setSources([source('src-1')])
-
-    expect(state().visibleIds).toEqual(['src-1'])
+    expect(state().activePlatform).toBe('twitch')
   })
 })
 
-describe('showSource', () => {
-  // v2: a tab click shows only that channel. Group memory is gone, so clicking a
-  // member of a split collapses the split down to it rather than restoring one.
-  it('shows only the chat that was clicked', () => {
-    state().setSources([source('src-1'), source('src-2'), source('src-3')])
-    state().toggleSplit('src-2')
+describe('setActivePlatform', () => {
+  it('switches the tab', () => {
+    state().setActivePlatform('kick')
 
-    expect(state().visibleIds).toHaveLength(2)
-
-    state().showSource('src-2')
-
-    expect(state().visibleIds).toEqual(['src-2'])
+    expect(state().activePlatform).toBe('kick')
   })
 
-  it('leaves the visible set alone when that chat is already the only one shown', () => {
-    state().setSources([source('src-1'), source('src-2')])
-
-    const before = state().visibleIds
-    state().showSource('src-1')
-
-    expect(state().visibleIds).toBe(before)
-  })
-
-  // Selecting a channel implies the Chat view, from Broadcast or Settings alike.
+  // Picking a platform implies the Chat view, from Broadcast or Settings alike.
   it('returns to the chat view', () => {
-    state().setSources([source('src-1')])
     state().setView('settings')
 
-    state().showSource('src-1')
+    state().setActivePlatform('youtube')
 
     expect(state().view).toBe('chats')
   })
 })
 
-describe('toggleSplit', () => {
-  it('adds a chat alongside the others', () => {
-    state().setSources([source('src-1'), source('src-2')])
+describe('setConnectDraft', () => {
+  it('keeps a half-typed name per platform', () => {
+    state().setConnectDraft('twitch', 'theburntpea')
+    state().setConnectDraft('kick', 'xqc')
 
-    state().toggleSplit('src-2')
-
-    expect(state().visibleIds).toEqual(['src-1', 'src-2'])
+    expect(state().connectDraft.twitch).toBe('theburntpea')
+    expect(state().connectDraft.kick).toBe('xqc')
   })
 
-  // Panes run in the channel list's order, not the order they were split in, so a
-  // split reads left to right the same as the tab strip above it.
-  it('orders panes by the channel list rather than by click order', () => {
-    state().setSources([source('src-1'), source('src-2'), source('src-3')])
+  it('does not churn the state when nothing changed', () => {
+    state().setConnectDraft('twitch', 'xqc')
+    const before = state().connectDraft
 
-    state().toggleSplit('src-3')
-    state().toggleSplit('src-2')
+    state().setConnectDraft('twitch', 'xqc')
 
-    expect(state().visibleIds).toEqual(['src-1', 'src-2', 'src-3'])
-  })
-
-  it('takes a chat back out of the split', () => {
-    state().setSources([source('src-1'), source('src-2')])
-    state().toggleSplit('src-2')
-
-    state().toggleSplit('src-2')
-
-    expect(state().visibleIds).toEqual(['src-1'])
-  })
-
-  it('refuses to empty the visible set', () => {
-    state().setSources([source('src-1'), source('src-2')])
-
-    state().toggleSplit('src-1')
-
-    expect(state().visibleIds).toEqual(['src-1'])
+    expect(state().connectDraft).toBe(before)
   })
 })
 
@@ -386,15 +327,6 @@ describe('forgetSource', () => {
     expect('src-1' in state().search).toBe(false)
     expect('src-1' in state().searchDraft).toBe(false)
     expect('src-1' in state().fontSize).toBe(false)
-  })
-
-  it('takes the chat off screen', () => {
-    state().setSources([source('src-1'), source('src-2')])
-    state().toggleSplit('src-2')
-
-    state().forgetSource('src-2')
-
-    expect(state().visibleIds).toEqual(['src-1'])
   })
 
   it('closes the filter and settings for that pane', () => {

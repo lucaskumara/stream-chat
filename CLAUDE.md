@@ -100,8 +100,9 @@ src/main/             bus.ts (MessageBus), backlog.ts, sources.ts (SourceManager
 src/main/obs/         server.ts — the loopback link server OBS docks connect to
 src/main/twitch/      auth.ts, helix.ts, state.ts, clientId.ts — account only, no wire code
 src/main/emotes/      7TV + BTTV, reached through Channel.emotes — see "Emotes" below
-src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the platform + event-accent
-                      tokens no CSS variable can carry), search.ts (the pane filter grammar),
+src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the platform colour, name and
+                      event-accent tokens no CSS variable can carry), search.ts (the pane
+                      filter grammar), connect.ts (the per-platform channel parse),
                       components/ and views/ — the title bar's three screens
 src/renderer/src/obs/ the OBS dock page — a second renderer entry, no antd
 ```
@@ -264,7 +265,8 @@ and Kick chat are readable while the channel is dark.
 
 **Adding a channel is checked twice, and the two checks fail differently.**
 `parseChannelInput` in `src/shared/channel.ts` decides whether the text is *shaped* like a
-channel — `TWITCH_LOGIN` is 3-25 of `[a-z0-9_]`, `KICK_SLUG` 2-25, a YouTube handle 3-30
+channel — reached from the renderer through `parseForPlatform`, which also refuses input
+resolving to a platform other than the open tab's — `TWITCH_LOGIN` is 3-25 of `[a-z0-9_]`, `KICK_SLUG` 2-25, a YouTube handle 3-30
 after the `@` — and rejects in the renderer without an IPC call. Resolve then decides whether
 the channel *exists*. A name that is too long and a name nobody owns therefore surface
 different messages from different processes, which is worth knowing when a fix to one appears
@@ -777,24 +779,16 @@ a kind in one and not the other renders a chip with `undefined` colours. Twitch 
 only platform that emits any of them, so this whole path is dark on Kick and YouTube.
 
 **The chrome does not explain itself on hover.** The pane bar's icon buttons, the search
-field, the pin, and emote and badge *images* all carry `aria-label` but no `title`, so nothing
+field, the platform tabs, and emote and badge *images* all carry `aria-label` but no `title`, so nothing
 pops a caption while you read chat. The one `title` left in a message row is on the
 three-letter badge chip that stands in for a badge with no image — there the title is the only
 place the full label exists. Do not reintroduce tooltips on the bar; they were removed on
 purpose.
 
-**The pin shows state, not just an action: filled means on screen.** Every tab renders the
-split control, and `<Pin fill>` is `currentColor` when the tab is shown and `none` when it is
-not, so the strip reads as "these chats are pinned open" at a glance. The click is still
-refused on a shown tab that is the only one shown — the visible set must never empty — but the
-icon stays rather than vanishing, because a control that disappears exactly when you look at
-it reads as a bug. Clicking a shown tab's pin once a second chat is open is what removes it
-from a split, and that is the only route: membership never changes by dragging.
-
 **Pane state lives in the store, not the pane.** `store.search[sourceId]` (committed terms),
 `store.searchDraft[sourceId]` (what is half-typed), `filterOpen[sourceId]` and
 `fontSize[sourceId]` are all keyed by source, because `App` renders a different tree as the
-split changes, so a pane *remounts* and local `useState` would silently drop the search.
+platform tab changes, so a pane *remounts* and local `useState` would silently drop the search.
 `forgetSource` deletes every one of those entries alongside the messages.
 
 **Two things in that popover are *not* per source, and it says so.** `ChatSettings` puts the
@@ -852,35 +846,55 @@ rather than a division. Do not restore it from the spec.
 by a segmented control at the far left of the title bar. `Broadcast` is a named placeholder
 reserved for the next slice of work — it is deliberately empty, not unfinished.
 
-**Channel tabs live in the title bar, and only in the Chat view.** The hairline divider
-before them is rendered *only* when the tabs are, or it is a stray line in an otherwise
-empty bar. Each tab carries a platform dot (dimmed to .55 when the tab is not shown,
-swapped for `--offline-dot` when the channel is offline), the label, and two 18px actions
-that fade in on hover: **split** and **remove**. The split action stays visible at `#b4b4b4`
-while that channel is part of a split, because a control that vanishes exactly when it is
-relevant reads as a bug.
+**Three platform tabs live in the title bar, centred, and only in the Chat view.** Twitch,
+YouTube and Kick are the whole strip — one chat per platform, no channel tabs, no split, no
+dragging. `store.activePlatform` says which is on screen, and the pane is whichever source
+carries that platform. Each tab is the site's own mark plus its name; the mark takes
+`PLATFORM_COLOR` while that platform holds a connected channel and the tab's own text tone
+otherwise, so the strip reads as "these three are live" without a second indicator.
 
-**A tab click shows only that channel, and implies the Chat view.** This is a reversal: v1
-made a click on an already-visible tab a no-op to protect the split. v2 collapses the split
-to the clicked channel instead, and `showSource` returns the state untouched only when that
-channel is *already the only one shown*. Selecting a channel from Broadcast or Settings
-switches back to Chat.
+**The three marks are the sites' own logo geometry, inlined once.** `PlatformMark` carries
+Twitch's header glitch, YouTube's `yt-ringo2` badge and the K from `kick.com/img/kick-logo.svg`,
+each as a single `currentColor` path — YouTube's play triangle is knocked out of the body by
+`fill-rule: evenodd` rather than painted in the page colour, which would smear the moment the
+tab gained a hover background. This is deliberately *not* the runtime fetch that badge art
+uses: that rule exists because sites redraw badges, and a brand mark is the one piece of a
+site's art that does not move.
 
-**Split membership changes only through the split control, and panes run in the channel
-list's order.** `toggleSplit` rebuilds `visibleIds` by filtering `sources`, not by appending,
-so a split reads left to right the same as the tab strip above it regardless of the order the
-panes were added. The last visible pane cannot be un-split.
+**Centring is absolute, not `flex-1` on both sides.** `.titlebar-centre` is out of the flow at
+`left: 50%`, so the tabs sit on the *window's* centre line rather than midway between the mode
+switcher and the window controls — those two are different widths, and on Windows they change
+width again when the window maximises. Verified in the running app: tab group centre 720 in a
+1440px window.
 
-**Split groups are gone, and so is tab dragging.** v1 remembered arrangements (`store.groups`)
-and restored them when any member was clicked, drew a coloured band across each contiguous
-run, and reordered tabs with dnd-kit through `components/tab-strip.ts`. The v2 handoff
-specifies neither, and both fought the "fewer visible controls" goal, so the state, the band,
-the drag geometry and its tests were removed together. `SourceManager.reorder` and the
-`sources:reorder` IPC survive on the main side with no caller in the UI — restoring drag
-reordering means writing a new interaction, not rewiring an old one. The renderer store's
-own `reorderSources` did **not** survive: a restored interaction would call the IPC and take
-the new order back through `setSources`, so a second local permutation was dead the day
-dragging went.
+**A platform with no channel shows the connect form in the pane, not a modal.** `ConnectChannel`
+replaced the old `AddChannel` dialog, and the tab supplies the platform, so `parseChannelInput`
+is always called with a hint and can never return `needsPlatform`. That is also why
+`parseForPlatform` exists: the parser happily resolves a pasted youtube.com link while the Kick
+tab is open, and connecting a chat on the tab next door is not what the click asked for — so
+input resolving to another platform is refused by name.
+
+**The connect draft is in the store, keyed by platform.** Switching tabs unmounts the form, so
+a local `useState` would drop a half-typed channel name — the same reason pane state is keyed
+by source. The error and the busy flag stay local on purpose: both should clear when the tab
+changes.
+
+**Disconnecting is in the pane's settings popover, and there is no confirm.** It is the only
+route back to the connect form, and it is `removeSource` plus `forgetSource` — the same pair
+the tab `×` used to run. Re-connecting costs typing the name again, which is why it sits below
+the OBS link rather than behind a dialog like clearing history.
+
+**One chat per platform is a renderer rule, not a main-process one.** `SourceManager` still
+holds any number of sources and `removeByPlatform` exists for the Twitch sign-in swap, so the
+OBS link server and the backlog are untouched by this. Nothing in the UI can create a second
+source for a platform, because the connect form is only rendered when there is none.
+
+**Split groups, tab dragging and per-channel tabs are all gone.** v1 remembered arrangements
+(`store.groups`) and reordered tabs with dnd-kit; v2 kept per-channel tabs with a split
+control and `visibleIds`. Both are removed — with `showSource`, `toggleSplit`, `visibleIds`,
+`components/ChannelTabs.tsx` and `components/AddChannel.tsx`. `SourceManager.reorder` and the
+`sources:reorder` IPC survive on the main side with no caller in the UI; restoring any of this
+means writing a new interaction, not rewiring an old one.
 
 ### Main process
 
@@ -1106,13 +1120,12 @@ now **back** — 7TV and BTTV resolve through `Channel.emotes`, verified live at
 images in one screen of a busy Twitch chat, none broken.
 
 The renderer chrome was rebuilt on **Ant Design v6**, then the sidebar was replaced by a
-browser-style tab strip, and the OS frame was replaced by `TitleBar`. The twelve rules the
-strip has to keep live in "Tabs, split groups and dragging" — read them there rather than
-here, since this paragraph has drifted from the code twice already. `MessageRow` stays
-hand-written for the reasons in "Renderer UI", and Tailwind is still in the tree for the
-chat rows. There is still no per-pane header and no tab-bar extra slot — the tab strip
-carries status — but each pane now has a top bar that searches it, clears it, and hands out
-its OBS link.
+browser-style tab strip, then antd went and the OS frame was replaced by `TitleBar`. The
+strip is now **three fixed platform tabs** rather than one tab per channel — the rules live
+in "Navigation", read them there rather than here, since this paragraph has drifted from the
+code twice already. `MessageRow` stays hand-written for the reasons in "Renderer UI", and
+Tailwind is still in the tree for the chat rows. Each pane has a top bar that searches it,
+clears it, hands out its OBS link and disconnects the channel.
 
 Every chat is also readable outside the app, at a loopback URL OBS can dock — see "OBS
 links".
@@ -1159,6 +1172,7 @@ tests, so nothing bundles them. What is covered:
 | every IPC argument validator | `ipc.ts` |
 | resolve and naming on all three platforms | `platforms/*/channel.ts` |
 | the pane filter grammar | `renderer/search.ts` |
+| the per-platform channel parse | `renderer/connect.ts` |
 | the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |
@@ -1172,8 +1186,8 @@ name, one in a comment — were enough to emit `.filter`, `.hidden` and the whol
 CSS back to byte-identical with the build from before the suite existed.
 
 **Tests are written against the invariants in this file, not against the implementation.**
-Where a rule above cost real time to discover — IRC's code-point emote offsets, `showSource`
-refusing to hide a visible chat, `Number(null)` snapping every dock to the smallest font,
+Where a rule above cost real time to discover — IRC's code-point emote offsets, a pasted link
+connecting on the tab next door, `Number(null)` snapping every dock to the smallest font,
 whole-token case-sensitive emote matching — there is a case for it carrying a comment that
 says which invariant it pins. That is what makes the suite worth keeping.
 

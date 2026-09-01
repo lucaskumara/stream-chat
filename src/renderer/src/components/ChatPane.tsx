@@ -33,6 +33,7 @@ export interface ChatPaneProps {
   onFontStep: (steps: number) => void
   onFontReset: () => void
   onClear: () => void
+  onDisconnect: () => void
 }
 
 export function ChatPane({
@@ -54,7 +55,8 @@ export function ChatPane({
   fontSize,
   onFontStep,
   onFontReset,
-  onClear
+  onClear,
+  onDisconnect
 }: ChatPaneProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState(true)
@@ -172,6 +174,7 @@ export function ChatPane({
           onFontStep={onFontStep}
           onFontReset={onFontReset}
           onClear={onClear}
+          onDisconnect={onDisconnect}
         />
       )}
 

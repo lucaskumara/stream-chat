@@ -6,6 +6,12 @@ export const PLATFORM_COLOR: Record<Platform, string> = {
   kick: '#53fc18'
 }
 
+export const PLATFORM_NAME: Record<Platform, string> = {
+  twitch: 'Twitch',
+  youtube: 'YouTube',
+  kick: 'Kick'
+}
+
 export type EventKind = 'subscription' | 'raid' | 'donation' | 'announcement' | 'system'
 
 export interface EventAccent {

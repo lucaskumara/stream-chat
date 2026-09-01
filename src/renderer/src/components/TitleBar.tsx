@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import type { SourceState } from '@shared/types'
+import type { Platform, SourceState } from '@shared/types'
 import { bridge } from '../bridge'
 import type { View } from '../store'
-import { ChannelTabs } from './ChannelTabs'
 import { ModeSwitcher } from './ModeSwitcher'
+import { PlatformTabs } from './PlatformTabs'
 
 function Glyph({ path }: { path: string }): React.ReactElement {
   return (
@@ -22,22 +22,16 @@ export interface TitleBarProps {
   view: View
   onView: (view: View) => void
   sources: SourceState[]
-  visibleIds: string[]
-  onSelect: (sourceId: string) => void
-  onSplit: (sourceId: string) => void
-  onRemove: (source: SourceState) => void
-  onAdd: () => void
+  activePlatform: Platform
+  onPlatform: (platform: Platform) => void
 }
 
 export function TitleBar({
   view,
   onView,
   sources,
-  visibleIds,
-  onSelect,
-  onSplit,
-  onRemove,
-  onAdd
+  activePlatform,
+  onPlatform
 }: TitleBarProps): React.ReactElement {
   const [maximized, setMaximized] = useState(false)
 
@@ -52,26 +46,16 @@ export function TitleBar({
     return api.onWindowMaximized(setMaximized)
   }, [])
 
-  // Without tabs beside it the divider is just a stray line in the bar
-  const tabs = view === 'chats' && sources.length > 0
-
   return (
     <div className="titlebar">
       <ModeSwitcher view={view} onSelect={onView} />
 
-      {tabs && (
-        <>
-          <span aria-hidden className="h-[20px] w-px flex-none" style={{ background: 'var(--line)' }} />
-
-          <ChannelTabs
-            sources={sources}
-            visibleIds={visibleIds}
-            onSelect={onSelect}
-            onSplit={onSplit}
-            onRemove={onRemove}
-            onAdd={onAdd}
-          />
-        </>
+      {/* Centred on the window rather than between its neighbours, so the three tabs
+          sit still while the mode switcher and the window controls change width. */}
+      {view === 'chats' && (
+        <div className="titlebar-centre">
+          <PlatformTabs active={activePlatform} sources={sources} onSelect={onPlatform} />
+        </div>
       )}
 
       <div className="titlebar-drag" />

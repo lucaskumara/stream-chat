@@ -65,6 +65,7 @@ button,
 /* --- title bar ------------------------------------------------------------ */
 
 .titlebar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -72,6 +73,14 @@ button,
   flex: none;
   padding-left: 8px;
   background: var(--ink-900);
+}
+
+/* Out of the flow, so the platform tabs stay on the window's centre line however
+   wide the mode switcher and the window controls grow. */
+.titlebar-centre {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 /* A drag region swallows mouse events, so every control inside the bar has to

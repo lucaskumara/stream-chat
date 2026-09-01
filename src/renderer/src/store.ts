@@ -3,6 +3,7 @@ import type {
   ChatBatch,
   ChatMessage,
   ModerationEvent,
+  Platform,
   SourceState,
   TwitchAuthState
 } from '@shared/types'
@@ -38,13 +39,18 @@ interface ChatState {
   view: View
   settingsPane: SettingsPane
 
+  /** One chat per platform, so the tab strip is the platform list and the visible
+      pane is whichever source carries this platform. */
+  activePlatform: Platform
+
+  /** Half-typed channel names survive a tab switch, which remounts the form. */
+  connectDraft: Record<string, string>
+
   filterOpen: Record<string, boolean>
 
   /** Only one pane's settings popover is open at a time, so this is a single id
       rather than a record: opening one closes any other. */
   gearOpenFor: string | null
-
-  visibleIds: string[]
 
   deleted: Deleted
 
@@ -72,8 +78,8 @@ interface ChatState {
 
   setSources: (states: SourceState[]) => void
   setTwitchAuth: (state: TwitchAuthState) => void
-  showSource: (sourceId: string) => void
-  toggleSplit: (sourceId: string) => void
+  setActivePlatform: (platform: Platform) => void
+  setConnectDraft: (platform: Platform, draft: string) => void
   ingest: (batch: ChatBatch) => void
   setView: (view: View) => void
   setSettingsPane: (pane: SettingsPane) => void
@@ -194,10 +200,12 @@ function sweptDeleted(deleted: Deleted, messages: Messages): Deleted {
 export const useStore = create<ChatState>()((set) => ({
   sources: [],
   bySource: {},
-  visibleIds: [],
   deleted: {},
   search: {},
   searchDraft: {},
+
+  activePlatform: 'twitch',
+  connectDraft: {},
 
   view: 'chats',
   settingsPane: 'general',
@@ -221,51 +229,28 @@ export const useStore = create<ChatState>()((set) => ({
 
   twitchAuth: { status: 'signed-out' },
 
+  /** A cold start adopts whatever main already has — the backlog replay after a
+      renderer crash otherwise leaves the connect form up over a live chat. Later
+      updates never move the tab: a status event on one platform must not pull the
+      user off the form they are typing into on another. */
   setSources: (states) =>
     set((s) => {
-      const alive = new Set(states.map((state) => state.id))
-      const kept = s.visibleIds.filter((id) => alive.has(id))
+      if (s.sources.length > 0) return { sources: states }
 
-      const opened =
-        s.sources.length > 0
-          ? states.find((state) => !s.sources.some((was) => was.id === state.id))
-          : undefined
+      const first = states[0]
 
-      if (opened) return { sources: states, visibleIds: [opened.id] }
-      if (kept.length > 0) return { sources: states, visibleIds: kept }
-
-      return {
-        sources: states,
-        visibleIds: states.slice(0, 1).map((state) => state.id)
-      }
+      return first ? { sources: states, activePlatform: first.platform } : { sources: states }
     }),
 
   setTwitchAuth: (twitchAuth) => set({ twitchAuth }),
 
-  /** A tab click shows only that channel and returns to the Chat view. It is no longer
-      a no-op on a shown tab: with a split open, clicking one member collapses to it. */
-  showSource: (sourceId) =>
+  setActivePlatform: (activePlatform) => set({ activePlatform, view: 'chats' }),
+
+  setConnectDraft: (platform, draft) =>
     set((s) => {
-      const alone = s.visibleIds.length === 1 && s.visibleIds[0] === sourceId
+      if (s.connectDraft[platform] === draft) return s
 
-      return alone ? { view: 'chats' } : { visibleIds: [sourceId], view: 'chats' }
-    }),
-
-  /** Panes run in the channel list's order rather than the order they were split in,
-      so a split reads left-to-right the same as the tab strip above it. */
-  toggleSplit: (sourceId) =>
-    set((s) => {
-      const held = s.visibleIds.includes(sourceId)
-      if (held && s.visibleIds.length === 1) return s
-
-      const next = new Set(s.visibleIds)
-      if (held) next.delete(sourceId)
-      else next.add(sourceId)
-
-      return {
-        visibleIds: s.sources.map((source) => source.id).filter((id) => next.has(id)),
-        view: 'chats'
-      }
+      return { connectDraft: { ...s.connectDraft, [platform]: draft } }
     }),
 
   ingest: (batch) =>
@@ -363,7 +348,6 @@ export const useStore = create<ChatState>()((set) => ({
       searchDraft: omit(s.searchDraft, sourceId),
       fontSize: omit(s.fontSize, sourceId),
       filterOpen: omit(s.filterOpen, sourceId),
-      gearOpenFor: s.gearOpenFor === sourceId ? null : s.gearOpenFor,
-      visibleIds: s.visibleIds.filter((id) => id !== sourceId)
+      gearOpenFor: s.gearOpenFor === sourceId ? null : s.gearOpenFor
     }))
 }))
