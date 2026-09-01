@@ -1,14 +1,7 @@
 import { memo, useCallback } from 'react'
 import { Search, Settings, X } from 'lucide-react'
 import type { SourceState } from '@shared/types'
-import { PLATFORM_COLOR } from '../theme'
 import { termLabel } from '../search'
-
-const PLATFORM_NAME: Record<SourceState['platform'], string> = {
-  twitch: 'Twitch',
-  youtube: 'YouTube',
-  kick: 'Kick'
-}
 
 export interface ChatPaneBarProps {
   source: SourceState
@@ -70,18 +63,8 @@ function ChatPaneBarImpl({
         className="flex h-[44px] items-center gap-[10px] pr-[8px] pl-[12px]"
         style={{ borderBottom: '1px solid var(--line)' }}
       >
-        <span
-          aria-hidden
-          className="h-[6px] w-[6px] flex-none rounded-full"
-          style={{ background: offline ? 'var(--offline-dot)' : PLATFORM_COLOR[source.platform] }}
-        />
-
         <span className="truncate text-[14px] font-semibold" style={{ color: '#f0f0f0' }}>
           {source.label}
-        </span>
-
-        <span className="flex-none text-[14px]" style={{ color: 'var(--fg-4)' }}>
-          {PLATFORM_NAME[source.platform]}
         </span>
 
         {offline && (

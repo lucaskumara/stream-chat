@@ -4,21 +4,22 @@ import { PLATFORM_COLOR, PLATFORM_NAME } from '../theme'
 import { PlatformMark } from './PlatformMark'
 
 export interface PlatformTabsProps {
-  active: Platform
+  visible: Platform[]
   sources: SourceState[]
-  onSelect: (platform: Platform) => void
+  onToggle: (platform: Platform) => void
 }
 
-function PlatformTabsImpl({ active, sources, onSelect }: PlatformTabsProps): React.ReactElement {
+function PlatformTabsImpl({ visible, sources, onToggle }: PlatformTabsProps): React.ReactElement {
   return (
     <div
       role="tablist"
       aria-label="Platform"
+      aria-multiselectable
       className="no-drag flex flex-none gap-[2px] rounded-[7px] p-[2px]"
       style={{ background: 'var(--ink-800)', border: '1px solid var(--line-2)' }}
     >
       {PLATFORMS.map((platform) => {
-        const on = active === platform
+        const on = visible.includes(platform)
         const source = sources.find((held) => held.platform === platform)
         const live = source !== undefined && source.status !== 'error' && source.status !== 'offline'
 
@@ -29,7 +30,7 @@ function PlatformTabsImpl({ active, sources, onSelect }: PlatformTabsProps): Rea
             role="tab"
             aria-selected={on}
             data-platform={platform}
-            onClick={() => onSelect(platform)}
+            onClick={() => onToggle(platform)}
             className="flex h-[26px] cursor-pointer items-center gap-[7px] rounded-[5px] border-0 px-[11px] text-[14px]"
             style={{
               background: on ? 'var(--segment-on)' : 'transparent',

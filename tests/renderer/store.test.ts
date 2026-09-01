@@ -29,44 +29,85 @@ beforeEach(() => useStore.setState(pristine, true))
 describe('setSources', () => {
   // The connect form would otherwise sit over a live chat after a renderer crash,
   // since the store comes back empty while main still holds the source.
-  it('adopts the platform main already has on a cold start', () => {
-    state().setSources([source('src-1', 'lofi', 'youtube')])
+  it('adopts every platform main already has on a cold start', () => {
+    state().setSources([source('src-1', 'lofi', 'youtube'), source('src-2', 'xqc', 'kick')])
 
-    expect(state().activePlatform).toBe('youtube')
+    expect(state().visiblePlatforms).toEqual(['youtube', 'kick'])
   })
 
   // A status event on one platform must not pull the user off the form they are
   // typing into on another.
-  it('leaves the tab alone once the list is known', () => {
+  it('leaves the tabs alone once the list is known', () => {
     state().setSources([source('src-1')])
-    state().setActivePlatform('kick')
+    state().togglePlatform('kick')
 
     state().setSources([source('src-1'), source('src-2', 'someone', 'youtube')])
 
-    expect(state().activePlatform).toBe('kick')
+    expect(state().visiblePlatforms).toEqual(['twitch', 'kick'])
   })
 
-  it('keeps the tab when main has nothing yet', () => {
+  it('keeps the tabs when main has nothing yet', () => {
     state().setSources([])
 
-    expect(state().activePlatform).toBe('twitch')
+    expect(state().visiblePlatforms).toEqual(['twitch'])
   })
 })
 
-describe('setActivePlatform', () => {
-  it('switches the tab', () => {
-    state().setActivePlatform('kick')
+describe('togglePlatform', () => {
+  it('puts a platform on screen alongside the others', () => {
+    state().togglePlatform('kick')
 
-    expect(state().activePlatform).toBe('kick')
+    expect(state().visiblePlatforms).toEqual(['twitch', 'kick'])
+  })
+
+  // Panes run in tab order, not the order they were switched on, so a split reads
+  // left to right the same as the strip above it.
+  it('orders panes by the tab strip rather than by click order', () => {
+    state().togglePlatform('kick')
+    state().togglePlatform('youtube')
+
+    expect(state().visiblePlatforms).toEqual(['twitch', 'youtube', 'kick'])
+  })
+
+  it('takes a platform back off screen', () => {
+    state().togglePlatform('kick')
+
+    state().togglePlatform('kick')
+
+    expect(state().visiblePlatforms).toEqual(['twitch'])
+  })
+
+  it('refuses to empty the view', () => {
+    state().togglePlatform('twitch')
+
+    expect(state().visiblePlatforms).toEqual(['twitch'])
+  })
+
+  // A tab with no channel shows its connect form, which is the only route to one.
+  it('switches on a platform that has no channel', () => {
+    state().setSources([source('src-1')])
+
+    state().togglePlatform('youtube')
+
+    expect(state().visiblePlatforms).toEqual(['twitch', 'youtube'])
   })
 
   // Picking a platform implies the Chat view, from Broadcast or Settings alike.
   it('returns to the chat view', () => {
     state().setView('settings')
 
-    state().setActivePlatform('youtube')
+    state().togglePlatform('youtube')
 
     expect(state().view).toBe('chats')
+  })
+
+  it('returns to the chat view even when the toggle is refused', () => {
+    state().setView('settings')
+
+    state().togglePlatform('twitch')
+
+    expect(state().view).toBe('chats')
+    expect(state().visiblePlatforms).toEqual(['twitch'])
   })
 })
 

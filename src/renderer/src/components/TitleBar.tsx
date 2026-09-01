@@ -22,7 +22,7 @@ export interface TitleBarProps {
   view: View
   onView: (view: View) => void
   sources: SourceState[]
-  activePlatform: Platform
+  visiblePlatforms: Platform[]
   onPlatform: (platform: Platform) => void
 }
 
@@ -30,7 +30,7 @@ export function TitleBar({
   view,
   onView,
   sources,
-  activePlatform,
+  visiblePlatforms,
   onPlatform
 }: TitleBarProps): React.ReactElement {
   const [maximized, setMaximized] = useState(false)
@@ -50,15 +50,16 @@ export function TitleBar({
     <div className="titlebar">
       <ModeSwitcher view={view} onSelect={onView} />
 
+      <div className="titlebar-drag" />
+
       {/* Centred on the window rather than between its neighbours, so the three tabs
-          sit still while the mode switcher and the window controls change width. */}
+          sit still while the mode switcher and the window controls change width — and
+          declared after the drag filler, whose region would otherwise re-cover them. */}
       {view === 'chats' && (
-        <div className="titlebar-centre">
-          <PlatformTabs active={activePlatform} sources={sources} onSelect={onPlatform} />
+        <div className="titlebar-centre no-drag">
+          <PlatformTabs visible={visiblePlatforms} sources={sources} onToggle={onPlatform} />
         </div>
       )}
-
-      <div className="titlebar-drag" />
 
       {!trafficLights && (
         <>

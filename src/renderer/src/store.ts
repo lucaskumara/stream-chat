@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { PLATFORMS } from '@shared/types'
 import type {
   ChatBatch,
   ChatMessage,
@@ -39,9 +40,10 @@ interface ChatState {
   view: View
   settingsPane: SettingsPane
 
-  /** One chat per platform, so the tab strip is the platform list and the visible
-      pane is whichever source carries this platform. */
-  activePlatform: Platform
+  /** One chat per platform, so the tab strip is the platform list and a pane is
+      whichever source carries a visible platform. Panes run in PLATFORMS order,
+      which is the order the tabs are drawn in. */
+  visiblePlatforms: Platform[]
 
   /** Half-typed channel names survive a tab switch, which remounts the form. */
   connectDraft: Record<string, string>
@@ -78,7 +80,7 @@ interface ChatState {
 
   setSources: (states: SourceState[]) => void
   setTwitchAuth: (state: TwitchAuthState) => void
-  setActivePlatform: (platform: Platform) => void
+  togglePlatform: (platform: Platform) => void
   setConnectDraft: (platform: Platform, draft: string) => void
   ingest: (batch: ChatBatch) => void
   setView: (view: View) => void
@@ -204,7 +206,7 @@ export const useStore = create<ChatState>()((set) => ({
   search: {},
   searchDraft: {},
 
-  activePlatform: 'twitch',
+  visiblePlatforms: ['twitch'],
   connectDraft: {},
 
   view: 'chats',
@@ -231,20 +233,34 @@ export const useStore = create<ChatState>()((set) => ({
 
   /** A cold start adopts whatever main already has — the backlog replay after a
       renderer crash otherwise leaves the connect form up over a live chat. Later
-      updates never move the tab: a status event on one platform must not pull the
+      updates never move the tabs: a status event on one platform must not pull the
       user off the form they are typing into on another. */
   setSources: (states) =>
     set((s) => {
       if (s.sources.length > 0) return { sources: states }
+      if (states.length === 0) return { sources: states }
 
-      const first = states[0]
+      const live = new Set(states.map((state) => state.platform))
 
-      return first ? { sources: states, activePlatform: first.platform } : { sources: states }
+      return { sources: states, visiblePlatforms: PLATFORMS.filter((held) => live.has(held)) }
     }),
 
   setTwitchAuth: (twitchAuth) => set({ twitchAuth }),
 
-  setActivePlatform: (activePlatform) => set({ activePlatform, view: 'chats' }),
+  /** Panes run in tab order rather than the order they were switched on, so a split
+      reads left to right the same as the strip above it. The last pane cannot be
+      switched off — the view must never empty. */
+  togglePlatform: (platform) =>
+    set((s) => {
+      const held = s.visiblePlatforms.includes(platform)
+      if (held && s.visiblePlatforms.length === 1) return { view: 'chats' }
+
+      const next = new Set(s.visiblePlatforms)
+      if (held) next.delete(platform)
+      else next.add(platform)
+
+      return { visiblePlatforms: PLATFORMS.filter((each) => next.has(each)), view: 'chats' }
+    }),
 
   setConnectDraft: (platform, draft) =>
     set((s) => {

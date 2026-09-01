@@ -761,8 +761,8 @@ utility ever referenced those, and they are gone too. The four `--text-*` variab
 render the same switch and the same stepper rather than two lookalikes.
 
 **The pane bar is a 44px header, and the pane's own controls moved into its popover.** The
-header carries the platform dot, channel name, platform name, an optional `offline` pill, and
-exactly two icon buttons: filter and settings. Text size, reset, clear chat and the OBS dock
+header carries the channel name, an optional `offline` pill, and exactly two icon buttons:
+filter and settings. Text size, reset, clear chat and the OBS dock
 link all live in the settings popover now. Both buttons keep their hover styling while their
 panel is open, via `data-on`.
 
@@ -787,8 +787,8 @@ purpose.
 
 **Pane state lives in the store, not the pane.** `store.search[sourceId]` (committed terms),
 `store.searchDraft[sourceId]` (what is half-typed), `filterOpen[sourceId]` and
-`fontSize[sourceId]` are all keyed by source, because `App` renders a different tree as the
-platform tab changes, so a pane *remounts* and local `useState` would silently drop the search.
+`fontSize[sourceId]` are all keyed by source, because `App` renders a different tree as tabs
+are toggled, so a pane *remounts* and local `useState` would silently drop the search.
 `forgetSource` deletes every one of those entries alongside the messages.
 
 **Two things in that popover are *not* per source, and it says so.** `ChatSettings` puts the
@@ -847,11 +847,32 @@ by a segmented control at the far left of the title bar. `Broadcast` is a named 
 reserved for the next slice of work — it is deliberately empty, not unfinished.
 
 **Three platform tabs live in the title bar, centred, and only in the Chat view.** Twitch,
-YouTube and Kick are the whole strip — one chat per platform, no channel tabs, no split, no
-dragging. `store.activePlatform` says which is on screen, and the pane is whichever source
-carries that platform. Each tab is the site's own mark plus its name; the mark takes
+YouTube and Kick are the whole strip — one chat per platform, no channel tabs, no dragging.
+`store.visiblePlatforms` says which are on screen, and each pane is whichever source carries
+a visible platform. Each tab is the site's own mark plus its name; the mark takes
 `PLATFORM_COLOR` while that platform holds a connected channel and the tab's own text tone
-otherwise, so the strip reads as "these three are live" without a second indicator.
+otherwise, so the strip reads as "these are live" without a second indicator.
+
+**A tab click toggles a pane on or off — it does not select one.** `togglePlatform` rebuilds
+`visiblePlatforms` by filtering `PLATFORMS`, not by appending, so panes always read left to
+right in the same order as the strip above them regardless of the order they were switched
+on. The last pane cannot be switched off — the view must never empty — but the refusal still
+returns to the Chat view, since the click came from Broadcast or Settings just as often.
+
+**Toggling is uniform, and a tab with no channel is not a special case.** Switching one on
+puts its pane on screen whatever it holds: a chat if that platform is connected, the connect
+form if it is not. That is the only route to the form, so it cannot be reserved for connected
+platforms — and it means a split of a live chat beside a connect form is a normal state, not
+a glitch. `ConnectChannel` is `max-w-[380px]` inside its column for that reason.
+
+**The greyed-out tab click was dead, and the cause was the drag region, not the styling.**
+`.titlebar-drag` fills the bar with `-webkit-app-region: drag`; Electron collects draggable
+rects in *document order* and a later one re-covers an earlier `no-drag` hole, so while the
+absolutely-positioned `.titlebar-centre` was declared **before** the filler, every tab click
+was swallowed by the OS. The tabs must stay declared after it. This survives any test driven
+by `element.click()` or `Runtime.evaluate` — both bypass hit-testing entirely — so it takes a
+real `Input.dispatchMouseEvent` with the window raised to catch, which is exactly the trap
+"Testing the IPC surface is not testing the app" warns about one level up.
 
 **The three marks are the sites' own logo geometry, inlined once.** `PlatformMark` carries
 Twitch's header glitch, YouTube's `yt-ringo2` badge and the K from `kick.com/img/kick-logo.svg`,
@@ -879,8 +900,13 @@ a local `useState` would drop a half-typed channel name — the same reason pane
 by source. The error and the busy flag stay local on purpose: both should clear when the tab
 changes.
 
-**Disconnecting is in the pane's settings popover, and there is no confirm.** It is the only
-route back to the connect form, and it is `removeSource` plus `forgetSource` — the same pair
+**The pane bar carries the channel name and nothing about the platform.** The dot and the
+platform name were both there and both were removed: the tab above the pane already names the
+platform and colours its mark, and panes run in tab order, so repeating it in every bar was
+the same fact three times. The `offline` pill stays — that is state, not identity.
+
+**Disconnecting is in the pane's settings popover, and there is no confirm.** It leaves the
+pane on screen showing the connect form again, and it is `removeSource` plus `forgetSource` — the same pair
 the tab `×` used to run. Re-connecting costs typing the name again, which is why it sits below
 the OBS link rather than behind a dialog like clearing history.
 
@@ -890,11 +916,13 @@ OBS link server and the backlog are untouched by this. Nothing in the UI can cre
 source for a platform, because the connect form is only rendered when there is none.
 
 **Split groups, tab dragging and per-channel tabs are all gone.** v1 remembered arrangements
-(`store.groups`) and reordered tabs with dnd-kit; v2 kept per-channel tabs with a split
-control and `visibleIds`. Both are removed — with `showSource`, `toggleSplit`, `visibleIds`,
-`components/ChannelTabs.tsx` and `components/AddChannel.tsx`. `SourceManager.reorder` and the
-`sources:reorder` IPC survive on the main side with no caller in the UI; restoring any of this
-means writing a new interaction, not rewiring an old one.
+(`store.groups`) and reordered tabs with dnd-kit; v2 kept per-channel tabs with a separate
+split control and `visibleIds`. Both are removed — with `showSource`, `toggleSplit`,
+`visibleIds`, `components/ChannelTabs.tsx` and `components/AddChannel.tsx`. Splitting survives
+as the tab toggle itself: there is no second control for it, because with three fixed tabs the
+tab *is* the control. `SourceManager.reorder` and the `sources:reorder` IPC survive on the main
+side with no caller in the UI; restoring dragging means writing a new interaction, not rewiring
+an old one.
 
 ### Main process
 

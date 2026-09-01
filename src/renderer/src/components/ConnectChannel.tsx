@@ -53,10 +53,10 @@ export function ConnectChannel({ platform }: ConnectChannelProps): React.ReactEl
 
   return (
     <div
-      className="flex flex-1 items-center justify-center"
+      className="flex min-w-0 flex-1 items-center justify-center px-[24px]"
       style={{ background: 'var(--ink-900)' }}
     >
-      <div className="w-[380px]">
+      <div className="w-full max-w-[380px]">
         <div className="flex items-center gap-[10px]">
           <span style={{ color: PLATFORM_COLOR[platform] }}>
             <PlatformMark platform={platform} height={20} />
