@@ -65,51 +65,53 @@ describe('setSources', () => {
     expect(state().visibleIds).toEqual(['src-2'])
   })
 
-  it('prunes a group when one of its members disappears', () => {
+  it('drops a chat out of the split when it disappears', () => {
     state().setSources([source('src-1'), source('src-2')])
     state().toggleSplit('src-2')
-    expect(state().groups).toHaveLength(1)
+    expect(state().visibleIds).toEqual(['src-1', 'src-2'])
 
     state().setSources([source('src-1')])
 
-    expect(state().groups).toEqual([])
+    expect(state().visibleIds).toEqual(['src-1'])
   })
 })
 
 describe('showSource', () => {
-  // Clicking the second of two open chats used to wipe the split and hide both.
-  it('does nothing at all when the chat is already on screen', () => {
-    state().setSources([source('src-1'), source('src-2')])
+  // v2: a tab click shows only that channel. Group memory is gone, so clicking a
+  // member of a split collapses the split down to it rather than restoring one.
+  it('shows only the chat that was clicked', () => {
+    state().setSources([source('src-1'), source('src-2'), source('src-3')])
     state().toggleSplit('src-2')
 
-    const before = state()
-    state().showSource('src-2')
-
-    expect(state().visibleIds).toBe(before.visibleIds)
-  })
-
-  it('replaces the visible set with a hidden chat', () => {
-    state().setSources([source('src-1'), source('src-2')])
+    expect(state().visibleIds).toHaveLength(2)
 
     state().showSource('src-2')
 
     expect(state().visibleIds).toEqual(['src-2'])
   })
 
-  it('restores the whole arrangement when a group member is clicked', () => {
-    state().setSources([source('src-1'), source('src-2'), source('src-3')])
-    state().showSource('src-1')
-    state().toggleSplit('src-2')
+  it('leaves the visible set alone when that chat is already the only one shown', () => {
+    state().setSources([source('src-1'), source('src-2')])
 
-    state().showSource('src-3')
+    const before = state().visibleIds
     state().showSource('src-1')
 
-    expect(state().visibleIds).toEqual(['src-1', 'src-2'])
+    expect(state().visibleIds).toBe(before)
+  })
+
+  // Selecting a channel implies the Chat view, from Broadcast or Settings alike.
+  it('returns to the chat view', () => {
+    state().setSources([source('src-1')])
+    state().setView('settings')
+
+    state().showSource('src-1')
+
+    expect(state().view).toBe('chats')
   })
 })
 
 describe('toggleSplit', () => {
-  it('opens a chat beside the one already on screen', () => {
+  it('adds a chat alongside the others', () => {
     state().setSources([source('src-1'), source('src-2')])
 
     state().toggleSplit('src-2')
@@ -117,15 +119,18 @@ describe('toggleSplit', () => {
     expect(state().visibleIds).toEqual(['src-1', 'src-2'])
   })
 
-  it('remembers two or more chats as a group', () => {
-    state().setSources([source('src-1'), source('src-2')])
+  // Panes run in the channel list's order, not the order they were split in, so a
+  // split reads left to right the same as the tab strip above it.
+  it('orders panes by the channel list rather than by click order', () => {
+    state().setSources([source('src-1'), source('src-2'), source('src-3')])
 
+    state().toggleSplit('src-3')
     state().toggleSplit('src-2')
 
-    expect(state().groups).toEqual([['src-1', 'src-2']])
+    expect(state().visibleIds).toEqual(['src-1', 'src-2', 'src-3'])
   })
 
-  it('takes a chat back off screen', () => {
+  it('takes a chat back out of the split', () => {
     state().setSources([source('src-1'), source('src-2')])
     state().toggleSplit('src-2')
 
@@ -135,31 +140,11 @@ describe('toggleSplit', () => {
   })
 
   it('refuses to empty the visible set', () => {
-    state().setSources([source('src-1')])
+    state().setSources([source('src-1'), source('src-2')])
 
     state().toggleSplit('src-1')
 
     expect(state().visibleIds).toEqual(['src-1'])
-  })
-
-  it('dissolves a group that drops to a single member', () => {
-    state().setSources([source('src-1'), source('src-2')])
-    state().toggleSplit('src-2')
-
-    state().toggleSplit('src-2')
-
-    expect(state().groups).toEqual([])
-  })
-
-  it('pulls a chat out of its old group when it joins a new arrangement', () => {
-    state().setSources([source('src-1'), source('src-2'), source('src-3')])
-    state().showSource('src-1')
-    state().toggleSplit('src-2')
-
-    state().showSource('src-3')
-    state().toggleSplit('src-2')
-
-    expect(state().groups).toEqual([['src-3', 'src-2']])
   })
 })
 
@@ -406,13 +391,15 @@ describe('forgetSource', () => {
     expect(state().visibleIds).toEqual(['src-1'])
   })
 
-  it('dissolves a group the chat was holding together', () => {
+  it('closes the filter and settings for that pane', () => {
     state().setSources([source('src-1'), source('src-2')])
-    state().toggleSplit('src-2')
+    state().toggleFilter('src-2')
+    state().toggleGear('src-2')
 
     state().forgetSource('src-2')
 
-    expect(state().groups).toEqual([])
+    expect('src-2' in state().filterOpen).toBe(false)
+    expect(state().gearOpenFor).toBeNull()
   })
 
   it('leaves other sources alone', () => {

@@ -14,7 +14,7 @@ lives — read it before touching the message pipeline, emotes, or either Twitch
 ```bash
 npm run dev        # electron-vite dev — launches the app and the renderer dev server
 npm run typecheck  # all three tsconfig projects; the fastest correctness gate
-npm run test       # vitest, the pure-logic suite — 384 cases in ~1.5s
+npm run test       # vitest, the pure-logic suite — 343 cases in ~1.5s
 npm run test:watch # the same suite, re-running as files change
 npm run build      # typecheck, then build main + preload + renderer
 ```
@@ -727,38 +727,41 @@ silently snapped every dock to the smallest font in `CHAT_FONT_SIZES`.
 
 ### Renderer UI
 
-**The chrome is Ant Design v6; the chat rows are not.** `Tabs`, `Splitter`, `Modal`,
-`Badge`, `Select`, `Input`, `Alert` and `Empty` build the tab strip, the add-channel modal
-and the pane frames. `MessageRow` is deliberately left as hand-written
-markup with Tailwind classes: it renders inside a virtualizer at 200 msg/s with up to five
-badges a row, and every antd component reads `ConfigProvider` context and carries cssinjs
-bookkeeping. Putting a `Tag` or a `Tooltip` in a message row multiplies that by the row
-count. The pane *chrome* is cheap; the pane *contents* are not.
+**There is no component library any more — the chrome is hand-built.** v1 built the tab
+strip, modal and controls on Ant Design v6. The v2 handoff specifies exact pixels, radii and
+tones for every control, which meant fighting antd's own vocabulary on every one of them, so
+`Tabs`, `Splitter`, `Modal`, `Select`, `Switch`, `Popover`, `Button` and `Empty` were all
+replaced by plain elements styled with Tailwind and the token variables. That deleted the
+whole antd/Tailwind layering problem with it: `index.css` no longer declares
+`@layer theme, base, antd, components, utilities`, and `main.tsx` no longer wraps the tree in
+`StyleProvider`/`ConfigProvider`. **`antd` and `@ant-design/cssinjs` are still in
+`package.json` and are now unused** — they are devDependencies, so nothing ships, but they can
+be dropped.
 
-**Tailwind's preflight and antd fight, and `@layer` is what settles it.** Preflight resets
-`button { background-color: transparent }`, which strips antd's buttons. `index.css`
-declares `@layer theme, base, antd, components, utilities;` *before* `@import 'tailwindcss'`
-(CSS allows `@layer` statements ahead of `@import`), and `main.tsx` wraps the tree in
-`<StyleProvider layer>` so antd's runtime styles land in that `antd` layer — after `base`,
-so antd beats preflight, and before `utilities`, so Tailwind classes still win over antd.
-Verified in the running app: the primary button computes `rgb(87, 90, 208)`, not
-`rgba(0, 0, 0, 0)`, and `document.styleSheets` reports the layer statement in that order.
+**Tokens live in `index.css` as custom properties, and `theme.ts` mirrors them for TS.**
+Everything in the chrome is one of `--ink-900/800/700/600`, `--line`, `--line-2`,
+`--hover-row`, `--segment-on`, `--fg`/`--fg-2`/`--fg-3`/`--fg-4`, `--heading`. Nothing
+computes a shade of its own. The four `--text-*` variables v1 used are gone: the chrome is
+14px with 17px screen titles and 12px section labels, and chat text is the per-pane
+`--chat-font-size`.
 
-**There is no sidebar. Tabs are the whole navigation, and `visibleIds` is the model.**
-`store.visibleIds` is the set of chats on screen, in `sources` order. **A visible chat is
-already "open" — clicking its tab must do nothing.** `showSource` returns the state
-unchanged when the id is already visible; only a hidden tab replaces the set. The split
-control calls `toggleSplit`, which adds or removes that chat alongside the others and
-refuses to empty the set. An earlier version treated click as "focus" and wiped the split,
-so clicking the second of two open chats hid both — that is the bug the no-op guard exists
-to prevent. `setSources` reconciles: drops dead ids, jumps to a genuinely new channel, seeds
-the first source on cold start. Panes render inside a `Splitter` with no per-pane *header* —
-the tab strip already names every open channel and columns map left to right onto tab order —
-but each pane does carry a `ChatPaneBar` along its top edge (see "The pane bar").
+**The shared controls are in `components/controls.tsx`** — `Toggle`, `ControlRow`,
+`Segmented`, `Stepper`, `Picker`, `EmptyBlock` — so the pane popover and the settings screen
+render the same switch and the same stepper rather than two lookalikes.
 
-**A message kind is drawn as an accent, not just a chip.** `KIND_ACCENT` in `MessageRow`
-gives `subscription`, `donation`, `raid`, `announcement` and `system` a colour, painted as a
-3px left border, a ~8% background wash and the `KIND_LABEL` chip's own tint. The border is
+**The pane bar is a 44px header, and the pane's own controls moved into its popover.** The
+header carries the platform dot, channel name, platform name, an optional `offline` pill, and
+exactly two icon buttons: filter and settings. Text size, reset, clear chat and the OBS dock
+link all live in the settings popover now. Both buttons keep their hover styling while their
+panel is open, via `data-on`.
+
+**Only one pane's settings popover is open at a time**, which is why `store.gearOpenFor` is a
+single id rather than a record — opening one closes any other. `filterOpen` *is* a record:
+filters are independent per pane.
+
+**A message kind is drawn as an accent, not just a chip.****A message kind is drawn as an accent, not just a chip.** `EVENT_ACCENT` in `theme.ts`
+gives `subscription`, `donation`, `raid` and `announcement` a colour, painted as a 2px left
+border, a 7% background wash, a lucide glyph and a badge on the 15% tint. The border is
 always in the layout — `chat` rows carry it transparent — so a notice arriving mid-scroll
 cannot shift the text of every other row sideways. Both maps are keyed on the same five kinds;
 a kind in one and not the other renders a chip with `undefined` colours. Twitch is still the
@@ -839,238 +842,42 @@ purely to satisfy antd. Every open tab additionally gets a `tab-shown` class (ap
 `renderTabBar`) whose CSS mimics the active look, so the strip reflects what is on screen
 rather than what was clicked last.
 
-### Tabs, split groups and dragging
+### Navigation (v2)
 
-The tab strip is the app's navigation and the most intricate code in the renderer. These are
-the rules it has to keep, in the order they were asked for; everything below them is how each
-one is enforced.
+The title bar owns navigation. There is no sidebar and no tab strip below it.
 
-1. **Tabs are the whole navigation.** `+` opens the add-channel modal, `×` removes a channel
-   with no confirmation — re-adding costs nothing, so a confirm step is pure friction.
-2. **A visible chat is already open.** Clicking its tab does nothing; only a hidden tab
-   changes what is on screen.
-3. **The split control opens a chat beside the others**, and panes run left to right in tab
-   order.
-4. **Two or more chats on screen are remembered as a group.** Clicking any member restores
-   the whole arrangement, so leaving a group to look at something else and coming back is
-   free.
-5. **A group is one unbroken run wearing one coloured band** — bright while it is on screen,
-   dimmed while it is only remembered, and a different colour per group.
-6. **Tabs slide horizontally along the strip**, pushing their neighbours aside as they go, and
-   a tab dragged past the last one lands at the end.
-7. **A group is dragged as a block**, by the grip on its leftmost member — a filled square in
-   the group's colour — and the real tabs travel, not a stand-in.
-8. **A grouped tab dragged by its own body stays inside its run**, and must not appear to move
-   at all in a direction it cannot go.
-9. **Nothing that is not a member may land inside a run.** A foreign tab crossing a group
-   steps the whole run aside as one unit and lands on whichever side it ended up on.
-10. **Dragging one group over another moves that one as a unit too** — it must not come apart.
-11. **Nothing jumps after release, and the strip never changes height.**
-12. **Membership changes only through the split control**, never by dragging.
+**Three views, one switcher.** `store.view` is `'chats' | 'broadcast' | 'settings'`, driven
+by a segmented control at the far left of the title bar. `Broadcast` is a named placeholder
+reserved for the next slice of work — it is deliberately empty, not unfinished.
 
-**Split groups are saved, and `groups` is the second half of the model.** `store.groups` is
-a list of member sets; whenever the visible set reaches two, it is saved as one. A tab
-belongs to at most one group, so splitting it into a new arrangement pulls it out of its old
-one, and a group that drops to a single member dissolves. `showSource` restores a whole
-group when you click any member, which is the point: leaving a group to look at something
-else and coming back must not cost you the arrangement. Groups are **session-only**, like
-every other piece of app state now that channels are no longer persisted.
+**Channel tabs live in the title bar, and only in the Chat view.** The hairline divider
+before them is rendered *only* when the tabs are, or it is a stray line in an otherwise
+empty bar. Each tab carries a platform dot (dimmed to .55 when the tab is not shown,
+swapped for `--offline-dot` when the channel is offline), the label, and two 18px actions
+that fade in on hover: **split** and **remove**. The split action stays visible at `#b4b4b4`
+while that channel is part of a split, because a control that vanishes exactly when it is
+relevant reads as a bug.
 
-**Groups are always contiguous, and `contiguousOrder` is the only thing enforcing it.**
-Every reorder passes through it; it re-emits a group's members together at the position of
-the first one. That single pass buys both drag rules without either being coded separately:
-a member dragged outside its run is pulled back, and a foreign tab dropped inside a run is
-pushed out. Membership therefore only ever changes through the split control, never by
-dragging.
+**A tab click shows only that channel, and implies the Chat view.** This is a reversal: v1
+made a click on an already-visible tab a no-op to protect the split. v2 collapses the split
+to the clicked channel instead, and `showSource` returns the state untouched only when that
+channel is *already the only one shown*. Selecting a channel from Broadcast or Settings
+switches back to Chat.
 
-**A group wears one band, and the band is the whole reason contiguity matters.** Grouped
-tabs get a coloured bar across their top edge, bridging the 2px gutter so a run reads as one
-band rather than a mark per tab, full opacity for the group on screen and dimmed for one
-merely remembered. Colours come from the group's index, not a hash, so two groups can never
-collide. A non-contiguous group would draw as two disconnected bands and read as two groups.
+**Split membership changes only through the split control, and panes run in the channel
+list's order.** `toggleSplit` rebuilds `visibleIds` by filtering `sources`, not by appending,
+so a split reads left to right the same as the tab strip above it regardless of the order the
+panes were added. The last visible pane cannot be un-split.
 
-Six separate faults live in the drag itself, all of them invisible until the pointer moves.
-Read these before touching `ChannelTabs`.
+**Split groups are gone, and so is tab dragging.** v1 remembered arrangements (`store.groups`)
+and restored them when any member was clicked, drew a coloured band across each contiguous
+run, and reordered tabs with dnd-kit through `components/tab-strip.ts`. The v2 handoff
+specifies neither, and both fought the "fewer visible controls" goal, so the state, the band,
+the drag geometry and its tests were removed together. `SourceManager.reorder` and the
+`sources:reorder` IPC survive on the main side with no caller in the UI — restoring drag
+reordering means writing a new interaction, not rewiring an old one.
 
-**It is dnd-kit, not HTML5 drag.** Native `draggable` gives a floating ghost and ignores
-drops outside a tab. `renderTabBar` wraps the bar in `DndContext` + `SortableContext` and
-clones each tab node with `useSortable`'s ref/listeners. `PointerSensor` needs an
-`activationConstraint` distance (5px) or the sensor swallows plain clicks and tabs stop
-selecting.
-
-**The dragged thing must carry no transition.** `useSortable` hands the same transition
-string to every tab including the one under the pointer, which makes it ease toward the
-cursor instead of tracking it. Only the tabs being pushed aside should animate.
-
-**Bounds are frozen at `onDragStart`; never measure inside the modifier.** A modifier runs on
-every pointer move, so `getBoundingClientRect` there reads positions that the drag is itself
-transforming — the limits crawl underneath the pointer and the tab sticks partway. All three
-cases share one shape, a moving span against a limit: a grip drag moves the whole block
-within the tab strip, a grouped tab moves within its own run, an ungrouped tab moves within
-the strip. A group's clamp must measure the **block**, not the grabbed tab, or the group gets
-a tab's worth of extra slack per extra member.
-
-**A group is dragged by the grip on its leftmost member, and the real tabs move.** An earlier
-attempt rendered a `DragOverlay` imitation, which inherited none of antd's styling and looked
-wrong. Members instead take the same clamped `translate3d` as the pointer, so they are the
-actual tabs travelling together.
-
-**Group drops are decided by the block, not by `over`.** dnd-kit picks the drop target from
-the grabbed tab's centre, which at full travel is still nearest its own neighbour — so a
-group could never reach the end of the strip. `dropWholeGroup` instead counts how many
-neighbours the block has swept past, using each one's width and a half-width threshold.
-
-**Neighbours are units, not tabs.** A whole run steps aside at once; walking individual tabs
-makes the group being dragged over come apart exactly like the group being dragged used to.
-While a group is in hand, every other tab is given an explicit offset, zero included, so
-nothing is left following the sorting strategy alongside tabs following the pointer. The
-same units decide the drop index, so the preview and the result cannot disagree.
-
-**A foreign tab lands on the side it ended up on.** Choosing from the direction of travel
-sends it to the far side of the group every time; compare its final centre to the run's
-midpoint instead, and treat a drag that ends on its own side as a no-op.
-
-**Suppress transitions for the settling frame.** Clearing the drag offsets and committing the
-reorder land in the same commit, but the transition then animates each element out of its old
-slot — traced frame by frame, a neighbour sat at `x=0` during the drag, jumped to `574` one
-frame after release, then slid back to `0` over ~200ms. `landInstantly` turns transitions off
-for one frame so tabs are simply already where they belong.
-
-**The strip is measured once per drag, never per frame.** `measureTabs()` reads every
-`.ant-tabs-tab[data-node-key]` into a `Map<id, Span>` in one pass at `onDragStart`, and the
-clamp, the neighbour units and the drop maths all derive from that single snapshot. The shape
-this code had first asked the DOM one question at a time — roughly `2N` `querySelector` calls
-per drag start — and any rect read later is the crawling-bounds fault above waiting to happen.
-
-**A drag re-renders the whole strip on every pointer move**, so everything derived from
-`sources` and `groups` is memoised: the id list, group ownership, each tab's run, the band
-marks and the `items` array, with `TabLabel` behind `memo` and stable callbacks. Without that,
-every frame rebuilt one `TabLabel` per tab — each with two `Tooltip`s and a `Badge` — and the
-sorting strategy walked every group for every tab to find its run.
-
-**The tab height is pinned.** antd re-measures the bar as tabs reorder and can settle a row
-taller, so the whole strip jumped 28px to 33px purely from moving a tab. Both arrangements
-carried identical classes and identical inner content, so nothing here caused it. The pin
-costs a coupling: change the tab font size or padding and the `height` in `index.css` has to
-move with it — raising the token from 14px to 1rem/16px is what took the pin from 30px to
-`2.25rem`.
-
-**`SourceManager.reorder` permutes the live entry map and nothing else.** Main's entry order
-is what `list()` broadcasts, so it has to track the strip or the next `sources:changed` would
-snap the tabs back. Nothing about it touches disk — see "Nothing is persisted but the Twitch
-token" below.
-
-**antd v6 renamed DOM internals, which breaks CDP driver scripts.**
-`.ant-select-selector` is now `.ant-select-content` and `.ant-select-selection-item` is
-gone; `.ant-modal-content` does not match either, though `.ant-modal` does. Opening the
-platform dropdown needs a `mousedown` dispatched on `.ant-select-content` — a plain
-`.click()` does not open it. Selectors copied from antd v5 answers return `null` silently.
-
-**antd is a devDependency, not a dependency.** The renderer is bundled (no
-`externalizeDepsPlugin` on that target), so it belongs beside `react`, `zustand` and
-`lucide-react`. Only main-process packages that stay external — `ws` and `youtubei.js` —
-are real dependencies, and electron-builder prunes everything else out of the installer, so
-a package in the wrong list is a shipping bug rather than a style question.
-
-**antd's tab chrome needs three CSS corrections, all of them in `index.css`.** They are
-overrides of antd internals, so re-check them on an antd upgrade. `.ant-tabs-nav-add` sizes
-its button but centres nothing — antd's own glyph is a font icon riding the line box, so a
-16px svg sat hard against the left edge; it needs `display: flex` with centring.
-`.ant-tabs-tab-remove` carries a negative inline-end margin that pulls the `×` 4px past the
-tab's padding, which reads as the close control being crammed into the tab edge; zero it.
-And the rule under the strip has to break under the *open* tab, so it reads as connected to
-the chat below it: `.ant-tabs-nav::before` still draws the full-width line, while
-`.ant-tabs-tab.tab-shown` paints its own `border-bottom-color` the chat's ink. That border is
-otherwise `INK.card`, a shade lighter than the chat, which is what made it read as a line
-under the open tab rather than as part of the tab. Hiding `::before` outright is the wrong
-fix — it removes the line everywhere, including the stretch beside the tabs that should
-stay.
-
-**Icons are lucide, and antd's own glyphs have to be overridden to keep it that way.**
-`lucide-react` is the only icon import in the tree; `@ant-design/icons` is no longer a direct
-dependency, though antd still pulls it transitively for internals we do not reach. Three antd
-components draw glyphs of their own unless told otherwise, and `Tabs` is where they all live:
-`addIcon`, `removeIcon` and `moreIcon`. Miss one and a single antd glyph sits among the lucide
-set at a different weight — the tab `+` and `×` are adjacent, so a mismatch there is obvious.
-Lucide defaults to 24px, so every usage passes `size={16}` to match the 1rem text. Check with
-`document.querySelectorAll('.anticon').length` in the running app: it should be **0**.
-
-**Every text size is 1rem or 1.25rem, against a root pinned at 16px.** `index.css` sets
-`html { font-size: 16px }` so the rem is not at the mercy of a browser default, and the whole
-the app *chrome* uses exactly two sizes: **1rem (16px) for everything** — tabs, inputs,
-buttons, the pane bar — and 1.25rem (20px) reserved for the modal heading. antd's
-`fontSize`/`titleFontSize` tokens are the exception that has to stay numeric (16 and 20)
-because the token type is a number, not a CSS length.
-
-**Chat text is adjustable, per pane, and on a wider range than the chrome.** The pane bar's
-`A↑`/`A↓`/`↺` buttons walk `store.fontSize[sourceId]` along `CHAT_FONT_SIZES`,
-`[10, 12, 14, 16, 18, 20, 22, 24]`, by index rather than by arithmetic. That range is
-deliberately *not* the chrome's four `--text-*` variables — chat is the content and wants to
-go smaller and larger than the frame around it. Reset drops the entry rather than writing the
-default back, so "unset" and "explicitly default" stay the same state. `ChatPane` writes
-`--chat-font-size` as an inline custom property on **its own root**, not on
-`document.documentElement` — that is what lets two panes in a split run at different sizes,
-and setting it globally (as an earlier version did) silently coupled them.
-
-The em units left in `MessageRow` are deliberate and are *not* text: they size emote images
-(`1.55em`) and badge images (`1.1em`) so those still scale with `--chat-font-size`. The store's
-`fontSize` holds **rem**, not px.
-
-**The theme is one object, not scattered inline styles.** `theme.ts` maps the ink palette
-onto antd tokens and exports `INK` for the few places that still need a raw hex. Reach for a
-token before a hex.
-
-**Every app surface is one shade.** `INK.app` (`#141414`) paints the title bar, the tab
-strip, the chat panes and the empty state, and `--color-ink-900` matches it so the body
-behind them cannot show a seam. The chrome used to run three greys — `#0d0d0d` body,
-`#101010` strip, `#141414` chat — which read as a mismatched frame bolted onto the app once
-the OS frame was gone. Depth comes from the cards on top (`INK.card` for a shown tab,
-`INK.raised` for a popover) and from `INK.line`, never from tinting the surface underneath.
-Verified in the running app: body, title bar, tab strip and chat all compute
-`rgb(20, 20, 20)`.
-
-**The palette is deliberately hueless.** `INK` runs `#141414` to `#272727` with R=G=B, and
-`colorPrimary` is a mid grey rather than an accent. It started as a cool blue-grey and read
-as a blue app rather than a black one: every surface measured about 215 degrees of hue, from
-the app background at `rgb(11, 13, 16)` to secondary text at `rgb(154, 164, 178)`. antd's
-dark algorithm derives its whole neutral ramp from `colorBgBase`, so a single tinted seed
-propagates to every border, surface and text tone. Group bands are the one intentional
-colour in the chrome. Author name colours are content, not chrome, and are left alone.
-
-**The window is frameless and the renderer draws the title bar.** `TitleBar` is rendered
-above the tab strip for *both* branches of `App` — including the empty state, since a window
-whose only close button lives behind "you have channels" cannot be closed. Two things bite here. A `-webkit-app-region: drag` region swallows mouse
-events, so every control inside the bar has to opt back out with `no-drag` or it is simply
-dead. And the maximise glyph is driven by `maximize`/`unmaximize` events pushed from main,
-not by what the button did — double-clicking the drag region, Win+Up and snapping all
-maximise the window without going through the button. Window control handlers resolve their
-target with `BrowserWindow.fromWebContents(event.sender)` rather than the module-level
-`mainWindow`, which is the same reason every other IPC handler validates its own input.
-Note that a frameless window still reports `outerHeight - innerHeight === 8` (the invisible
-resize border), so that difference is not a test for "is the frame gone".
-
-**The frame is not the same on all three platforms, and one uniform `frame: false` is
-wrong.** `frameOptions()` in `main/index.ts` gives Windows and Linux `frame: false` with our
-own buttons, and macOS `titleBarStyle: 'hidden'` with `trafficLightPosition` — on macOS the
-OS keeps drawing its traffic lights, so `TitleBar` renders no buttons of its own there. The
-bar carries no text at all — it is a drag region plus the window buttons — so nothing needs
-insetting past the traffic lights, which is why the old `.titlebar-mac` padding rule is
-gone. Our buttons sit on the right and the close button
-hovers Windows red; that is the wrong furniture on the wrong side for macOS, which is the
-whole reason for the branch. The renderer learns which host it is on from `api.platform`,
-set once in the preload from `process.platform` — sandboxed preloads still expose that, so
-it costs no IPC. Costs that remain: Windows loses the snap-layouts flyout on maximise hover
-(that needs `titleBarOverlay`, which hands the right-hand strip back to the OS), and on
-Linux edge-resize and double-click-to-maximise depend on the compositor. **Only the Windows
-path has been run** — the macOS and Linux branches are written, not tested.
-
-**Platform dots are the sites' favicons, except in message rows.** `PlatformIcon` loads
-`favicon.ico` from each platform and falls back to the old coloured dot on error, so a dead
-favicon cannot leave a blank tab. `PLATFORM_COLOR` lives there now because it is the
-fallback. `MessageRow` still uses the dot: that path renders per message inside the
-virtualizer, where an `img` per row would cost real time.
-
-### Main process
+### Main process### Main process
 
 **Nothing is persisted but the Twitch token.** `config.json` holds `version` and the
 encrypted `twitch.tokensEnc`, and that is the whole file. Channels are deliberately *not*
@@ -1345,7 +1152,6 @@ tests, so nothing bundles them. What is covered:
 | resolve and naming on all three platforms | `platforms/*/channel.ts` |
 | the pane filter grammar | `renderer/search.ts` |
 | the whole zustand store, groups included | `renderer/store.ts` |
-| the tab-strip drag geometry | `renderer/components/tab-strip.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |
 

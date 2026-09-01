@@ -1,37 +1,94 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Empty, Flex, Layout, Modal, Splitter } from 'antd'
-import { Plus } from 'lucide-react'
 import type { SourceState } from '@shared/types'
 import { bridge } from './bridge'
-import { CHAT_FONT_DEFAULT, useStore } from './store'
+import { useStore } from './store'
 import { AddChannel } from './components/AddChannel'
-import { ChannelTabs } from './components/ChannelTabs'
 import { ChatPane } from './components/ChatPane'
+import { EmptyBlock } from './components/controls'
 import { TitleBar } from './components/TitleBar'
+import { Broadcast } from './views/Broadcast'
+import { Settings } from './views/Settings'
 
 const EMPTY_TERMS: string[] = []
 
+function Chats({ onAdd }: { onAdd: () => void }): React.ReactElement {
+  const s = useStore()
+
+  const panes = s.sources.filter((source) => s.visibleIds.includes(source.id))
+
+  if (s.sources.length === 0) {
+    return (
+      <div
+        className="flex flex-1 items-center justify-center"
+        style={{ background: 'var(--ink-900)' }}
+      >
+        <EmptyBlock
+          size={34}
+          title="No channels yet"
+          detail="Add one by name, or paste its link."
+        >
+          <button
+            type="button"
+            className="ghost-button h-[32px] px-[14px] text-[14px]"
+            style={{ background: 'var(--ink-600)', borderRadius: 7, color: 'var(--fg)' }}
+            onClick={onAdd}
+          >
+            Add a channel
+          </button>
+        </EmptyBlock>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1">
+      {panes.map((source, at) => (
+        <div
+          key={source.id}
+          className="flex min-w-0 flex-1"
+          style={{ borderLeft: at === 0 ? undefined : '1px solid var(--line)' }}
+        >
+          <ChatPane
+            source={source}
+            messages={s.bySource[source.id] ?? []}
+            deleted={s.deleted}
+            showDeleted={s.showDeleted}
+            showTimestamps={s.showTimestamps}
+            density={s.density}
+            filterOpen={s.filterOpen[source.id] === true}
+            gearOpen={s.gearOpenFor === source.id}
+            onToggleFilter={() => s.toggleFilter(source.id)}
+            onToggleGear={() => s.toggleGear(source.id)}
+            searchTerms={s.search[source.id] ?? EMPTY_TERMS}
+            searchDraft={s.searchDraft[source.id] ?? ''}
+            onSearchTerms={(terms) => s.setSearch(source.id, terms)}
+            onSearchDraft={(draft) => s.setSearchDraft(source.id, draft)}
+            onAddSearchTerm={(term) => s.addSearchTerm(source.id, term)}
+            fontSize={s.fontSize[source.id] ?? s.defaultFontSize}
+            onFontStep={(steps) => s.stepFontSize(source.id, steps)}
+            onFontReset={() => s.resetFontSize(source.id)}
+            onClear={() => {
+              s.clearSource(source.id)
+              s.closeGear()
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function App(): React.ReactElement {
+  const view = useStore((s) => s.view)
+  const setView = useStore((s) => s.setView)
   const sources = useStore((s) => s.sources)
   const visibleIds = useStore((s) => s.visibleIds)
   const setSources = useStore((s) => s.setSources)
   const setTwitchAuth = useStore((s) => s.setTwitchAuth)
   const ingest = useStore((s) => s.ingest)
   const forgetSource = useStore((s) => s.forgetSource)
-  const reorderSources = useStore((s) => s.reorderSources)
-  const bySource = useStore((s) => s.bySource)
-  const deleted = useStore((s) => s.deleted)
-  const search = useStore((s) => s.search)
-  const searchDraft = useStore((s) => s.searchDraft)
-  const setSearch = useStore((s) => s.setSearch)
-  const setSearchDraft = useStore((s) => s.setSearchDraft)
-  const addSearchTerm = useStore((s) => s.addSearchTerm)
-  const stepFontSize = useStore((s) => s.stepFontSize)
-  const resetFontSize = useStore((s) => s.resetFontSize)
-  const clearSource = useStore((s) => s.clearSource)
-  const showDeleted = useStore((s) => s.showDeleted)
-  const showTimestamps = useStore((s) => s.showTimestamps)
-  const fontSize = useStore((s) => s.fontSize)
+  const showSource = useStore((s) => s.showSource)
+  const toggleSplit = useStore((s) => s.toggleSplit)
 
   const [adding, setAdding] = useState(false)
 
@@ -56,6 +113,7 @@ export default function App(): React.ReactElement {
           .catch(() => {})
       }
     })
+
     void api
       .twitchAuthState()
       .then(setTwitchAuth)
@@ -76,89 +134,24 @@ export default function App(): React.ReactElement {
     [forgetSource]
   )
 
-  const reorder = useCallback(
-    (orderedIds: string[]) => {
-      reorderSources(orderedIds)
-      void bridge().api.reorderSources(orderedIds)
-    },
-    [reorderSources]
-  )
-
-  const panes = sources.filter((source) => visibleIds.includes(source.id))
-
-  const renderPane = (source: SourceState): React.ReactElement => (
-    <ChatPane
-      sourceId={source.id}
-      messages={bySource[source.id] ?? []}
-      deleted={deleted}
-      showDeleted={showDeleted}
-      showTimestamps={showTimestamps}
-      showPlatform={false}
-      searchTerms={search[source.id] ?? EMPTY_TERMS}
-      searchDraft={searchDraft[source.id] ?? ''}
-      onSearchTerms={(terms) => setSearch(source.id, terms)}
-      onSearchDraft={(draft) => setSearchDraft(source.id, draft)}
-      onAddSearchTerm={(term) => addSearchTerm(source.id, term)}
-      fontSize={fontSize[source.id] ?? CHAT_FONT_DEFAULT}
-      onFontStep={(steps) => stepFontSize(source.id, steps)}
-      onFontReset={() => resetFontSize(source.id)}
-      onClear={() => clearSource(source.id)}
-    />
-  )
-
   return (
-    <Layout style={{ height: '100%' }}>
-      <TitleBar />
+    <div className="flex h-full flex-col">
+      <TitleBar
+        view={view}
+        onView={setView}
+        sources={sources}
+        visibleIds={visibleIds}
+        onSelect={showSource}
+        onSplit={toggleSplit}
+        onRemove={remove}
+        onAdd={() => setAdding(true)}
+      />
 
-      {sources.length === 0 ? (
-        <Flex flex={1} align="center" justify="center">
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="No channels yet. Add one by name, or paste its link."
-          >
-            <Button type="primary" icon={<Plus size={16} />} onClick={() => setAdding(true)}>
-              Add a channel
-            </Button>
-          </Empty>
-        </Flex>
-      ) : (
-        <Flex vertical style={{ flex: 1, minHeight: 0 }}>
-          <ChannelTabs
-            sources={sources}
-            visibleIds={visibleIds}
-            onAdd={() => setAdding(true)}
-            onRemove={remove}
-            onReorder={reorder}
-          />
+      {view === 'chats' && <Chats onAdd={() => setAdding(true)} />}
+      {view === 'broadcast' && <Broadcast />}
+      {view === 'settings' && <Settings />}
 
-          <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-            {panes.length === 1 ? (
-              renderPane(panes[0])
-            ) : (
-              <Splitter style={{ height: '100%', width: '100%' }}>
-                {panes.map((source) => (
-                  <Splitter.Panel key={source.id} min={220}>
-                    {renderPane(source)}
-                  </Splitter.Panel>
-                ))}
-              </Splitter>
-            )}
-          </div>
-        </Flex>
-      )}
-
-      <Modal
-        title="Add a channel"
-        open={adding}
-        onCancel={() => setAdding(false)}
-        footer={null}
-        width={420}
-        centered
-        styles={{ wrapper: { paddingBottom: '20vh' } }}
-        destroyOnHidden
-      >
-        <AddChannel onAdded={() => setAdding(false)} />
-      </Modal>
-    </Layout>
+      {adding && <AddChannel onClose={() => setAdding(false)} />}
+    </div>
   )
 }

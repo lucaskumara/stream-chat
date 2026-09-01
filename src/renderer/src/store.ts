@@ -11,17 +11,40 @@ const DEFAULT_CAPACITY = 500
 
 const DELETED_LIMIT = 4000
 
-/** Chat rows have their own range, wider than the chrome's type scale: 10px to 24px
-    in 2px steps. The chrome stays on the four --text-* variables in index.css. */
-export const CHAT_FONT_SIZES = [10, 12, 14, 16, 18, 20, 22, 24]
-export const CHAT_FONT_DEFAULT = 16
+/** The handoff lists steps 12/14/16/18/20/24 with a default of 15, which is not one of
+    them — in the mock either stepper button therefore jumps straight to 12. 15 is added
+    as a step so the stepper moves one notch at a time from the default. */
+export const CHAT_FONT_SIZES = [12, 14, 15, 16, 18, 20, 24]
+export const CHAT_FONT_DEFAULT = 15
+
+export type View = 'chats' | 'broadcast' | 'settings'
+
+export type SettingsPane =
+  | 'general'
+  | 'appearance'
+  | 'accounts'
+  | 'notifications'
+  | 'shortcuts'
+
+export type Density = 'comfortable' | 'compact'
+export type ThemeChoice = 'dark' | 'midnight' | 'system'
+
+export type GeneralFlag = 'launchAtStartup' | 'reopenChannels' | 'keepOnTop' | 'closeToTray'
 
 interface ChatState {
   sources: SourceState[]
   bySource: Messages
 
+  view: View
+  settingsPane: SettingsPane
+
+  filterOpen: Record<string, boolean>
+
+  /** Only one pane's settings popover is open at a time, so this is a single id
+      rather than a record: opening one closes any other. */
+  gearOpenFor: string | null
+
   visibleIds: string[]
-  groups: string[][]
 
   deleted: Deleted
 
@@ -31,6 +54,16 @@ interface ChatState {
   showDeleted: boolean
   showTimestamps: boolean
   capacity: number
+
+  density: Density
+  themeChoice: ThemeChoice
+  colorByPlatform: boolean
+  defaultFontSize: number
+
+  launchAtStartup: boolean
+  reopenChannels: boolean
+  keepOnTop: boolean
+  closeToTray: boolean
 
   /** Chat row size per source, in px from CHAT_FONT_SIZES. Missing means the default. */
   fontSize: Record<string, number>
@@ -43,8 +76,18 @@ interface ChatState {
   showSource: (sourceId: string) => void
   toggleSplit: (sourceId: string) => void
   ingest: (batch: ChatBatch) => void
+  setView: (view: View) => void
+  setSettingsPane: (pane: SettingsPane) => void
+  toggleFilter: (sourceId: string) => void
+  toggleGear: (sourceId: string) => void
+  closeGear: () => void
   setShowDeleted: (showDeleted: boolean) => void
   setShowTimestamps: (showTimestamps: boolean) => void
+  setDensity: (density: Density) => void
+  setThemeChoice: (theme: ThemeChoice) => void
+  setColorByPlatform: (on: boolean) => void
+  stepDefaultFontSize: (steps: number) => void
+  setFlag: (flag: GeneralFlag, on: boolean) => void
   setSearch: (sourceId: string, terms: string[]) => void
   setSearchDraft: (sourceId: string, draft: string) => void
   addSearchTerm: (sourceId: string, term: string) => void
@@ -57,12 +100,16 @@ interface ChatState {
 type Messages = Record<string, ChatMessage[]>
 type Deleted = Record<string, true>
 
-function capped(arr: ChatMessage[], capacity: number): ChatMessage[] {
-  return arr.length > capacity ? arr.slice(arr.length - capacity) : arr
+function steppedSize(current: number, steps: number): number {
+  const at = CHAT_FONT_SIZES.indexOf(current)
+  const from = at === -1 ? CHAT_FONT_SIZES.indexOf(CHAT_FONT_DEFAULT) : at
+  const last = CHAT_FONT_SIZES.length - 1
+
+  return CHAT_FONT_SIZES[Math.min(last, Math.max(0, from + steps))]
 }
 
-function pruneGroups(groups: string[][], keep: (sourceId: string) => boolean): string[][] {
-  return groups.map((group) => group.filter(keep)).filter((group) => group.length > 1)
+function capped(arr: ChatMessage[], capacity: number): ChatMessage[] {
+  return arr.length > capacity ? arr.slice(arr.length - capacity) : arr
 }
 
 function omit<T>(record: Record<string, T>, key: string): Record<string, T> {
@@ -148,15 +195,29 @@ export const useStore = create<ChatState>()((set) => ({
   sources: [],
   bySource: {},
   visibleIds: [],
-  groups: [],
   deleted: {},
   search: {},
   searchDraft: {},
+
+  view: 'chats',
+  settingsPane: 'general',
+  filterOpen: {},
+  gearOpenFor: null,
 
   showDeleted: true,
   showTimestamps: true,
   capacity: DEFAULT_CAPACITY,
   fontSize: {},
+
+  density: 'comfortable',
+  themeChoice: 'dark',
+  colorByPlatform: true,
+  defaultFontSize: CHAT_FONT_DEFAULT,
+
+  launchAtStartup: true,
+  reopenChannels: true,
+  keepOnTop: false,
+  closeToTray: true,
 
   twitchAuth: { status: 'signed-out' },
 
@@ -170,14 +231,11 @@ export const useStore = create<ChatState>()((set) => ({
           ? states.find((state) => !s.sources.some((was) => was.id === state.id))
           : undefined
 
-      const groups = pruneGroups(s.groups, (id) => alive.has(id))
-
-      if (opened) return { sources: states, groups, visibleIds: [opened.id] }
-      if (kept.length > 0) return { sources: states, groups, visibleIds: kept }
+      if (opened) return { sources: states, visibleIds: [opened.id] }
+      if (kept.length > 0) return { sources: states, visibleIds: kept }
 
       return {
         sources: states,
-        groups,
         visibleIds: states.slice(0, 1).map((state) => state.id)
       }
     }),
@@ -195,30 +253,29 @@ export const useStore = create<ChatState>()((set) => ({
       return ordered.length === s.sources.length ? { sources: ordered } : s
     }),
 
+  /** A tab click shows only that channel and returns to the Chat view. It is no longer
+      a no-op on a shown tab: with a split open, clicking one member collapses to it. */
   showSource: (sourceId) =>
     set((s) => {
-      if (s.visibleIds.includes(sourceId)) return s
+      const alone = s.visibleIds.length === 1 && s.visibleIds[0] === sourceId
 
-      const group = s.groups.find((ids) => ids.includes(sourceId))
-
-      return { visibleIds: group ? [...group] : [sourceId] }
+      return alone ? { view: 'chats' } : { visibleIds: [sourceId], view: 'chats' }
     }),
 
+  /** Panes run in the channel list's order rather than the order they were split in,
+      so a split reads left-to-right the same as the tab strip above it. */
   toggleSplit: (sourceId) =>
     set((s) => {
       const held = s.visibleIds.includes(sourceId)
       if (held && s.visibleIds.length === 1) return s
 
-      const visibleIds = held
-        ? s.visibleIds.filter((id) => id !== sourceId)
-        : [...s.visibleIds, sourceId]
-
-      const touched = new Set([...visibleIds, sourceId])
-      const groups = pruneGroups(s.groups, (id) => !touched.has(id))
+      const next = new Set(s.visibleIds)
+      if (held) next.delete(sourceId)
+      else next.add(sourceId)
 
       return {
-        visibleIds,
-        groups: visibleIds.length > 1 ? [...groups, visibleIds] : groups
+        visibleIds: s.sources.map((source) => source.id).filter((id) => next.has(id)),
+        view: 'chats'
       }
     }),
 
@@ -232,9 +289,34 @@ export const useStore = create<ChatState>()((set) => ({
       return { bySource: messages, deleted: sweptDeleted(deleted, messages) }
     }),
 
+  setView: (view) => set({ view }),
+
+  setSettingsPane: (settingsPane) => set({ settingsPane }),
+
+  toggleFilter: (sourceId) =>
+    set((s) => ({
+      filterOpen: { ...s.filterOpen, [sourceId]: !s.filterOpen[sourceId] }
+    })),
+
+  toggleGear: (sourceId) =>
+    set((s) => ({ gearOpenFor: s.gearOpenFor === sourceId ? null : sourceId })),
+
+  closeGear: () => set({ gearOpenFor: null }),
+
   setShowDeleted: (showDeleted) => set({ showDeleted }),
 
   setShowTimestamps: (showTimestamps) => set({ showTimestamps }),
+
+  setDensity: (density) => set({ density }),
+
+  setThemeChoice: (themeChoice) => set({ themeChoice }),
+
+  setColorByPlatform: (colorByPlatform) => set({ colorByPlatform }),
+
+  stepDefaultFontSize: (steps) =>
+    set((s) => ({ defaultFontSize: steppedSize(s.defaultFontSize, steps) })),
+
+  setFlag: (flag, on) => set({ [flag]: on } as Pick<ChatState, GeneralFlag>),
 
   setSearch: (sourceId, terms) =>
     set((s) => ({ search: { ...s.search, [sourceId]: terms } })),
@@ -256,11 +338,8 @@ export const useStore = create<ChatState>()((set) => ({
 
   stepFontSize: (sourceId, steps) =>
     set((s) => {
-      const current = s.fontSize[sourceId] ?? CHAT_FONT_DEFAULT
-      const at = CHAT_FONT_SIZES.indexOf(current)
-      const from = at === -1 ? CHAT_FONT_SIZES.indexOf(CHAT_FONT_DEFAULT) : at
-
-      const next = CHAT_FONT_SIZES[Math.min(CHAT_FONT_SIZES.length - 1, Math.max(0, from + steps))]
+      const current = s.fontSize[sourceId] ?? s.defaultFontSize
+      const next = steppedSize(current, steps)
       if (next === current) return s
 
       return { fontSize: { ...s.fontSize, [sourceId]: next } }
@@ -286,7 +365,8 @@ export const useStore = create<ChatState>()((set) => ({
       search: omit(s.search, sourceId),
       searchDraft: omit(s.searchDraft, sourceId),
       fontSize: omit(s.fontSize, sourceId),
-      visibleIds: s.visibleIds.filter((id) => id !== sourceId),
-      groups: pruneGroups(s.groups, (id) => id !== sourceId)
+      filterOpen: omit(s.filterOpen, sourceId),
+      gearOpenFor: s.gearOpenFor === sourceId ? null : s.gearOpenFor,
+      visibleIds: s.visibleIds.filter((id) => id !== sourceId)
     })),
 }))

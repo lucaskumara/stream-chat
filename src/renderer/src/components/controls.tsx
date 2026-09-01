@@ -1,0 +1,212 @@
+import { Minus, Plus } from 'lucide-react'
+import { CHAT_FONT_SIZES } from '../store'
+
+export function Toggle({
+  label,
+  on,
+  onChange
+}: {
+  label: string
+  on: boolean
+  onChange: (on: boolean) => void
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={() => onChange(!on)}
+      className="relative h-[18px] w-[30px] flex-none cursor-pointer border-0 p-0"
+      style={{
+        borderRadius: 999,
+        background: on ? '#6f6f6f' : 'rgba(255,255,255,.14)'
+      }}
+    >
+      <span
+        aria-hidden
+        className="absolute h-[12px] w-[12px] rounded-full bg-white"
+        style={{ top: 3, left: on ? 15 : 3, transition: 'left .18s' }}
+      />
+    </button>
+  )
+}
+
+export function ControlRow({
+  label,
+  children
+}: {
+  label: string
+  children: React.ReactNode
+}): React.ReactElement {
+  return (
+    <div className="flex h-[28px] items-center justify-between gap-[20px]">
+      <span className="truncate text-[14px]" style={{ color: 'var(--fg-2)' }}>
+        {label}
+      </span>
+      {children}
+    </div>
+  )
+}
+
+export function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onSelect
+}: {
+  label: string
+  value: T
+  options: { value: T; label: string }[]
+  onSelect: (value: T) => void
+}): React.ReactElement {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="flex flex-none gap-[2px] rounded-[7px] p-[2px]"
+      style={{ background: 'var(--ink-800)', border: '1px solid var(--line-2)' }}
+    >
+      {options.map((option) => {
+        const on = option.value === value
+
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onSelect(option.value)}
+            className="h-[24px] cursor-pointer rounded-[5px] border-0 px-[11px] text-[13px]"
+            style={{
+              background: on ? 'var(--segment-on)' : 'transparent',
+              color: on ? '#f2f2f2' : 'var(--fg-3)'
+            }}
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+export function Stepper({
+  label,
+  size,
+  onStep
+}: {
+  label: string
+  size: number
+  onStep: (steps: number) => void
+}): React.ReactElement {
+  const first = CHAT_FONT_SIZES[0]
+  const last = CHAT_FONT_SIZES[CHAT_FONT_SIZES.length - 1]
+
+  return (
+    <div
+      className="flex flex-none items-center p-[2px]"
+      style={{ background: 'var(--ink-800)', border: '1px solid var(--line-2)', borderRadius: 6 }}
+    >
+      <button
+        type="button"
+        aria-label={`Smaller ${label}`}
+        disabled={size <= first}
+        onClick={() => onStep(-1)}
+        className="icon-button h-[20px] w-[22px] rounded-[4px]"
+      >
+        <Minus size={13} strokeWidth={1.8} />
+      </button>
+
+      <span
+        className="w-[34px] text-center text-[13px] tabular-nums"
+        style={{ color: 'var(--fg)' }}
+      >
+        {size}px
+      </span>
+
+      <button
+        type="button"
+        aria-label={`Larger ${label}`}
+        disabled={size >= last}
+        onClick={() => onStep(1)}
+        className="icon-button h-[20px] w-[22px] rounded-[4px]"
+      >
+        <Plus size={13} strokeWidth={1.8} />
+      </button>
+    </div>
+  )
+}
+
+export function Picker<T extends string>({
+  label,
+  value,
+  options,
+  onSelect
+}: {
+  label: string
+  value: T
+  options: { value: T; label: string }[]
+  onSelect: (value: T) => void
+}): React.ReactElement {
+  return (
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(event) => onSelect(event.target.value as T)}
+      className="h-[28px] w-[132px] flex-none cursor-pointer px-[9px] text-[13px]"
+      style={{
+        background: 'var(--ink-800)',
+        border: '1px solid var(--line-2)',
+        borderRadius: 6,
+        color: 'var(--fg)'
+      }}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+export function EmptyBlock({
+  size = 26,
+  title,
+  detail,
+  children
+}: {
+  size?: number
+  title?: string
+  detail?: string
+  children?: React.ReactNode
+}): React.ReactElement {
+  return (
+    <div
+      className="flex flex-col items-center justify-center text-center"
+      style={{ gap: title ? 14 : 10, color: 'var(--fg-4)' }}
+    >
+      <span
+        aria-hidden
+        className="flex-none"
+        style={{
+          width: size,
+          height: size,
+          border: '1.5px solid #2e2e2e',
+          borderRadius: size > 30 ? 9 : 7
+        }}
+      />
+
+      {title && (
+        <span className="text-[14px]" style={{ color: '#e0e0e0' }}>
+          {title}
+        </span>
+      )}
+
+      {detail && <span className="text-[13px]">{detail}</span>}
+
+      {children}
+    </div>
+  )
+}

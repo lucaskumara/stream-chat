@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
+import type { SourceState } from '@shared/types'
 import { bridge } from '../bridge'
+import type { View } from '../store'
+import { ChannelTabs } from './ChannelTabs'
+import { ModeSwitcher } from './ModeSwitcher'
 
 function Glyph({ path }: { path: string }): React.ReactElement {
   return (
@@ -14,7 +18,27 @@ const MAXIMIZE = 'M0.5 0.5 H9.5 V9.5 H0.5 Z'
 const RESTORE = 'M2.5 2.5 H9.5 V9.5 H2.5 Z M0.5 0.5 H7.5 V2.5 M0.5 0.5 V7.5 H2.5'
 const CLOSE = 'M0.5 0.5 L9.5 9.5 M9.5 0.5 L0.5 9.5'
 
-export function TitleBar(): React.ReactElement {
+export interface TitleBarProps {
+  view: View
+  onView: (view: View) => void
+  sources: SourceState[]
+  visibleIds: string[]
+  onSelect: (sourceId: string) => void
+  onSplit: (sourceId: string) => void
+  onRemove: (source: SourceState) => void
+  onAdd: () => void
+}
+
+export function TitleBar({
+  view,
+  onView,
+  sources,
+  visibleIds,
+  onSelect,
+  onSplit,
+  onRemove,
+  onAdd
+}: TitleBarProps): React.ReactElement {
   const [maximized, setMaximized] = useState(false)
 
   const { api } = bridge()
@@ -28,8 +52,28 @@ export function TitleBar(): React.ReactElement {
     return api.onWindowMaximized(setMaximized)
   }, [])
 
+  // Without tabs beside it the divider is just a stray line in the bar
+  const tabs = view === 'chats' && sources.length > 0
+
   return (
     <div className="titlebar">
+      <ModeSwitcher view={view} onSelect={onView} />
+
+      {tabs && (
+        <>
+          <span aria-hidden className="h-[20px] w-px flex-none" style={{ background: 'var(--line)' }} />
+
+          <ChannelTabs
+            sources={sources}
+            visibleIds={visibleIds}
+            onSelect={onSelect}
+            onSplit={onSplit}
+            onRemove={onRemove}
+            onAdd={onAdd}
+          />
+        </>
+      )}
+
       <div className="titlebar-drag" />
 
       {!trafficLights && (

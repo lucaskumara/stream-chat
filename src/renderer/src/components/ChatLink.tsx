@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Button, Input, Typography } from 'antd'
 import { Check, Copy } from 'lucide-react'
 import { bridge } from '../bridge'
 
@@ -42,28 +41,25 @@ export function ChatLink({ sourceId }: { sourceId: string }): React.ReactElement
   }
 
   return (
-    <div>
-      <Typography.Text type="secondary">
-        Add this in OBS as a custom browser dock, or a browser source.
-      </Typography.Text>
-
-      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <Input readOnly value={link ?? 'unavailable'} style={{ flex: 1, minWidth: 0 }} />
-
-        <Button
-          className="chat-link-copy"
-          icon={copied ? <Check size={16} /> : <Copy size={16} />}
-          disabled={!link}
-          onClick={copy}
-          aria-label="Copy this chat's link"
-        />
+    <div className="flex items-center gap-[8px]">
+      <div className="inset-field h-[30px] min-w-0 flex-1">
+        <span
+          className="min-w-0 flex-1 truncate text-[13px] whitespace-nowrap"
+          style={{ color: link ? 'var(--fg-2)' : 'var(--fg-4)' }}
+        >
+          {link ?? 'unavailable'}
+        </span>
       </div>
 
-      {!link && (
-        <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-          The link server could not bind a port this session.
-        </Typography.Text>
-      )}
+      <button
+        type="button"
+        className="icon-button chat-link-copy"
+        disabled={!link}
+        aria-label="Copy this chat's link"
+        onClick={copy}
+      >
+        {copied ? <Check size={15} strokeWidth={1.8} /> : <Copy size={15} strokeWidth={1.8} />}
+      </button>
     </div>
   )
 }

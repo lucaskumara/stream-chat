@@ -1,44 +1,39 @@
-/* antd sits between Tailwind's preflight and its utilities: component styles
-   win over the base reset (which would otherwise strip button backgrounds),
-   while utility classes still win over antd. StyleProvider `layer` in
-   main.tsx is what puts antd's runtime styles into this layer. */
-@layer theme, base, antd, components, utilities;
-
 @import 'tailwindcss';
 
 @theme {
   --color-twitch: #9146ff;
   --color-youtube: #ff0033;
   --color-kick: #53fc18;
-  --color-mock: #64748b;
-
-  --color-ink-900: #141414;
-  --color-ink-700: #1c1c1c;
-  --color-ink-600: #242424;
-  --color-ink-500: #333333;
 }
 
+/* The v2 palette, from the handoff. Every surface, border and text tone in the
+   chrome is one of these — nothing computes a shade of its own. */
 :root {
-  /* Matches antd's Tabs cardGutter so a group band can span the gap. */
-  --tab-gutter: 2px;
+  --ink-900: #141414;
+  --ink-800: #181818;
+  --ink-700: #1c1c1c;
+  --ink-600: #242424;
 
-  /* The whole type scale. Every text size in the app is one of these four, and
-     nothing computes a size of its own. antd's fontSize/titleFontSize tokens in
-     theme.ts have to mirror --text-md and --text-xl by hand, because those tokens
-     take a number rather than a CSS length. */
-  --text-sm: 14px;
-  --text-md: 16px;
-  --text-lg: 18px;
-  --text-xl: 20px;
+  --line: #262626;
+  --line-2: #303030;
 
-  /* Message text and author names, stepped through the scale per pane by the
-     bar's A-arrow buttons. The em units left in MessageRow size emote and badge
-     *images*, so those still scale with this value. */
-  --chat-font-size: var(--text-md);
+  --hover-row: #1e1e1e;
+  --segment-on: #333333;
+
+  --fg: #e6e6e6;
+  --fg-2: #9d9d9d;
+  --fg-3: #767676;
+  --fg-4: #5f5f5f;
+  --heading: #f2f2f2;
+
+  --offline-dot: #4a4a4a;
+  --close-hover: #c42b1c;
+
+  /* Chat rows are sized per pane by the stepper; the em units in MessageRow size
+     emote and badge images off this, so those scale with the text. */
+  --chat-font-size: 15px;
 }
 
-/* Text is sized in px from the scale above, but Tailwind's spacing utilities are
-   rem-based, so the root stays pinned to keep padding and gaps stable. */
 html {
   font-size: 16px;
 }
@@ -51,218 +46,187 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-ink-900);
-  color: #e3e3e3;
+  background: var(--ink-900);
+  color: var(--fg);
   font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
-  font-size: var(--text-md);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
 
-/* antd re-measures the tab bar as tabs are reordered and can settle on a taller
-   row, which made the whole strip jump between 28px and 33px purely from moving a
-   tab. The chrome has no reason to vary, so the height is pinned — and the pin has to
-  move with the token font size. */
-.ant-tabs-tab {
-  height: 2.25rem;
-  box-sizing: border-box;
+button {
+  font: inherit;
+  color: inherit;
 }
 
-/* The split control on each tab. It has to read as a control at rest — at low
-   opacity it looked like decoration and split view was undiscoverable. */
-.tab-split {
-  display: flex;
-  padding: 2px;
-  border-radius: 3px;
-  opacity: 0.35;
+/* Every hover in the chrome settles at the same speed. */
+button,
+.hoverable {
   transition:
-    opacity 0.12s,
+    background-color 0.12s,
     color 0.12s,
-    background 0.12s;
-}
-.tab-split:hover {
-  opacity: 0.9;
-  background: #2a2a2a;
+    opacity 0.12s;
 }
 
-/* Pinned is filled rather than outlined, so it carries far more ink than the
-   unpinned glyph at the same colour. It is deliberately a mid grey, not the
-   #ededed the tab label uses — a solid near-white pin shouted over the name. */
-.tab-split-on {
-  opacity: 0.75;
-  color: #8f8f8f;
-}
+/* --- title bar ------------------------------------------------------------ */
 
-/* Tabs that share a saved split group wear one continuous coloured bar across
-   their top edge — the bar bridges the 2px gutter between adjacent members so a
-   run reads as a single band rather than one mark per tab. The whole tab is
-   deliberately left alone; only the band says "these open together". */
-.tab-group {
-  position: relative;
-}
-.tab-group::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: calc(-1 * var(--tab-gutter));
-  height: 2px;
-  background: var(--group-color);
-  opacity: 0.3;
-  transition: opacity 0.12s;
-  pointer-events: none;
-}
-
-/* The band lights up for the group currently on screen and stays dimmed for
-   groups that are only remembered. */
-.tab-group.tab-shown::before {
-  opacity: 1;
-}
-
-/* Grip on the leftmost member — drags the whole group rather than one tab. The
-   bar is 3px but the hit area is the whole 14px of leading space, because that
-   space is what reads as "grab the group". */
-.tab-grip {
-  position: relative;
-  width: 20px;
-  height: 20px;
-  margin-left: -7px;
-  opacity: 0.55;
-  cursor: grab;
-  transition: opacity 0.12s;
-}
-.tab-grip::after {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  background: var(--group-color);
-  border-radius: 3px;
-}
-.tab-grip:hover {
-  opacity: 1;
-}
-.tab-group.tab-shown .tab-grip {
-  opacity: 0.8;
-}
-.tab-group-end::before {
-  right: 0;
-  border-top-right-radius: 2px;
-}
-.tab-group-start::before {
-  border-top-left-radius: 2px;
-}
-
-/* Every open chat is "shown", but antd only marks one tab active. Shown tabs
-   are styled to match the active one so the tab strip reflects what is on
-   screen rather than which tab was clicked last. */
-.ant-tabs-tab.tab-shown {
-  background: #1c1c1c;
-}
-.ant-tabs-tab.tab-shown .ant-tabs-tab-btn {
-  color: #ededed;
-}
-
-/* Chat scrollers get a thin, low-contrast bar so a fast-moving list doesn't
-   draw the eye to the scrollbar instead of the messages. */
-.chat-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-ink-500) transparent;
-  overflow-anchor: none;
-}
-.chat-scroll::-webkit-scrollbar {
-  width: 10px;
-}
-.chat-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-ink-500);
-  border-radius: 5px;
-}
-.chat-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-/* The window is frameless, so this row is the whole title bar: it carries the
-   OS drag region and the only way to minimise, maximise or close. Everything
-   inside it is draggable except the buttons, which opt back out — a drag
-   region swallows clicks, so a control left inside one is dead. */
 .titlebar {
   display: flex;
   align-items: center;
-  height: 32px;
+  gap: 8px;
+  height: 38px;
   flex: none;
-  -webkit-app-region: drag;
+  padding-left: 8px;
+  background: var(--ink-900);
+  border-bottom: 1px solid var(--line);
 }
 
+/* A drag region swallows mouse events, so every control inside the bar has to
+   opt back out or it is simply dead. */
 .titlebar-drag {
   flex: 1;
   align-self: stretch;
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
 }
 
 .titlebar-button {
-  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 44px;
-  height: 32px;
+  height: 34px;
   flex: none;
   border: 0;
   padding: 0;
   background: transparent;
-  color: #a1a1a1;
-  cursor: default;
-  transition:
-    background 0.12s,
-    color 0.12s;
+  color: var(--fg-3);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
 }
+
 .titlebar-button:hover {
-  background: #242424;
+  background: var(--ink-600);
   color: #ededed;
 }
+
 .titlebar-close:hover {
-  background: #c42b1c;
-  color: #ffffff;
+  background: var(--close-hover);
+  color: #fff;
 }
 
-/* Search terms in the pane bar read as pills: fully rounded, and removed with
-   Backspace rather than a per-pill close cross — the bar is narrow and a cross
-   on every term crowded it. antd tags mode already pops the last tag on
-   Backspace when the typed text is empty, so hiding the cross costs nothing. */
-.chat-pane-search .ant-select-selection-item {
-  height: 24px;
-  border-radius: 999px;
-  padding-inline: 10px;
-  line-height: 24px;
-}
+/* --- shared controls ------------------------------------------------------ */
 
-/* antd reserves room after the label for the close cross; with the cross hidden
-   that reservation reads as a long empty tail on every pill. */
-.chat-pane-search .ant-select-selection-item-content {
-  margin-inline-end: 0;
-}
-
-.chat-pane-search .ant-select-selection-item-remove {
-  display: none;
-}
-
-/* antd sizes the add button but does not centre a child element in it — its own
-   glyph is a font icon that rides the line box, so a 16px svg sat hard against the
-   left edge. */
-.ant-tabs-nav-add {
-  display: flex !important;
+.icon-button {
+  display: flex;
   align-items: center;
   justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
 }
 
-/* antd pulls the close control 4px past the tab's padding with a negative margin,
-   which reads as the x being crammed against the tab edge. */
-.ant-tabs-tab-remove {
-  margin-inline-end: 0 !important;
+.icon-button:hover,
+.icon-button[data-on='true'] {
+  background: var(--ink-600);
+  color: #ededed;
 }
 
-/* An open tab merges into the chat below it: the strip's rule runs the full width,
-   but a shown tab paints its own bottom edge the chat's colour, so the line appears
-   to break under exactly the tab whose chat you are looking at. The tab's card
-   border is INK.card, a shade lighter than the chat, which is why it read as a line
-   under the open tab rather than as part of the tab. */
-.ant-tabs-tab.tab-shown {
-  border-bottom-color: var(--color-ink-900);
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.icon-button:disabled:hover {
+  background: transparent;
+  color: var(--fg-3);
+}
+
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+
+.ghost-button:hover:not(:disabled) {
+  background: var(--hover-row);
+  color: var(--fg);
+}
+
+.ghost-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: var(--heading);
+  cursor: pointer;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #454545;
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.inset-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ink-800);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  padding: 0 10px;
+}
+
+.section-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-4);
+}
+
+/* --- chat ----------------------------------------------------------------- */
+
+.chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #303030 transparent;
+}
+
+.chat-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.chat-scroll::-webkit-scrollbar-thumb {
+  background: #303030;
+  border-radius: 999px;
+}
+
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }

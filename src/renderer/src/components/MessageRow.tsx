@@ -5,32 +5,26 @@ import {
   Crown,
   Gem,
   Gift,
+  Megaphone,
   Shield,
   ShieldCheck,
   Star,
   Sword,
+  Users,
   Video,
   Wrench,
   Zap,
   type LucideIcon
 } from 'lucide-react'
 import type { Badge, ChatMessage, Fragment } from '@shared/types'
+import { BADGE_WASH, EVENT_ACCENT, ROW_WASH } from '../theme'
 import { PLATFORM_COLOR } from './PlatformIcon'
 
-const KIND_LABEL: Partial<Record<ChatMessage['kind'], string>> = {
-  subscription: 'SUB',
-  donation: 'TIP',
-  raid: 'RAID',
-  announcement: 'NOTICE',
-  system: 'SYS'
-}
-
-const KIND_ACCENT: Partial<Record<ChatMessage['kind'], string>> = {
-  subscription: '#a78bfa',
-  donation: '#34d399',
-  raid: '#fbbf24',
-  announcement: '#60a5fa',
-  system: '#9ca3af'
+const KIND_GLYPH: Partial<Record<ChatMessage['kind'], LucideIcon>> = {
+  subscription: Star,
+  donation: Gift,
+  raid: Users,
+  announcement: Megaphone
 }
 
 const BADGE_GLYPH: Record<string, { icon: LucideIcon; color: string }> = {
@@ -158,7 +152,7 @@ function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
   return (
     <span
       title={badge.label}
-      className="mr-1 rounded-sm bg-neutral-700/60 px-1 text-[length:var(--text-sm)] font-semibold tracking-wide text-neutral-300 uppercase"
+      className="mr-1 rounded-sm bg-neutral-700/60 px-1 text-[.75em] font-semibold tracking-wide text-neutral-300 uppercase"
     >
       {badge.label.slice(0, 3)}
     </span>
@@ -179,7 +173,10 @@ function FragmentView({
       return <Emote name={fragment.name} url={fragment.url} />
     case 'mention':
       return (
-        <span className="rounded-sm bg-neutral-600/40 px-1 font-medium text-neutral-100">
+        <span
+          className="px-[4px] py-px"
+          style={{ background: 'rgba(255,255,255,.1)', borderRadius: 3, color: '#f2f2f2' }}
+        >
           {fragment.text}
         </span>
       )
@@ -187,7 +184,8 @@ function FragmentView({
       return (
         <button
           type="button"
-          className="cursor-pointer text-neutral-200 underline underline-offset-2 hover:text-white"
+          className="cursor-pointer underline"
+          style={{ color: '#c9c9c9', textUnderlineOffset: 2, background: 'none', border: 0, padding: 0 }}
           onClick={() => onOpenLink(fragment.href)}
         >
           {fragment.text}
@@ -201,6 +199,7 @@ export interface MessageRowProps {
   deleted: boolean
   showTimestamps: boolean
   showPlatform: boolean
+  compact?: boolean
   onOpenLink: (url: string) => void
 }
 
@@ -209,31 +208,38 @@ function MessageRowImpl({
   deleted,
   showTimestamps,
   showPlatform,
+  compact,
   onOpenLink
 }: MessageRowProps): React.ReactElement {
-  const kindLabel = KIND_LABEL[msg.kind]
-  const accent = KIND_ACCENT[msg.kind]
+  const event = EVENT_ACCENT[msg.kind as keyof typeof EVENT_ACCENT]
+  const Glyph = KIND_GLYPH[msg.kind]
 
   return (
     <div
-      className={[
-        'border-l-[3px] py-[3px] pr-2 pl-[5px] text-[length:var(--chat-font-size)] leading-snug break-words',
-        deleted ? 'opacity-40' : ''
-      ].join(' ')}
+      className="border-l-2 px-[12px] text-[length:var(--chat-font-size)] break-words"
       style={{
-        borderLeftColor: accent ?? 'transparent',
-        background: accent ? `${accent}14` : undefined
+        // Always in the layout, transparent on chat rows, so a notice arriving
+        // mid-scroll cannot shift every other row sideways.
+        borderLeftColor: event?.accent ?? 'transparent',
+        background: event ? `${event.accent}${ROW_WASH}` : undefined,
+        paddingTop: compact ? 2 : 5,
+        paddingBottom: compact ? 2 : 5,
+        lineHeight: 1.45,
+        opacity: deleted ? 0.38 : undefined
       }}
     >
       {msg.replyTo && (
-        <div className="truncate pl-1 text-[length:var(--text-sm)] text-neutral-500">
-          ↳ replying to {msg.replyTo.authorName}: {msg.replyTo.excerpt}
+        <div className="truncate text-[.86em]" style={{ color: 'var(--fg-4)' }}>
+          ↳ {msg.replyTo.authorName}: {msg.replyTo.excerpt}
         </div>
       )}
 
       <span className={deleted ? 'line-through' : undefined}>
         {showTimestamps && (
-          <span className="mr-1 text-[length:var(--text-sm)] text-neutral-500 tabular-nums">
+          <span
+            className="mr-[6px] text-[.86em] tabular-nums"
+            style={{ color: 'var(--fg-4)' }}
+          >
             {formatTime(msg.timestamp)}
           </span>
         )}
@@ -246,12 +252,27 @@ function MessageRowImpl({
           />
         )}
 
-        {kindLabel && (
+        {Glyph && event && (
+          <Glyph
+            size="1em"
+            strokeWidth={1.8}
+            aria-hidden
+            className="mr-[5px] inline-block"
+            style={{ color: event.accent, verticalAlign: -1 }}
+          />
+        )}
+
+        {event && (
           <span
-            className="mr-1 rounded-sm px-1 text-[length:var(--text-sm)] font-bold tracking-wide"
-            style={{ background: `${accent}2e`, color: accent }}
+            className="mr-1 inline-block px-[5px] py-px text-[.75em] font-bold uppercase"
+            style={{
+              background: `${event.accent}${BADGE_WASH}`,
+              color: event.badgeText,
+              borderRadius: 3,
+              letterSpacing: '.06em'
+            }}
           >
-            {kindLabel}
+            {event.label}
           </span>
         )}
 
@@ -263,14 +284,16 @@ function MessageRowImpl({
           className="cursor-pointer font-semibold hover:underline"
           style={{ color: nameColor(msg) }}
           data-author={msg.authorName}
-          title="Filter this chat by this author"
         >
           {msg.authorDisplayName ?? msg.authorName}
         </span>
-        <span className="text-neutral-500">: </span>
+        <span style={{ color: 'var(--fg-4)' }}>: </span>
 
         {msg.monetary && (
-          <span className="mr-1 rounded-sm bg-emerald-500/20 px-1 text-[length:var(--text-sm)] font-semibold text-emerald-300">
+          <span
+            className="mr-1 inline-block px-[5px] py-px font-semibold"
+            style={{ background: 'rgba(52,211,153,.18)', color: '#6ee7b7', borderRadius: 3 }}
+          >
             {msg.monetary.currency === 'bits'
               ? `${msg.monetary.amount.toLocaleString()} bits`
               : `${msg.monetary.currency} ${msg.monetary.amount.toFixed(2)}`}
@@ -284,7 +307,11 @@ function MessageRowImpl({
         ))}
       </span>
 
-      {deleted && <span className="ml-1 text-[length:var(--text-sm)] text-neutral-500">(deleted)</span>}
+      {deleted && (
+        <span className="ml-1 text-[.86em]" style={{ color: 'var(--fg-4)' }}>
+          (deleted)
+        </span>
+      )}
     </div>
   )
 }

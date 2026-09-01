@@ -1,56 +1,99 @@
-import { Divider, Flex, Switch, Typography } from 'antd'
 import { useStore } from '../store'
 import { ChatLink } from './ChatLink'
+import { ControlRow, Stepper, Toggle } from './controls'
 
-function DisplayToggle({
+function Rule(): React.ReactElement {
+  return <div className="my-[12px] h-px" style={{ background: 'var(--line)' }} />
+}
+
+function Group({
   label,
-  className,
-  on,
-  onChange
+  children
 }: {
   label: string
-  className: string
-  on: boolean
-  onChange: (on: boolean) => void
+  children: React.ReactNode
 }): React.ReactElement {
   return (
-    <Flex align="center" justify="space-between" gap={16}>
-      <Typography.Text>{label}</Typography.Text>
-
-      <Switch size="small" className={className} checked={on} onChange={onChange} />
-    </Flex>
+    <div>
+      <div className="section-label mb-[8px]">{label}</div>
+      {children}
+    </div>
   )
 }
 
-export function ChatSettings({ sourceId }: { sourceId: string }): React.ReactElement {
+export interface ChatSettingsProps {
+  sourceId: string
+  fontSize: number
+  onFontStep: (steps: number) => void
+  onFontReset: () => void
+  onClear: () => void
+}
+
+export function ChatSettings({
+  sourceId,
+  fontSize,
+  onFontStep,
+  onFontReset,
+  onClear
+}: ChatSettingsProps): React.ReactElement {
   const showTimestamps = useStore((s) => s.showTimestamps)
   const showDeleted = useStore((s) => s.showDeleted)
   const setShowTimestamps = useStore((s) => s.setShowTimestamps)
   const setShowDeleted = useStore((s) => s.setShowDeleted)
 
   return (
-    <div style={{ width: 380 }}>
-      <Typography.Text type="secondary">Every chat</Typography.Text>
+    <div
+      className="absolute z-[5] w-[340px] px-[16px] pt-[14px] pb-[16px]"
+      style={{
+        top: 48,
+        right: 10,
+        background: 'var(--ink-600)',
+        border: '1px solid var(--line-2)',
+        borderRadius: 10,
+        boxShadow: '0 14px 36px rgba(0,0,0,.55)'
+      }}
+    >
+      <Group label="Every chat">
+        <ControlRow label="Timestamps">
+          <Toggle label="Timestamps" on={showTimestamps} onChange={setShowTimestamps} />
+        </ControlRow>
 
-      <Flex vertical gap={8} style={{ marginTop: 8 }}>
-        <DisplayToggle
-          label="Timestamps"
-          className="chat-settings-timestamps"
-          on={showTimestamps}
-          onChange={setShowTimestamps}
-        />
+        <ControlRow label="Deleted messages">
+          <Toggle label="Deleted messages" on={showDeleted} onChange={setShowDeleted} />
+        </ControlRow>
+      </Group>
 
-        <DisplayToggle
-          label="Deleted messages"
-          className="chat-settings-deleted"
-          on={showDeleted}
-          onChange={setShowDeleted}
-        />
-      </Flex>
+      <Rule />
 
-      <Divider style={{ margin: '12px 0' }} />
+      <Group label="This chat">
+        <ControlRow label="Text size">
+          <Stepper label="chat text" size={fontSize} onStep={onFontStep} />
+        </ControlRow>
 
-      <ChatLink sourceId={sourceId} />
+        <div className="mt-[8px] flex gap-[8px]">
+          <button
+            type="button"
+            className="ghost-button chat-pane-font-reset h-[28px] flex-1 text-[13px]"
+            onClick={onFontReset}
+          >
+            Reset size
+          </button>
+
+          <button
+            type="button"
+            className="ghost-button chat-pane-clear h-[28px] flex-1 text-[13px]"
+            onClick={onClear}
+          >
+            Clear chat
+          </button>
+        </div>
+      </Group>
+
+      <Rule />
+
+      <Group label="OBS dock link">
+        <ChatLink sourceId={sourceId} />
+      </Group>
     </div>
   )
 }

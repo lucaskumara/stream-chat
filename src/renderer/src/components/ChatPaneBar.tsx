@@ -1,148 +1,168 @@
-import { memo, useCallback, useMemo } from 'react'
-import { Button, Popconfirm, Popover, Select } from 'antd'
-import { AArrowDown, AArrowUp, RotateCcw, Search, Settings, Trash2 } from 'lucide-react'
+import { memo, useCallback } from 'react'
+import { Search, Settings, X } from 'lucide-react'
+import type { SourceState } from '@shared/types'
+import { PLATFORM_COLOR } from './PlatformIcon'
 import { INK } from '../theme'
-import { ChatSettings } from './ChatSettings'
 import { termLabel } from '../search'
-import { CHAT_FONT_DEFAULT, CHAT_FONT_SIZES } from '../store'
+
+const PLATFORM_NAME: Record<SourceState['platform'], string> = {
+  twitch: 'Twitch',
+  youtube: 'YouTube',
+  kick: 'Kick'
+}
 
 export interface ChatPaneBarProps {
-  sourceId: string
+  source: SourceState
+  filterOpen: boolean
+  gearOpen: boolean
   terms: string[]
   draft: string
+  matches: number
   total: number
-  fontSize: number
+  onToggleFilter: () => void
+  onToggleGear: () => void
   onTerms: (terms: string[]) => void
   onDraft: (draft: string) => void
-  onFontStep: (steps: number) => void
-  onFontReset: () => void
-  onClear: () => void
 }
 
 function ChatPaneBarImpl({
-  sourceId,
+  source,
+  filterOpen,
+  gearOpen,
   terms,
   draft,
+  matches,
   total,
-  fontSize,
+  onToggleFilter,
+  onToggleGear,
   onTerms,
-  onDraft,
-  onFontStep,
-  onFontReset,
-  onClear
+  onDraft
 }: ChatPaneBarProps): React.ReactElement {
-  const options = useMemo(
-    () => terms.map((term) => ({ value: term, label: termLabel(term) })),
-    [terms]
-  )
+  const offline = source.status === 'offline' || source.status === 'error'
 
-  // Enter commits a tag through onChange but never fires onSearch, so a controlled
-  // searchValue would keep the text that just became a pill — and keep filtering by it.
-  const handleChange = useCallback(
-    (next: string[]) => {
-      onTerms(next)
+  const commit = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Escape') {
+        if (draft !== '') onDraft('')
+        else if (terms.length > 0) onTerms([])
+        return
+      }
+
+      if (event.key === 'Backspace' && draft === '' && terms.length > 0) {
+        onTerms(terms.slice(0, -1))
+        return
+      }
+
+      if (event.key !== 'Enter' && event.key !== ',') return
+
+      event.preventDefault()
+      const value = draft.trim()
+      if (value === '') return
+
+      onTerms([...terms, value])
       onDraft('')
-    },
-    [onTerms, onDraft]
-  )
-
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLElement>) => {
-      if (event.key !== 'Escape') return
-
-      if (draft !== '') onDraft('')
-      else if (terms.length > 0) onTerms([])
     },
     [draft, terms, onDraft, onTerms]
   )
 
   return (
-    <div
-      className="flex items-center gap-2 p-2"
-      style={{ background: INK.app, flex: 'none' }}
-    >
-      <Select
-        mode="tags"
-        open={false}
-        allowClear
-        value={terms}
-        options={options}
-        searchValue={draft}
-        tokenSeparators={[',']}
-        suffixIcon={<Search size={16} style={{ opacity: 0.45 }} />}
-        placeholder="Filter"
-        className="chat-pane-search"
-        style={{ flex: 1, minWidth: 0 }}
-        onChange={handleChange}
-        onSearch={onDraft}
-        onKeyDown={handleKeyDown}
-      />
-
-      <Button
-        type="text"
-        className="chat-pane-bigger"
-        icon={<AArrowUp size={16} />}
-        disabled={fontSize >= CHAT_FONT_SIZES[CHAT_FONT_SIZES.length - 1]}
-        onClick={() => onFontStep(1)}
-        aria-label="Larger text in this chat"
-        style={{ flex: 'none' }}
-      />
-
-      <Button
-        type="text"
-        className="chat-pane-smaller"
-        icon={<AArrowDown size={16} />}
-        disabled={fontSize <= CHAT_FONT_SIZES[0]}
-        onClick={() => onFontStep(-1)}
-        aria-label="Smaller text in this chat"
-        style={{ flex: 'none' }}
-      />
-
-      <Button
-        type="text"
-        className="chat-pane-font-reset"
-        icon={<RotateCcw size={16} />}
-        disabled={fontSize === CHAT_FONT_DEFAULT}
-        onClick={onFontReset}
-        aria-label="Reset text size in this chat"
-        style={{ flex: 'none' }}
-      />
-
-      <Popover
-        content={<ChatSettings sourceId={sourceId} />}
-        title="Chat settings"
-        trigger="click"
-        placement="bottomRight"
-        destroyOnHidden
+    <div className="flex-none">
+      <div
+        className="flex h-[44px] items-center gap-[10px] pr-[8px] pl-[12px]"
+        style={{ borderBottom: '1px solid var(--line)' }}
       >
-        <Button
-          type="text"
-          className="chat-pane-settings"
-          icon={<Settings size={16} />}
-          aria-label="Chat settings"
-          style={{ flex: 'none' }}
+        <span
+          aria-hidden
+          className="h-[6px] w-[6px] flex-none rounded-full"
+          style={{ background: offline ? INK.offlineDot : PLATFORM_COLOR[source.platform] }}
         />
-      </Popover>
 
-      <Popconfirm
-        title="Are you sure?"
-        placement="bottomRight"
-        okText="Clear"
-        cancelText="Cancel"
-        okButtonProps={{ danger: true }}
-        onConfirm={onClear}
-        disabled={total === 0}
-        styles={{ root: { minWidth: 200 } }}
-      >
-        <Button
-          type="text"
-          className="chat-pane-clear"
-          icon={<Trash2 size={16} />}
-          disabled={total === 0}
-          aria-label="Clear this chat"
-          style={{ flex: 'none' }}
-        />
-      </Popconfirm>
+        <span className="truncate text-[14px] font-semibold" style={{ color: '#f0f0f0' }}>
+          {source.label}
+        </span>
+
+        <span className="flex-none text-[14px]" style={{ color: 'var(--fg-4)' }}>
+          {PLATFORM_NAME[source.platform]}
+        </span>
+
+        {offline && (
+          <span
+            className="flex h-[18px] flex-none items-center px-[7px] text-[12px]"
+            style={{
+              border: '1px solid var(--line-2)',
+              borderRadius: 999,
+              color: 'var(--fg-3)'
+            }}
+          >
+            offline
+          </span>
+        )}
+
+        <div className="flex-1" />
+
+        <button
+          type="button"
+          className="icon-button chat-pane-filter"
+          data-on={filterOpen}
+          aria-label={`Filter ${source.label}`}
+          onClick={onToggleFilter}
+        >
+          <Search size={15} strokeWidth={1.8} />
+        </button>
+
+        <button
+          type="button"
+          className="icon-button chat-pane-settings"
+          data-on={gearOpen}
+          aria-label={`Settings for ${source.label}`}
+          onClick={onToggleGear}
+        >
+          <Settings size={15} strokeWidth={1.8} />
+        </button>
+      </div>
+
+      {filterOpen && (
+        <div className="px-[12px] py-[8px]" style={{ borderBottom: '1px solid var(--line)' }}>
+          <div className="inset-field h-[30px]">
+            <Search size={14} strokeWidth={1.8} style={{ flexShrink: 0, color: 'var(--fg-3)' }} />
+
+            {terms.map((term) => (
+              <span
+                key={term}
+                className="flex h-[20px] flex-none items-center gap-[5px] pr-[5px] pl-[8px] text-[13px]"
+                style={{ background: '#2f2f2f', borderRadius: 999, color: 'var(--fg)' }}
+              >
+                {termLabel(term)}
+                <button
+                  type="button"
+                  aria-label={`Remove ${termLabel(term)}`}
+                  onClick={() => onTerms(terms.filter((held) => held !== term))}
+                  className="flex cursor-pointer items-center border-0 bg-transparent p-0"
+                  style={{ color: 'var(--fg-3)' }}
+                >
+                  <X size={11} strokeWidth={2} />
+                </button>
+              </span>
+            ))}
+
+            <input
+              value={draft}
+              spellCheck={false}
+              placeholder={terms.length === 0 ? 'Filter messages' : ''}
+              onChange={(event) => onDraft(event.target.value)}
+              onKeyDown={commit}
+              className="min-w-0 flex-1 border-0 bg-transparent text-[13px] outline-none"
+              style={{ color: 'var(--fg)' }}
+            />
+
+            {(terms.length > 0 || draft !== '') && (
+              <span className="flex-none text-[13px] tabular-nums" style={{ color: 'var(--fg-4)' }}>
+                {matches} of {total}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,24 +1,29 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Button, Empty, Flex } from 'antd'
 import { ArrowDown } from 'lucide-react'
-import type { ChatMessage } from '@shared/types'
+import type { ChatMessage, SourceState } from '@shared/types'
 import { bridge } from '../bridge'
-import { INK } from '../theme'
 import { authorTerm, matchesSearch, parseSearch } from '../search'
+import type { Density } from '../store'
 import { ChatPaneBar } from './ChatPaneBar'
+import { ChatSettings } from './ChatSettings'
+import { EmptyBlock } from './controls'
 import { MessageRow } from './MessageRow'
 
 const PIN_THRESHOLD_PX = 40
 const ESTIMATED_ROW_PX = 26
 
 export interface ChatPaneProps {
-  sourceId: string
+  source: SourceState
   messages: ChatMessage[]
   deleted: Record<string, true>
   showDeleted: boolean
   showTimestamps: boolean
-  showPlatform: boolean
+  density: Density
+  filterOpen: boolean
+  gearOpen: boolean
+  onToggleFilter: () => void
+  onToggleGear: () => void
   searchTerms: string[]
   searchDraft: string
   onSearchTerms: (terms: string[]) => void
@@ -31,12 +36,16 @@ export interface ChatPaneProps {
 }
 
 export function ChatPane({
-  sourceId,
+  source,
   messages,
   deleted,
   showDeleted,
   showTimestamps,
-  showPlatform,
+  density,
+  filterOpen,
+  gearOpen,
+  onToggleFilter,
+  onToggleGear,
   searchTerms,
   searchDraft,
   onSearchTerms,
@@ -133,34 +142,45 @@ export function ChatPane({
 
   return (
     <div
-      className="flex min-h-0 min-w-0 flex-1 flex-col"
+      className="relative flex min-h-0 min-w-0 flex-1 flex-col"
       style={
         {
           height: '100%',
-          background: INK.app,
+          background: 'var(--ink-900)',
           '--chat-font-size': `${fontSize}px`
         } as React.CSSProperties
       }
     >
       <ChatPaneBar
-        sourceId={sourceId}
+        source={source}
+        filterOpen={filterOpen}
+        gearOpen={gearOpen}
         terms={searchTerms}
         draft={searchDraft}
+        matches={visible.length}
         total={list.length}
-        fontSize={fontSize}
+        onToggleFilter={onToggleFilter}
+        onToggleGear={onToggleGear}
         onTerms={onSearchTerms}
         onDraft={onSearchDraft}
-        onFontStep={onFontStep}
-        onFontReset={onFontReset}
-        onClear={onClear}
       />
+
+      {gearOpen && (
+        <ChatSettings
+          sourceId={source.id}
+          fontSize={fontSize}
+          onFontStep={onFontStep}
+          onFontReset={onFontReset}
+          onClear={onClear}
+        />
+      )}
 
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
           onScroll={handleScroll}
           onClick={filterByAuthor}
-          className="chat-scroll absolute inset-0 overflow-x-hidden overflow-y-auto"
+          className="chat-scroll absolute inset-0 overflow-x-hidden overflow-y-auto pb-[8px]"
         >
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
             {items.map((item) => {
@@ -183,7 +203,8 @@ export function ChatPane({
                     msg={msg}
                     deleted={deleted[msg.id] === true}
                     showTimestamps={showTimestamps}
-                    showPlatform={showPlatform}
+                    showPlatform={false}
+                    compact={density === 'compact'}
                     onOpenLink={openLink}
                   />
                 </div>
@@ -193,37 +214,33 @@ export function ChatPane({
         </div>
 
         {visible.length === 0 && (
-          <Flex
-            align="center"
-            justify="center"
-            className="pointer-events-none absolute inset-0"
-          >
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                list.length === 0 ? 'waiting for messages…' : 'every message is filtered out'
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <EmptyBlock
+              detail={
+                list.length === 0 ? 'Waiting for messages…' : 'Every message is filtered out.'
               }
             />
-          </Flex>
+          </div>
         )}
 
         {!pinned && (
-          <Button
-            type="primary"
-            shape="round"
-            size="small"
-            icon={<ArrowDown size={16} />}
+          <button
+            type="button"
             onClick={resume}
+            className="absolute left-1/2 flex h-[26px] cursor-pointer items-center gap-[6px] px-[12px] text-[13px]"
             style={{
-              position: 'absolute',
-              bottom: 8,
-              left: '50%',
+              bottom: 10,
               transform: 'translateX(-50%)',
-              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.45)'
+              background: '#2b2b2b',
+              border: '1px solid var(--line-2)',
+              borderRadius: 999,
+              color: '#ededed',
+              boxShadow: '0 6px 18px rgba(0,0,0,.5)'
             }}
           >
-            {unread > 0 ? `${unread} new · ` : ''}chat paused — resume
-          </Button>
+            <ArrowDown size={14} strokeWidth={1.8} />
+            {unread > 0 ? `${unread} new · paused` : 'paused'}
+          </button>
         )}
       </div>
     </div>
