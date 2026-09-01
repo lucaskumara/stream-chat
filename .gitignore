@@ -26,3 +26,6 @@ yarn-error.log*
 *.local
 .DS_Store
 Thumbs.db
+
+# design handoff bundles, kept locally
+*.zip
