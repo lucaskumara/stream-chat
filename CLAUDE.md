@@ -765,7 +765,7 @@ well, so the mirror is gone. What is left there genuinely cannot be a CSS variab
 are composed with `ROW_WASH`/`BADGE_WASH` at render time. `PLATFORM_COLOR` was also
 duplicated by a Tailwind `@theme` block declaring `--color-twitch/-youtube/-kick`; no
 utility ever referenced those, and they are gone too. The four `--text-*` variables v1 used are gone: the chrome is
-14px with 17px screen titles and 12px section labels, and chat text is the per-pane
+14px with 17px screen titles and 13px section labels, and chat text is the per-pane
 `--chat-font-size`.
 
 **There is a light theme, and it is one inverted block — not a media query.** `App` resolves
