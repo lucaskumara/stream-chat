@@ -1,4 +1,4 @@
-import { Minus, Plus } from 'lucide-react'
+import { Minus, Plus, type LucideIcon } from 'lucide-react'
 import { CHAT_FONT_SIZES } from '../store'
 
 export function Toggle({
@@ -171,12 +171,17 @@ export function Picker<T extends string>({
   )
 }
 
+/** The icon is the view's own tab glyph, so an empty Chat page shows the Chat icon and an
+    empty Broadcast page the Broadcast one. The handoff drew an outlined square here; naming
+    the view reads better than a placeholder shape. */
 export function EmptyBlock({
+  icon: Icon,
   size = 26,
   title,
   detail,
   children
 }: {
+  icon: LucideIcon
   size?: number
   title?: string
   detail?: string
@@ -187,16 +192,7 @@ export function EmptyBlock({
       className="flex flex-col items-center justify-center text-center"
       style={{ gap: title ? 14 : 10, color: 'var(--fg-4)' }}
     >
-      <span
-        aria-hidden
-        className="flex-none"
-        style={{
-          width: size,
-          height: size,
-          border: '1.5px solid #2e2e2e',
-          borderRadius: size > 30 ? 9 : 7
-        }}
-      />
+      <Icon size={size} strokeWidth={1.5} aria-hidden className="flex-none" style={{ color: '#2e2e2e' }} />
 
       {title && (
         <span className="text-[14px]" style={{ color: '#e0e0e0' }}>

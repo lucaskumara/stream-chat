@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { MessageSquare } from 'lucide-react'
 import type { SourceState } from '@shared/types'
 import { bridge } from './bridge'
 import { useStore } from './store'
@@ -23,6 +24,7 @@ function Chats({ onAdd }: { onAdd: () => void }): React.ReactElement {
         style={{ background: 'var(--ink-900)' }}
       >
         <EmptyBlock
+          icon={MessageSquare}
           size={34}
           title="No channels yet"
           detail="Add one by name, or paste its link."

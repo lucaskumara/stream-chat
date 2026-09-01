@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowDown } from 'lucide-react'
+import { ArrowDown, MessageSquare } from 'lucide-react'
 import type { ChatMessage, SourceState } from '@shared/types'
 import { bridge } from '../bridge'
 import { authorTerm, matchesSearch, parseSearch } from '../search'
@@ -216,6 +216,7 @@ export function ChatPane({
         {visible.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <EmptyBlock
+              icon={MessageSquare}
               detail={
                 list.length === 0 ? 'Waiting for messages…' : 'Every message is filtered out.'
               }

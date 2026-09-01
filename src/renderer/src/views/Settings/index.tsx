@@ -1,9 +1,10 @@
+import { Settings as SettingsIcon } from 'lucide-react'
 import type { SettingsPane } from '../../store'
 import { useStore } from '../../store'
+import { EmptyBlock } from '../../components/controls'
 import { Accounts } from './Accounts'
 import { Appearance } from './Appearance'
 import { General } from './General'
-import { EmptyBlock } from '../../components/controls'
 
 const PANES: { pane: SettingsPane; label: string }[] = [
   { pane: 'general', label: 'General' },
@@ -24,7 +25,7 @@ const TITLES: Record<SettingsPane, { title: string; blurb: string }> = {
 function Nothing(): React.ReactElement {
   return (
     <div className="flex justify-center py-[26px]">
-      <EmptyBlock detail="Nothing here yet." />
+      <EmptyBlock icon={SettingsIcon} detail="Nothing here yet." />
     </div>
   )
 }
