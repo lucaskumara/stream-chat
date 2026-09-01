@@ -846,6 +846,10 @@ rather than what was clicked last.
 
 The title bar owns navigation. There is no sidebar and no tab strip below it.
 
+**The title bar carries no bottom rule**, though the handoff specifies one. It was removed
+by request — the bar and the view below it are both `--ink-900`, so the line read as a seam
+rather than a division. Do not restore it from the spec.
+
 **Three views, one switcher.** `store.view` is `'chats' | 'broadcast' | 'settings'`, driven
 by a segmented control at the far left of the title bar. `Broadcast` is a named placeholder
 reserved for the next slice of work — it is deliberately empty, not unfinished.

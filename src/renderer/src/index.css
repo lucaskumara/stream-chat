@@ -78,7 +78,6 @@ button,
   flex: none;
   padding-left: 8px;
   background: var(--ink-900);
-  border-bottom: 1px solid var(--line);
 }
 
 /* A drag region swallows mouse events, so every control inside the bar has to
