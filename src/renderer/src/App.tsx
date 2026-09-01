@@ -130,7 +130,7 @@ export default function App(): React.ReactElement {
     [visiblePlatforms, sources, merged]
   )
   const setSources = useStore((s) => s.setSources)
-  const setTwitchAuth = useStore((s) => s.setTwitchAuth)
+  const setAccounts = useStore((s) => s.setAccounts)
   const ingest = useStore((s) => s.ingest)
   const forgetSource = useStore((s) => s.forgetSource)
 
@@ -138,7 +138,7 @@ export default function App(): React.ReactElement {
     const { api } = bridge()
     const offBatch = api.onBatch(ingest)
     const offSources = api.onSources(setSources)
-    const offAuth = api.onTwitchAuth(setTwitchAuth)
+    const offAccounts = api.onAccounts(setAccounts)
 
     // A renderer reload — after a crash, or the watchdog recovering a blank window —
     // starts with an empty store, so the replay main already keeps for OBS docks is
@@ -157,16 +157,16 @@ export default function App(): React.ReactElement {
     })
 
     void api
-      .twitchAuthState()
-      .then(setTwitchAuth)
-      .catch((error) => console.debug('[auth] state unavailable:', error))
+      .accounts()
+      .then(setAccounts)
+      .catch((error) => console.debug('[accounts] state unavailable:', error))
 
     return () => {
       offBatch()
       offSources()
-      offAuth()
+      offAccounts()
     }
-  }, [ingest, setSources, setTwitchAuth])
+  }, [ingest, setSources, setAccounts])
 
   // The palette is stamped on the root rather than resolved in CSS, so 'system' has
   // one home and the OBS dock — a second entry that never stamps — stays dark.

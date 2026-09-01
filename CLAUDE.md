@@ -992,9 +992,66 @@ tab *is* the control. `SourceManager.reorder` and the `sources:reorder` IPC surv
 side with no caller in the UI; restoring dragging means writing a new interaction, not rewiring
 an old one.
 
+### Accounts and sign-in
+
+**Signing in unlocks nothing yet, on purpose.** All three platforms can now be connected
+from Settings -> Accounts, and no feature reads the result. `AccountManager.authenticated()`
+is the seam sending, moderating and stream-key reads will come through; it has no callers.
+Chat still reads anonymously on every platform whether or not an account is connected.
+
+**The three platforms do not share an auth mechanism, and cannot.** Twitch is the only one
+of the three offering a *public-client* flow, so it keeps the device-code grant it already
+had — a real refresh token, no secret, and the browser opens on the user's own machine.
+Google wants a Cloud project whose sensitive scopes expire refresh tokens weekly until the
+app leaves Testing; Kick's token exchange requires a `client_secret` a desktop binary cannot
+hold. So both of those sign in through a window running the real site, which is what an OBS
+browser dock is. `AccountManager` is where that split stops mattering upstream.
+
+**The Electron token in the user agent is what Google blocks, and the failure looks like a
+bug in us.** Left in, `accounts.google.com` serves "This browser or app may not be secure"
+instead of a sign-in form. `browserUserAgent()` strips `Electron/x.y.z` *and* our own
+`stream-chat/x.y.z` product token, leaving a plain Chrome UA, and sets it on both the
+partition and the initial `loadURL`. Verified in the running app: the real Google sign-in
+form renders, `navigator.userAgent` reads `…Chrome/152.0.7977.54 Safari/537.36`.
+
+**Site sessions live in Chromium's cookie store, not in `config.json`.** Each platform gets
+a `persist:account-<platform>` partition, so a session survives restart with nothing of ours
+written to disk, and `signOut` is `clearStorageData`. This is a real widening of "nothing is
+persisted but the Twitch token" — see that invariant — but the credential never passes
+through our code, and `restore()` only re-reads *who* the session belongs to at boot.
+
+**Kick's sign-in marker must be `session_token` alone.** Kick hands every visitor a
+`kick_session` cookie, so matching that one too reports a signed-in account the instant the
+window opens, before anybody types anything.
+
+**Kick has no login route and does not need a narrow window.** `kick.com/login` returns 200
+and renders the homepage — it is a SPA, so every path does. The login is behind the account
+icon in the header, and the window is 1000px because the site renders skeletons rather than
+content at 520. Verified: no Cloudflare interstitial in the login window at either size.
+
+**Kick's authenticated requests go through the partition, not Node's `fetch`.**
+`KickAccount.fetch` uses `Session.fetch`, so requests carry Chromium's TLS fingerprint and
+the Cloudflare clearance the login window earned. The same cookies on a bare `fetch` are
+what the community reports getting 403 "Request blocked by security policy".
+
+**Twitch grants are read off the stored token, never off `SCOPES`.** `channel:read:stream_key`
+was added to `SCOPES`, which does not retroactively grant it — a token minted before the
+change keeps working for chat and simply lacks stream-key access. `twitchAccount` therefore
+maps the token's own scope list, and `twitchScopesStale` is the separate question of whether
+a working sign-in needs redoing. Write scopes are deliberately *not* requested: asking for
+authority no code can use costs one more sign-in when sending lands, and is the honest trade.
+
+**A name is a nicety; the session is what matters.** Kick's identity lookup failing leaves
+the account connected and unnamed rather than reporting a sign-in failure — the cookie is
+the credential, and `/api/v1/user` is decoration.
+
 ### Main process
 
-**Nothing is persisted but the Twitch token.** `config.json` holds `version` and the
+**Nothing is persisted but the Twitch token — and, since accounts landed, the YouTube and
+Kick site sessions Chromium keeps for us.** Those live in `persist:account-<platform>`
+partitions under userData rather than in `config.json`, so no credential of theirs passes
+through our code; see "Accounts and sign-in" above. Channel names are still not saved, which
+is the part of this rule that was a privacy decision. `config.json` holds `version` and the
 encrypted `twitch.tokensEnc`, and that is the whole file. Channels are deliberately *not*
 saved: the app opens empty every launch and every channel on screen was added this session.
 An earlier build restored saved channels at startup, which meant `config.json` accumulated a
@@ -1142,9 +1199,9 @@ baked into the build, or nothing at all.
 
 | Platform | User sign-in? | Build credential | Why |
 |---|---|---|---|
-| Twitch | **Optional** | Client ID | EventSub is never anonymous — every `channel.chat.message` subscription carries the reading user's `user_id`. Anonymous IRC is the signed-out fallback and loses nothing — badges resolve over anonymous GQL, not Helix. |
-| YouTube | **No** | none | Reading chat goes through the innertube endpoint the web player uses — no key, no quota. A Google API key would only be needed for account-scoped calls, or to *send* messages (`liveChatMessages.insert` is OAuth-only). |
-| Kick | **No** | none | The internal socket is anonymous. Kick's *official* API is OAuth + webhook, useless to a desktop app with no public URL. |
+| Twitch | **Optional**, device flow | Client ID | EventSub is never anonymous — every `channel.chat.message` subscription carries the reading user's `user_id`. Anonymous IRC is the signed-out fallback and loses nothing — badges resolve over anonymous GQL, not Helix. |
+| YouTube | **Optional**, site session | none | Sign-in is a login window, not OAuth — a Cloud project's sensitive scopes expire refresh tokens weekly until the app leaves Testing. Reading chat goes through the innertube endpoint the web player uses — no key, no quota. A Google API key would only be needed for account-scoped calls, or to *send* messages (`liveChatMessages.insert` is OAuth-only). |
+| Kick | **Optional**, site session | none | Sign-in is a login window: the public API's token exchange needs a `client_secret` a desktop build cannot hold. The internal socket is anonymous. Kick's *official* API is OAuth + webhook, useless to a desktop app with no public URL. |
 
 **The Data API stays unused for reading chat — but `streamList` is the one option that could
 beat innertube.** Two different methods, and the distinction matters:
@@ -1275,6 +1332,8 @@ tests, so nothing bundles them. What is covered:
 | the split/merged column model | `renderer/layout.ts` |
 | the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
+| the Twitch account state and scope staleness | `twitch/state.ts` |
+| the login window's user-agent scrub | `accounts/window.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |
 
 **Keep the tests out of `src/renderer`, and not only for tidiness.** Tailwind v4 scans the

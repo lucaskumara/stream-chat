@@ -5,8 +5,7 @@ import { obsChatPath } from '@shared/obs'
 import type { MessageBus } from './bus'
 import type { ObsServer } from './obs/server'
 import type { SourceManager } from './sources'
-import type { TwitchAuth } from './twitch/auth'
-import { buildAuthState } from './twitch/state'
+import type { AccountManager } from './accounts'
 
 const MAX_LABEL_LENGTH = 80
 const MAX_IDENTIFIER_LENGTH = 100
@@ -28,13 +27,13 @@ export const IPC = {
   windowIsMaximized: 'window:is-maximized',
   windowMaximized: 'window:maximized',
 
-  twitchAuthState: 'twitch:auth-state',
-  twitchStartLogin: 'twitch:start-login',
-  twitchSignOut: 'twitch:sign-out',
+  accounts: 'accounts:list',
+  accountSignIn: 'accounts:sign-in',
+  accountSignOut: 'accounts:sign-out',
 
   batch: 'chat:batch',
   sourceState: 'sources:state',
-  twitchAuth: 'twitch:auth'
+  accountState: 'accounts:state'
 } as const
 
 type IpcHandler = Parameters<typeof ipcMain.handle>[1]
@@ -50,14 +49,14 @@ function handle(channel: string, listener: IpcHandler): void {
 
 export function registerIpc(
   sources: SourceManager,
-  auth: TwitchAuth,
+  accounts: AccountManager,
   obs: ObsServer,
   bus: MessageBus
 ): void {
   registerSourceHandlers(sources, bus)
   registerShellHandlers()
   registerWindowHandlers()
-  registerTwitchAuthHandlers(sources, auth)
+  registerAccountHandlers(sources, accounts)
   registerObsHandlers(sources, obs)
 }
 
@@ -125,12 +124,22 @@ function senderWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow | null 
   return BrowserWindow.fromWebContents(event.sender)
 }
 
-function registerTwitchAuthHandlers(sources: SourceManager, auth: TwitchAuth): void {
-  handle(IPC.twitchAuthState, () => buildAuthState(auth))
-  handle(IPC.twitchStartLogin, async () => auth.startDeviceFlow())
-  handle(IPC.twitchSignOut, async () => {
-    await sources.removeByPlatform('twitch')
-    auth.signOut()
+/** Signing out of Twitch drops its chats, because the transport is chosen by whether a
+    token exists — the other two do not touch chat at all, so their sessions come and go
+    without disturbing anything on screen. */
+function registerAccountHandlers(sources: SourceManager, accounts: AccountManager): void {
+  handle(IPC.accounts, () => accounts.list())
+
+  handle(IPC.accountSignIn, async (event, platform: unknown) => {
+    await accounts.signIn(parsePlatform(platform), senderWindow(event))
+  })
+
+  handle(IPC.accountSignOut, async (_e, platform: unknown) => {
+    const target = parsePlatform(platform)
+
+    if (target === 'twitch') await sources.removeByPlatform('twitch')
+
+    await accounts.signOut(target)
   })
 }
 

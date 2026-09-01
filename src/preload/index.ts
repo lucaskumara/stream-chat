@@ -1,13 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
+  AccountState,
   AddSourceRequest,
   ChatApi,
   ChatBatch,
   ChatMessage,
-  DeviceCodePrompt,
   HostPlatform,
-  SourceState,
-  TwitchAuthState
+  Platform,
+  SourceState
 } from '@shared/types'
 
 const IPC = {
@@ -24,12 +24,12 @@ const IPC = {
   windowClose: 'window:close',
   windowIsMaximized: 'window:is-maximized',
   windowMaximized: 'window:maximized',
-  twitchAuthState: 'twitch:auth-state',
-  twitchStartLogin: 'twitch:start-login',
-  twitchSignOut: 'twitch:sign-out',
+  accounts: 'accounts:list',
+  accountSignIn: 'accounts:sign-in',
+  accountSignOut: 'accounts:sign-out',
   batch: 'chat:batch',
   sourceState: 'sources:state',
-  twitchAuth: 'twitch:auth'
+  accountState: 'accounts:state'
 } as const
 
 const HOSTS: HostPlatform[] = ['darwin', 'win32', 'linux']
@@ -93,17 +93,19 @@ const api: ChatApi = {
     }
   },
 
-  twitchAuthState: (): Promise<TwitchAuthState> => ipcRenderer.invoke(IPC.twitchAuthState),
+  accounts: (): Promise<AccountState[]> => ipcRenderer.invoke(IPC.accounts),
 
-  twitchStartLogin: (): Promise<DeviceCodePrompt> => ipcRenderer.invoke(IPC.twitchStartLogin),
+  accountSignIn: (platform: Platform): Promise<void> =>
+    ipcRenderer.invoke(IPC.accountSignIn, platform),
 
-  twitchSignOut: (): Promise<void> => ipcRenderer.invoke(IPC.twitchSignOut),
+  accountSignOut: (platform: Platform): Promise<void> =>
+    ipcRenderer.invoke(IPC.accountSignOut, platform),
 
-  onTwitchAuth: (cb: (state: TwitchAuthState) => void): (() => void) => {
-    const handler = (_e: Electron.IpcRendererEvent, state: TwitchAuthState): void => cb(state)
-    ipcRenderer.on(IPC.twitchAuth, handler)
+  onAccounts: (cb: (states: AccountState[]) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, states: AccountState[]): void => cb(states)
+    ipcRenderer.on(IPC.accountState, handler)
     return () => {
-      ipcRenderer.off(IPC.twitchAuth, handler)
+      ipcRenderer.off(IPC.accountState, handler)
     }
   }
 }

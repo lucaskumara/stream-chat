@@ -92,27 +92,36 @@ export interface AddSourceRequest {
   identifier?: string
 }
 
-export type TwitchAuthStatus =
+export type AccountStatus =
   | 'not-configured'
   | 'signed-out'
   | 'pending'
   | 'signed-in'
   | 'error'
 
-export interface TwitchAuthState {
-  status: TwitchAuthStatus
-
-  login?: string
-  userId?: string
-  error?: string
-  scopes?: string[]
-}
-
 export interface DeviceCodePrompt {
   userCode: string
   verificationUri: string
   expiresAt: number
   interval: number
+}
+
+export interface AccountState {
+  platform: Platform
+  status: AccountStatus
+
+  userId?: string
+  displayName?: string
+
+  /** What this connection unlocks, phrased for the settings row. Main resolves it
+      because only main knows whether a scope was actually granted. */
+  grants?: string[]
+
+  error?: string
+
+  /** Twitch is the only platform with a public-client OAuth flow, so it is the only
+      one that shows a code. The other two open a login window instead. */
+  prompt?: DeviceCodePrompt
 }
 
 export type HostPlatform = 'darwin' | 'win32' | 'linux' | 'other'
@@ -141,9 +150,9 @@ export interface ChatApi {
 
   onSources(cb: (states: SourceState[]) => void): () => void
 
-  twitchAuthState(): Promise<TwitchAuthState>
-  twitchStartLogin(): Promise<DeviceCodePrompt>
-  twitchSignOut(): Promise<void>
+  accounts(): Promise<AccountState[]>
+  accountSignIn(platform: Platform): Promise<void>
+  accountSignOut(platform: Platform): Promise<void>
 
-  onTwitchAuth(cb: (state: TwitchAuthState) => void): () => void
+  onAccounts(cb: (states: AccountState[]) => void): () => void
 }

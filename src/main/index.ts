@@ -9,7 +9,7 @@ import { TwitchAuth } from './twitch/auth'
 import { Helix } from './twitch/helix'
 import { EventSubHub, IrcHub } from './chat/platforms/twitch'
 import { keepRendererAlive } from './lifecycle'
-import { buildAuthState } from './twitch/state'
+import { AccountManager } from './accounts'
 
 const isDev = !app.isPackaged
 
@@ -25,14 +25,16 @@ function broadcastSources(states: SourceState[]): void {
   obs.sourcesChanged()
 }
 
-function broadcastTwitchAuth(): void {
+function broadcastAccounts(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC.twitchAuth, buildAuthState(auth))
+    mainWindow.webContents.send(IPC.accountState, accounts.list())
   }
 }
 
-const auth = new TwitchAuth(broadcastTwitchAuth)
+const auth = new TwitchAuth(broadcastAccounts)
 const helix = new Helix(auth)
+
+const accounts = new AccountManager(auth, broadcastAccounts)
 
 const eventsub = new EventSubHub(helix, (status, error) => {
   if (status === 'error') console.warn('[eventsub]', error)
@@ -131,7 +133,7 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     app.setAppUserModelId('com.lucaskumara.streamchat')
 
-    registerIpc(sources, auth, obs, bus)
+    registerIpc(sources, accounts, obs, bus)
 
     void obs.start()
 
@@ -139,7 +141,9 @@ if (!app.requestSingleInstanceLock()) {
     bus.attach(mainWindow)
 
     mainWindow.webContents.once('did-finish-load', () => {
-      broadcastTwitchAuth()
+      broadcastAccounts()
+
+      void accounts.restore()
     })
 
     mainWindow.on('closed', () => {

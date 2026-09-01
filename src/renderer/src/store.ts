@@ -1,12 +1,12 @@
 import { create } from 'zustand'
 import { PLATFORMS } from '@shared/types'
 import type {
+  AccountState,
   ChatBatch,
   ChatMessage,
   ModerationEvent,
   Platform,
-  SourceState,
-  TwitchAuthState
+  SourceState
 } from '@shared/types'
 
 const DEFAULT_CAPACITY = 500
@@ -75,10 +75,10 @@ interface ChatState {
   /** Chat row size per source, in px from CHAT_FONT_SIZES. Missing means the default. */
   fontSize: Record<string, number>
 
-  twitchAuth: TwitchAuthState
+  accounts: AccountState[]
 
   setSources: (states: SourceState[]) => void
-  setTwitchAuth: (state: TwitchAuthState) => void
+  setAccounts: (accounts: AccountState[]) => void
   togglePlatform: (platform: Platform) => void
   toggleMerged: () => void
   setConnectDraft: (platform: Platform, draft: string) => void
@@ -230,7 +230,7 @@ export const useStore = create<ChatState>()((set) => ({
 
   reopenChannels: true,
 
-  twitchAuth: { status: 'signed-out' },
+  accounts: [],
 
   /** A cold start adopts whatever main already has — the backlog replay after a
       renderer crash otherwise leaves the connect form up over a live chat. Later
@@ -246,7 +246,7 @@ export const useStore = create<ChatState>()((set) => ({
       return { sources: states, visiblePlatforms: PLATFORMS.filter((held) => live.has(held)) }
     }),
 
-  setTwitchAuth: (twitchAuth) => set({ twitchAuth }),
+  setAccounts: (accounts) => set({ accounts }),
 
   /** Panes run in tab order rather than the order they were switched on, so a split
       reads left to right the same as the strip above it. The last pane cannot be

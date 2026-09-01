@@ -2,7 +2,10 @@ import { config, type StoredTwitchTokens } from '../config'
 
 const ID_BASE = 'https://id.twitch.tv/oauth2'
 
-export const SCOPES = ['user:read:chat'] as const
+/** Read-only. Sending and going live need write scopes, and asking for them before
+    those features exist would be requesting authority we cannot use — at the cost of
+    one more sign-in when they land. */
+export const SCOPES = ['user:read:chat', 'channel:read:stream_key'] as const
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
 
@@ -101,12 +104,22 @@ export class TwitchAuth {
 
     this.poll(clientId, res.device_code, expiresAt, intervalMs)
 
-    return {
+    this.prompt = {
       userCode: res.user_code,
       verificationUri: res.verification_uri,
       expiresAt,
       interval: res.interval
     }
+
+    return this.prompt
+  }
+
+  private prompt: DeviceCodePrompt | null = null
+
+  /** Retained so the settings row can keep showing the code while polling runs — the
+      renderer never has to hold a value main is already tracking. */
+  getPrompt(): DeviceCodePrompt | null {
+    return this.pollTimer ? this.prompt : null
   }
 
   private poll(
