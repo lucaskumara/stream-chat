@@ -887,10 +887,21 @@ order, so `mergeMessages` walks them — linear in the total rather than re-sort
 message on each 100ms batch. It is stable by *list order*, which is tab order, so messages
 sharing a timestamp do not shuffle between batches.
 
+**A mark's box has to land on whole pixels, or the whole thing smears.** Deriving the
+width from the height and the viewBox ratio is the obvious way to keep the aspect and it
+is what made these look blurry: it gave Twitch `11.656 x 14` and Kick `11.109 x 13`, and
+an *odd* height centred in the 26px tab put Kick at `y=12.5`. At `devicePixelRatio: 1`
+every edge then falls between device pixels. `PlatformMark` rounds the derived width and
+leans on `preserveAspectRatio` for the sub-pixel of aspect that costs, and every tab
+height is even so flex centring stays whole. Measured after: `12 x 14`, `17 x 12`,
+`12 x 14`, all at integer `y`. The x is still fractional — it comes from the text beside
+it — but the box and the vertical alignment are what read as blur.
+
 **A merged row carries its platform's mark, and only a merged row.** `MessageRow`'s
 `showPlatform` predates this and drew a coloured dot with a `title`; it now draws the tab's
-own `PlatformMark` at `0.85em` — sized in em so it tracks the pane's font size like the emote
-and badge images, and with no `title`, per the no-tooltips rule. The merged pane passes it
+own `PlatformMark` at `1em` — sized in em so it tracks the pane's font size like the emote
+and badge images, and `1em` rather than a fraction of one because `CHAT_FONT_SIZES` are all
+integers, so the height stays whole at every step. No `title`, per the no-tooltips rule. The merged pane passes it
 only when more than one chat is actually in the column.
 
 **Toggling is uniform, and a tab with no channel is not a special case.** Switching one on

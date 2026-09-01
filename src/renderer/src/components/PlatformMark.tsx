@@ -32,7 +32,7 @@ const MARK: Record<Platform, Mark> = {
 
   kick: {
     viewBox: '0 0 22.24 26',
-    height: 13,
+    height: 14,
     path:
       'M0 0.0307H8.3407V5.7942H11.1163V2.9125H13.8919V0.0307H22.2326V8.6927H19.457V11.5745' +
       'H16.6815V14.4562H19.457V17.338H22.2326V26H13.8919V23.1182H11.1163V20.2365H8.3407V26H0V0.0307Z'
@@ -42,9 +42,9 @@ const MARK: Record<Platform, Mark> = {
 export interface PlatformMarkProps {
   platform: Platform
 
-  /** A number is drawn at that many px tall. A CSS length — `0.85em` in a chat row —
-      is set on the style instead, with the width left to the viewBox's own aspect
-      ratio, so the mark tracks the pane's font size like the emote and badge images. */
+  /** A number is drawn at that many px tall. A CSS length — `1em` in a chat row — is
+      set on the style instead, with the width left to the viewBox's own aspect ratio,
+      so the mark tracks the pane's font size like the emote and badge images. */
   height?: number | string
 }
 
@@ -56,13 +56,14 @@ export function PlatformMark({ platform, height }: PlatformMarkProps): React.Rea
 
   const sized =
     typeof drawn === 'number'
-      ? { width: (drawn * width) / tall, height: drawn }
+      ? { width: Math.round((drawn * width) / tall), height: drawn }
       : { style: { height: drawn, width: 'auto' } }
 
   return (
     <svg
       {...sized}
       viewBox={mark.viewBox}
+      preserveAspectRatio="xMidYMid meet"
       fill="currentColor"
       aria-hidden
       focusable="false"

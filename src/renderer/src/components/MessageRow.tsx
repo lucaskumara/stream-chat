@@ -249,7 +249,7 @@ function MessageRowImpl({
             className="mr-[6px] inline-block"
             style={{ color: PLATFORM_COLOR[msg.platform], verticalAlign: -1 }}
           >
-            <PlatformMark platform={msg.platform} height="0.85em" />
+            <PlatformMark platform={msg.platform} height="1em" />
           </span>
         )}
 
