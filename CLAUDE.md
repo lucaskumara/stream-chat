@@ -103,7 +103,8 @@ src/main/emotes/      7TV + BTTV, reached through Channel.emotes — see "Emotes
 src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the platform colour, name and
                       event-accent tokens no CSS variable can carry), search.ts (the pane
                       filter grammar), connect.ts (the per-platform channel parse),
-                      components/ and views/ — the title bar's three screens
+                      merge.ts + layout.ts (the merged column and the column model),
+                      components/ and views/
 src/renderer/src/obs/ the OBS dock page — a second renderer entry, no antd
 ```
 
@@ -859,6 +860,39 @@ right in the same order as the strip above them regardless of the order they wer
 on. The last pane cannot be switched off — the view must never empty — but the refusal still
 returns to the Chat view, since the click came from Broadcast or Settings just as often.
 
+**One button to the right of the strip switches columns for one merged list.**
+`store.merged` is the whole state, and the button only ever toggles that. Its icon shows the
+layout you are *in* rather than the one a click would give: `Square` while merged, and
+`Columns2`/`Columns3` while split — the count only chooses between the two split icons, and
+in split mode it is exactly `visible.length`, which is why the tab bar needs nothing else to
+draw it. Disabled below two visible platforms, where it would do nothing visible. Merging is
+a viewing mode over connected chats only — a visible platform with no channel keeps its own
+column either way, because its connect form has nowhere else to go, so
+[merged chat][connect form] is a normal state rather than a glitch.
+
+**`layout.ts` derives the column model once, and both the view and the icon read it.**
+`chatColumns(visiblePlatforms, sources, merged)` is the only place split-versus-merged is
+decided; `App` renders what it returns and never re-derives it. Keeping a second copy in the
+title bar to count columns is exactly the drift this avoids.
+
+**A pane is a list of sources, not a source, and `columnPaneId` is what keys its state.**
+Split panes key on `source.id`; the merged pane keys on the literal `'merged'`, so its
+search, filter, font size and popover are its own and survive toggling back and forth. Two
+controls in the popover need a single channel and are hidden without one — the OBS dock link,
+which addresses one channel, and Disconnect, which would have to guess which. `ChatPaneBar`
+takes a `label` and an `offline` flag rather than a `SourceState` for the same reason.
+
+**The merged list is a k-way merge, not a sort.** Each source's list is already in arrival
+order, so `mergeMessages` walks them — linear in the total rather than re-sorting every held
+message on each 100ms batch. It is stable by *list order*, which is tab order, so messages
+sharing a timestamp do not shuffle between batches.
+
+**A merged row carries its platform's mark, and only a merged row.** `MessageRow`'s
+`showPlatform` predates this and drew a coloured dot with a `title`; it now draws the tab's
+own `PlatformMark` at `0.85em` — sized in em so it tracks the pane's font size like the emote
+and badge images, and with no `title`, per the no-tooltips rule. The merged pane passes it
+only when more than one chat is actually in the column.
+
 **Toggling is uniform, and a tab with no channel is not a special case.** Switching one on
 puts its pane on screen whatever it holds: a chat if that platform is connected, the connect
 form if it is not. That is the only route to the form, so it cannot be reserved for connected
@@ -1201,6 +1235,8 @@ tests, so nothing bundles them. What is covered:
 | resolve and naming on all three platforms | `platforms/*/channel.ts` |
 | the pane filter grammar | `renderer/search.ts` |
 | the per-platform channel parse | `renderer/connect.ts` |
+| the merged-column k-way merge | `renderer/merge.ts` |
+| the split/merged column model | `renderer/layout.ts` |
 | the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |

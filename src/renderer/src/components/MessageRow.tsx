@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import type { Badge, ChatMessage, Fragment } from '@shared/types'
 import { BADGE_WASH, EVENT_ACCENT, PLATFORM_COLOR, ROW_WASH } from '../theme'
+import { PlatformMark } from './PlatformMark'
 
 const KIND_GLYPH: Partial<Record<ChatMessage['kind'], LucideIcon>> = {
   subscription: Star,
@@ -245,10 +246,11 @@ function MessageRowImpl({
 
         {showPlatform && (
           <span
-            title={msg.platform}
-            className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
-            style={{ backgroundColor: PLATFORM_COLOR[msg.platform] }}
-          />
+            className="mr-[6px] inline-block"
+            style={{ color: PLATFORM_COLOR[msg.platform], verticalAlign: -1 }}
+          >
+            <PlatformMark platform={msg.platform} height="0.85em" />
+          </span>
         )}
 
         {Glyph && event && (

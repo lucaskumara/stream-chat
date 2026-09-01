@@ -1,6 +1,8 @@
-import { useCallback, useEffect } from 'react'
-import type { Platform, SourceState } from '@shared/types'
+import { useCallback, useEffect, useMemo } from 'react'
+import type { ChatMessage, SourceState } from '@shared/types'
 import { bridge } from './bridge'
+import { chatColumns, columnLabel, columnPaneId, type ChatColumn } from './layout'
+import { mergeMessages } from './merge'
 import { useStore } from './store'
 import { ChatPane } from './components/ChatPane'
 import { ConnectChannel } from './components/ConnectChannel'
@@ -9,65 +11,92 @@ import { Broadcast } from './views/Broadcast'
 import { Settings } from './views/Settings'
 
 const EMPTY_TERMS: string[] = []
+const EMPTY_MESSAGES: ChatMessage[] = []
 
 function Pane({
-  platform,
+  column,
+  messages,
   onDisconnect
 }: {
-  platform: Platform
+  column: ChatColumn
+  messages: ChatMessage[]
   onDisconnect: (source: SourceState) => void
 }): React.ReactElement {
   const s = useStore()
 
-  const source = s.sources.find((held) => held.platform === platform)
-
-  if (!source) return <ConnectChannel platform={platform} />
+  const paneId = columnPaneId(column)
+  const { sources } = column
 
   return (
     <ChatPane
-      source={source}
-      messages={s.bySource[source.id] ?? []}
+      sources={sources}
+      label={columnLabel(column)}
+      showPlatform={sources.length > 1}
+      messages={messages}
       deleted={s.deleted}
       showDeleted={s.showDeleted}
       showTimestamps={s.showTimestamps}
       density={s.density}
-      filterOpen={s.filterOpen[source.id] === true}
-      gearOpen={s.gearOpenFor === source.id}
-      onToggleFilter={() => s.toggleFilter(source.id)}
-      onToggleGear={() => s.toggleGear(source.id)}
-      searchTerms={s.search[source.id] ?? EMPTY_TERMS}
-      searchDraft={s.searchDraft[source.id] ?? ''}
-      onSearchTerms={(terms) => s.setSearch(source.id, terms)}
-      onSearchDraft={(draft) => s.setSearchDraft(source.id, draft)}
-      onAddSearchTerm={(term) => s.addSearchTerm(source.id, term)}
-      fontSize={s.fontSize[source.id] ?? s.defaultFontSize}
-      onFontStep={(steps) => s.stepFontSize(source.id, steps)}
-      onFontReset={() => s.resetFontSize(source.id)}
+      filterOpen={s.filterOpen[paneId] === true}
+      gearOpen={s.gearOpenFor === paneId}
+      onToggleFilter={() => s.toggleFilter(paneId)}
+      onToggleGear={() => s.toggleGear(paneId)}
+      searchTerms={s.search[paneId] ?? EMPTY_TERMS}
+      searchDraft={s.searchDraft[paneId] ?? ''}
+      onSearchTerms={(terms) => s.setSearch(paneId, terms)}
+      onSearchDraft={(draft) => s.setSearchDraft(paneId, draft)}
+      onAddSearchTerm={(term) => s.addSearchTerm(paneId, term)}
+      fontSize={s.fontSize[paneId] ?? s.defaultFontSize}
+      onFontStep={(steps) => s.stepFontSize(paneId, steps)}
+      onFontReset={() => s.resetFontSize(paneId)}
       onClear={() => {
-        s.clearSource(source.id)
+        for (const source of sources) s.clearSource(source.id)
         s.closeGear()
       }}
-      onDisconnect={() => onDisconnect(source)}
+      onDisconnect={() => {
+        if (sources.length === 1) onDisconnect(sources[0])
+      }}
     />
   )
 }
 
-function Chats({
+function Column({
+  column,
   onDisconnect
 }: {
+  column: ChatColumn
   onDisconnect: (source: SourceState) => void
 }): React.ReactElement {
-  const visiblePlatforms = useStore((s) => s.visiblePlatforms)
+  const bySource = useStore((s) => s.bySource)
 
+  const messages = useMemo(
+    () => mergeMessages(column.sources.map((source) => bySource[source.id] ?? EMPTY_MESSAGES)),
+    [column, bySource]
+  )
+
+  if (column.platform !== null && column.sources.length === 0) {
+    return <ConnectChannel platform={column.platform} />
+  }
+
+  return <Pane column={column} messages={messages} onDisconnect={onDisconnect} />
+}
+
+function Chats({
+  columns,
+  onDisconnect
+}: {
+  columns: ChatColumn[]
+  onDisconnect: (source: SourceState) => void
+}): React.ReactElement {
   return (
     <div className="flex min-h-0 flex-1">
-      {visiblePlatforms.map((platform, at) => (
+      {columns.map((column, at) => (
         <div
-          key={platform}
+          key={column.key}
           className="flex min-w-0 flex-1"
           style={{ borderLeft: at === 0 ? undefined : '1px solid var(--line)' }}
         >
-          <Pane platform={platform} onDisconnect={onDisconnect} />
+          <Column column={column} onDisconnect={onDisconnect} />
         </div>
       ))}
     </div>
@@ -80,6 +109,13 @@ export default function App(): React.ReactElement {
   const sources = useStore((s) => s.sources)
   const visiblePlatforms = useStore((s) => s.visiblePlatforms)
   const togglePlatform = useStore((s) => s.togglePlatform)
+  const merged = useStore((s) => s.merged)
+  const toggleMerged = useStore((s) => s.toggleMerged)
+
+  const columns = useMemo(
+    () => chatColumns(visiblePlatforms, sources, merged),
+    [visiblePlatforms, sources, merged]
+  )
   const setSources = useStore((s) => s.setSources)
   const setTwitchAuth = useStore((s) => s.setTwitchAuth)
   const ingest = useStore((s) => s.ingest)
@@ -134,10 +170,12 @@ export default function App(): React.ReactElement {
         onView={setView}
         sources={sources}
         visiblePlatforms={visiblePlatforms}
+        merged={merged}
         onPlatform={togglePlatform}
+        onMerged={toggleMerged}
       />
 
-      {view === 'chats' && <Chats onDisconnect={disconnect} />}
+      {view === 'chats' && <Chats columns={columns} onDisconnect={disconnect} />}
       {view === 'broadcast' && <Broadcast />}
       {view === 'settings' && <Settings />}
     </div>

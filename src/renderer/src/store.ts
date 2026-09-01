@@ -45,6 +45,11 @@ interface ChatState {
       which is the order the tabs are drawn in. */
   visiblePlatforms: Platform[]
 
+  /** Whether the visible chats share one column. Connected chats merge; a visible
+      platform with no channel keeps its own column either way, or its connect form
+      would have nowhere to go. */
+  merged: boolean
+
   /** Half-typed channel names survive a tab switch, which remounts the form. */
   connectDraft: Record<string, string>
 
@@ -81,6 +86,7 @@ interface ChatState {
   setSources: (states: SourceState[]) => void
   setTwitchAuth: (state: TwitchAuthState) => void
   togglePlatform: (platform: Platform) => void
+  toggleMerged: () => void
   setConnectDraft: (platform: Platform, draft: string) => void
   ingest: (batch: ChatBatch) => void
   setView: (view: View) => void
@@ -207,6 +213,7 @@ export const useStore = create<ChatState>()((set) => ({
   searchDraft: {},
 
   visiblePlatforms: ['twitch'],
+  merged: false,
   connectDraft: {},
 
   view: 'chats',
@@ -268,6 +275,8 @@ export const useStore = create<ChatState>()((set) => ({
 
       return { connectDraft: { ...s.connectDraft, [platform]: draft } }
     }),
+
+  toggleMerged: () => set((s) => ({ merged: !s.merged })),
 
   ingest: (batch) =>
     set((s) => {

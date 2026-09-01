@@ -1,10 +1,10 @@
 import { memo, useCallback } from 'react'
 import { Search, Settings, X } from 'lucide-react'
-import type { SourceState } from '@shared/types'
 import { termLabel } from '../search'
 
 export interface ChatPaneBarProps {
-  source: SourceState
+  label: string
+  offline: boolean
   filterOpen: boolean
   gearOpen: boolean
   terms: string[]
@@ -18,7 +18,8 @@ export interface ChatPaneBarProps {
 }
 
 function ChatPaneBarImpl({
-  source,
+  label,
+  offline,
   filterOpen,
   gearOpen,
   terms,
@@ -30,8 +31,6 @@ function ChatPaneBarImpl({
   onTerms,
   onDraft
 }: ChatPaneBarProps): React.ReactElement {
-  const offline = source.status === 'offline' || source.status === 'error'
-
   const commit = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.key === 'Escape') {
@@ -64,7 +63,7 @@ function ChatPaneBarImpl({
         style={{ borderBottom: '1px solid var(--line)' }}
       >
         <span className="truncate text-[14px] font-semibold" style={{ color: '#f0f0f0' }}>
-          {source.label}
+          {label}
         </span>
 
         {offline && (
@@ -86,7 +85,7 @@ function ChatPaneBarImpl({
           type="button"
           className="icon-button chat-pane-filter"
           data-on={filterOpen}
-          aria-label={`Filter ${source.label}`}
+          aria-label={`Filter ${label}`}
           onClick={onToggleFilter}
         >
           <Search size={15} strokeWidth={1.8} />
@@ -96,7 +95,7 @@ function ChatPaneBarImpl({
           type="button"
           className="icon-button chat-pane-settings"
           data-on={gearOpen}
-          aria-label={`Settings for ${source.label}`}
+          aria-label={`Settings for ${label}`}
           onClick={onToggleGear}
         >
           <Settings size={15} strokeWidth={1.8} />

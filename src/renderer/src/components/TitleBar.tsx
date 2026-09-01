@@ -23,7 +23,9 @@ export interface TitleBarProps {
   onView: (view: View) => void
   sources: SourceState[]
   visiblePlatforms: Platform[]
+  merged: boolean
   onPlatform: (platform: Platform) => void
+  onMerged: () => void
 }
 
 export function TitleBar({
@@ -31,7 +33,9 @@ export function TitleBar({
   onView,
   sources,
   visiblePlatforms,
-  onPlatform
+  merged,
+  onPlatform,
+  onMerged
 }: TitleBarProps): React.ReactElement {
   const [maximized, setMaximized] = useState(false)
 
@@ -57,7 +61,13 @@ export function TitleBar({
           declared after the drag filler, whose region would otherwise re-cover them. */}
       {view === 'chats' && (
         <div className="titlebar-centre no-drag">
-          <PlatformTabs visible={visiblePlatforms} sources={sources} onToggle={onPlatform} />
+          <PlatformTabs
+            visible={visiblePlatforms}
+            sources={sources}
+            merged={merged}
+            onToggle={onPlatform}
+            onToggleMerged={onMerged}
+          />
         </div>
       )}
 

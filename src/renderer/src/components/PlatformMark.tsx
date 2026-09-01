@@ -41,7 +41,11 @@ const MARK: Record<Platform, Mark> = {
 
 export interface PlatformMarkProps {
   platform: Platform
-  height?: number
+
+  /** A number is drawn at that many px tall. A CSS length — `0.85em` in a chat row —
+      is set on the style instead, with the width left to the viewBox's own aspect
+      ratio, so the mark tracks the pane's font size like the emote and badge images. */
+  height?: number | string
 }
 
 export function PlatformMark({ platform, height }: PlatformMarkProps): React.ReactElement {
@@ -50,10 +54,14 @@ export function PlatformMark({ platform, height }: PlatformMarkProps): React.Rea
 
   const [, , width, tall] = mark.viewBox.split(' ').map(Number)
 
+  const sized =
+    typeof drawn === 'number'
+      ? { width: (drawn * width) / tall, height: drawn }
+      : { style: { height: drawn, width: 'auto' } }
+
   return (
     <svg
-      width={(drawn * width) / tall}
-      height={drawn}
+      {...sized}
       viewBox={mark.viewBox}
       fill="currentColor"
       aria-hidden

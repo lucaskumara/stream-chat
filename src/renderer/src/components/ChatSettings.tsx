@@ -22,7 +22,9 @@ function Group({
 }
 
 export interface ChatSettingsProps {
-  sourceId: string
+  /** null while the pane holds several merged chats: a dock addresses one channel,
+      and "disconnect" would have to guess which. */
+  sourceId: string | null
   fontSize: number
   onFontStep: (steps: number) => void
   onFontReset: () => void
@@ -91,21 +93,25 @@ export function ChatSettings({
         </div>
       </Group>
 
-      <Rule />
+      {sourceId !== null && (
+        <>
+          <Rule />
 
-      <Group label="OBS dock link">
-        <ChatLink sourceId={sourceId} />
-      </Group>
+          <Group label="OBS dock link">
+            <ChatLink sourceId={sourceId} />
+          </Group>
 
-      <Rule />
+          <Rule />
 
-      <button
-        type="button"
-        className="ghost-button chat-pane-disconnect h-[28px] w-full text-[13px]"
-        onClick={onDisconnect}
-      >
-        Disconnect channel
-      </button>
+          <button
+            type="button"
+            className="ghost-button chat-pane-disconnect h-[28px] w-full text-[13px]"
+            onClick={onDisconnect}
+          >
+            Disconnect channel
+          </button>
+        </>
+      )}
     </div>
   )
 }

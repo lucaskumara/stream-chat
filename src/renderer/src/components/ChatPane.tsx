@@ -14,7 +14,10 @@ const PIN_THRESHOLD_PX = 40
 const ESTIMATED_ROW_PX = 26
 
 export interface ChatPaneProps {
-  source: SourceState
+  /** One source in a column of its own, or every merged chat in one column. */
+  sources: SourceState[]
+  label: string
+  showPlatform: boolean
   messages: ChatMessage[]
   deleted: Record<string, true>
   showDeleted: boolean
@@ -37,7 +40,9 @@ export interface ChatPaneProps {
 }
 
 export function ChatPane({
-  source,
+  sources,
+  label,
+  showPlatform,
   messages,
   deleted,
   showDeleted,
@@ -60,6 +65,9 @@ export function ChatPane({
 }: ChatPaneProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState(true)
+
+  // Only a pane holding a single chat can offer that chat's dock link or disconnect it.
+  const alone = sources.length === 1 ? sources[0] : null
 
   const [frozen, setFrozen] = useState<ChatMessage[] | null>(null)
   const list = frozen ?? messages
@@ -154,7 +162,8 @@ export function ChatPane({
       }
     >
       <ChatPaneBar
-        source={source}
+        label={label}
+        offline={alone !== null && (alone.status === 'offline' || alone.status === 'error')}
         filterOpen={filterOpen}
         gearOpen={gearOpen}
         terms={searchTerms}
@@ -169,7 +178,7 @@ export function ChatPane({
 
       {gearOpen && (
         <ChatSettings
-          sourceId={source.id}
+          sourceId={alone?.id ?? null}
           fontSize={fontSize}
           onFontStep={onFontStep}
           onFontReset={onFontReset}
@@ -206,7 +215,7 @@ export function ChatPane({
                     msg={msg}
                     deleted={deleted[msg.id] === true}
                     showTimestamps={showTimestamps}
-                    showPlatform={false}
+                    showPlatform={showPlatform}
                     compact={density === 'compact'}
                     onOpenLink={openLink}
                   />
