@@ -11,12 +11,13 @@ const NAME: Record<Platform, string> = {
   kick: 'Kick'
 }
 
-/** How each platform asks for credentials, said plainly — the two are genuinely
-    different experiences and a user who expects a window should get one. */
+/** Twitch's is genuinely a different experience — it asks you to confirm a code, because
+    Twitch supports no other flow for an app that cannot hold a secret — so the row says so
+    before you click rather than dropping you on an unexplained page. */
 const METHOD: Record<Platform, string> = {
-  twitch: 'Opens twitch.tv in your browser',
-  youtube: 'Opens a sign-in window',
-  kick: 'Opens a sign-in window'
+  twitch: 'Opens twitch.tv to confirm a code',
+  youtube: 'Opens Google in your browser',
+  kick: 'Opens Kick in your browser'
 }
 
 const EMPTY: AccountState = { platform: 'twitch', status: 'signed-out' }
@@ -36,7 +37,8 @@ export function Accounts(): React.ReactElement {
       </div>
 
       <p className="mt-[10px] text-[13px]" style={{ color: 'var(--fg-4)' }}>
-        Reading chat never needs an account. Signing in is what will later let you send
+        Each of these opens your normal browser and uses the platform's own sign-in page.
+        Reading chat never needs an account — signing in is what will later let you send
         messages, moderate, and read your own stream keys.
       </p>
     </div>
@@ -109,15 +111,15 @@ function Detail({ account }: { account: AccountState }): React.ReactElement {
 function detailText(account: AccountState): string {
   switch (account.status) {
     case 'not-configured':
-      return 'This build has no Twitch Client ID compiled in'
+      return `This build carries no ${NAME[account.platform]} client credentials`
 
     case 'error':
       return account.error ?? 'Sign-in failed'
 
     case 'pending':
       return account.prompt
-        ? `Enter ${account.prompt.userCode} at ${hostOf(account.prompt.verificationUri)}`
-        : 'Waiting for sign-in…'
+        ? `Approve in your browser — the code ${account.prompt.userCode} is already filled in`
+        : 'Waiting for your browser…'
 
     case 'signed-in': {
       const who = account.displayName ?? 'Signed in'
@@ -128,13 +130,5 @@ function detailText(account: AccountState): string {
 
     default:
       return METHOD[account.platform]
-  }
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host
-  } catch {
-    return url
   }
 }

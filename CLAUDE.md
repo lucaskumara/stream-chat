@@ -994,64 +994,75 @@ an old one.
 
 ### Accounts and sign-in
 
-**Signing in unlocks nothing yet, on purpose.** All three platforms can now be connected
-from Settings -> Accounts, and no feature reads the result. `AccountManager.authenticated()`
-is the seam sending, moderating and stream-key reads will come through; it has no callers.
-Chat still reads anonymously on every platform whether or not an account is connected.
+**Signing in unlocks nothing yet, on purpose.** All three platforms connect from Settings ->
+Accounts and no feature reads the result. `OAuthAccount.accessToken()` and `TwitchAuth`
+are the seams sending, moderating and stream-key reads will come through. Chat still reads
+anonymously on every platform whether or not an account is connected.
 
-**The three platforms do not share an auth mechanism, and cannot.** Twitch is the only one
-of the three offering a *public-client* flow, so it keeps the device-code grant it already
-had — a real refresh token, no secret, and the browser opens on the user's own machine.
-Google wants a Cloud project whose sensitive scopes expire refresh tokens weekly until the
-app leaves Testing; Kick's token exchange requires a `client_secret` a desktop binary cannot
-hold. So both of those sign in through a window running the real site, which is what an OBS
-browser dock is. `AccountManager` is where that split stops mattering upstream.
+**Every flow is the platform's own documented one, and every one opens the real browser.**
+Nothing is scraped, no page is driven, and no password passes through this app. An earlier
+version of this work signed YouTube and Kick in by capturing session cookies from an
+embedded window; that is against Google's OAuth policy — they disallow the authorization
+endpoint "inside an embedded user-agent" — and it was replaced wholesale. Do not bring it
+back.
 
-**The Electron token in the user agent is what Google blocks, and the failure looks like a
-bug in us.** Left in, `accounts.google.com` serves "This browser or app may not be secure"
-instead of a sign-in form. `browserUserAgent()` strips `Electron/x.y.z` *and* our own
-`stream-chat/x.y.z` product token, leaving a plain Chrome UA, and sets it on both the
-partition and the initial `loadURL`. Verified in the running app: the real Google sign-in
-form renders, `navigator.userAgent` reads `…Chrome/152.0.7977.54 Safari/537.36`.
+**Twitch is device code because Twitch offers a secretless app nothing else.** Its
+authorization code grant requires a `client_secret`, it does not support PKCE at all, and
+public clients are restricted to the device grant — so the code-confirmation step is not a
+design choice we made and cannot be polished away. What *can* be done is saying so before
+the browser opens, which is why the Twitch row reads "Opens twitch.tv to confirm a code".
+The `verification_uri` already carries `?device-code=`, so the code arrives prefilled.
+Device-flow access tokens last 4 hours and its refresh tokens are **one time use**, which
+is why `refresh` must store the returned refresh token and not the one it sent.
 
-**Site sessions live in Chromium's cookie store, not in `config.json`.** Each platform gets
-a `persist:account-<platform>` partition, so a session survives restart with nothing of ours
-written to disk, and `signOut` is `clearStorageData`. This is a real widening of "nothing is
-persisted but the Twitch token" — see that invariant — but the credential never passes
-through our code, and `restore()` only re-reads *who* the session belongs to at boot.
+**YouTube and Kick are authorization code + PKCE onto a loopback redirect**, which is what
+Google documents for installed apps and what Kick documents full stop. `accounts/session.ts`
+holds the whole flow once; a platform supplies only its `OAuthProvider`, an `identify` call
+and the wording for its scopes.
 
-**Kick's sign-in marker must be `session_token` alone.** Kick hands every visitor a
-`kick_session` cookie, so matching that one too reports a signed-in account the instant the
-window opens, before anybody types anything.
+**The two loopback hosts are not interchangeable.** Google documents `http://127.0.0.1:port`;
+Kick asks for `localhost` because their Next.js frontend rewrites the first `127.0.0.1` it
+finds in the URL, breaking the exact-match on `redirect_uri` (their docs offer a
+sacrificial-parameter workaround instead, which using `localhost` avoids needing). Both land
+on port 4569, so `LoopbackReceiver` binds **both** families — Windows resolves `localhost`
+to `::1` first, so an IPv4-only listener would simply never see Kick's callback. Same
+reasoning as `ObsServer`, and the same trap.
 
-**Kick has no login route and does not need a narrow window.** `kick.com/login` returns 200
-and renders the homepage — it is a SPA, so every path does. The login is behind the account
-icon in the header, and the window is 1000px because the site renders skeletons rather than
-content at 520. Verified: no Cloudflare interstitial in the login window at either size.
+**The `state` check is the point of the loopback, not decoration.** Anything on the machine
+can hit 4569 while a sign-in is open. `readRedirect` refuses a redirect whose `state` is not
+the one just issued, before any code is exchanged.
 
-**Kick's authenticated requests go through the partition, not Node's `fetch`.**
-`KickAccount.fetch` uses `Session.fetch`, so requests carry Chromium's TLS fingerprint and
-the Cloudflare clearance the login window earned. The same cookies on a bare `fetch` are
-what the community reports getting 403 "Request blocked by security policy".
+**Google needs `access_type=offline` *and* `prompt=consent`.** Without both it returns an
+access token and no refresh token, and the account falls out silently about an hour later —
+which reads as "the sign-in randomly stopped working" rather than as a missing parameter.
 
-**Twitch grants are read off the stored token, never off `SCOPES`.** `channel:read:stream_key`
-was added to `SCOPES`, which does not retroactively grant it — a token minted before the
-change keeps working for chat and simply lacks stream-key access. `twitchAccount` therefore
-maps the token's own scope list, and `twitchScopesStale` is the separate question of whether
-a working sign-in needs redoing. Write scopes are deliberately *not* requested: asking for
-authority no code can use costs one more sign-in when sending lands, and is the honest trade.
+**Kick's `client_secret` is a real credential and it ships in the binary.** Kick requires it
+on both the authorization-code and refresh grants and documents no public-client option, so
+a build either carries one or has no Kick sign-in. This is unlike `BUILT_IN_TWITCH_CLIENT_ID`,
+which identifies the app and authorises nothing. Both `clientId.ts` files default to empty,
+which renders as `not-configured` and offers no sign-in — the correct state for a build
+nobody has provisioned. Kick's is refused unless *both* id and secret are present, since an
+id alone would offer a sign-in that cannot complete.
 
-**A name is a nicety; the session is what matters.** Kick's identity lookup failing leaves
-the account connected and unnamed rather than reporting a sign-in failure — the cookie is
-the credential, and `/api/v1/user` is decoration.
+**All three scope sets are read-only.** `user:read:chat channel:read:stream_key` on Twitch,
+`youtube.readonly` on Google, `user:read channel:read streamkey:read` on Kick. Requesting
+write authority before anything can use it buys nothing but a scarier consent screen; the
+cost is one further sign-in when sending lands. Twitch grants are read off the *stored*
+token rather than off `SCOPES`, because adding a scope does not retroactively grant it —
+`twitchScopesStale` is the separate question of whether a sign-in needs redoing.
+
+**A name is decoration; the token is the account.** An identity lookup that fails leaves the
+sign-in intact and unnamed rather than discarding a good token.
+
+**`config.json` is version 2 and holds a slot per platform.** The twitch slot is
+byte-identical to version 1's, so an older config is upgraded in place rather than discarded
+— dropping it would sign the user out on update for no reason.
 
 ### Main process
 
-**Nothing is persisted but the Twitch token — and, since accounts landed, the YouTube and
-Kick site sessions Chromium keeps for us.** Those live in `persist:account-<platform>`
-partitions under userData rather than in `config.json`, so no credential of theirs passes
-through our code; see "Accounts and sign-in" above. Channel names are still not saved, which
-is the part of this rule that was a privacy decision. `config.json` holds `version` and the
+**Nothing is persisted but OAuth tokens — one slot per platform since accounts landed.**
+Channel names are still not saved, which is the part of this rule that was a privacy
+decision. `config.json` holds `version` and the
 encrypted `twitch.tokensEnc`, and that is the whole file. Channels are deliberately *not*
 saved: the app opens empty every launch and every channel on screen was added this session.
 An earlier build restored saved channels at startup, which meant `config.json` accumulated a
@@ -1333,7 +1344,8 @@ tests, so nothing bundles them. What is covered:
 | the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
 | the Twitch account state and scope staleness | `twitch/state.ts` |
-| the login window's user-agent scrub | `accounts/window.ts` |
+| authorize-URL building, scope and refresh-token handling | `accounts/oauth.ts` |
+| PKCE challenges and the redirect state check | `accounts/pkce.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |
 
 **Keep the tests out of `src/renderer`, and not only for tidiness.** Tailwind v4 scans the

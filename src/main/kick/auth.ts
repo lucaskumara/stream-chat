@@ -1,119 +1,72 @@
-import type { BrowserWindow } from 'electron'
-import type { AccountState } from '@shared/types'
-import type { LoginTarget } from '../accounts/window'
-import { forgetSession, isSignedIn, runLoginWindow, sessionFor } from '../accounts/window'
+import type { Platform } from '@shared/types'
+import type { AccountIdentity } from '../accounts/session'
+import { OAuthAccount } from '../accounts/session'
+import type { OAuthProvider } from '../accounts/oauth'
+import { BUILT_IN_KICK_CLIENT_ID, BUILT_IN_KICK_CLIENT_SECRET } from './clientId'
 
-const ORIGIN = 'https://kick.com'
+const API = 'https://api.kick.com/public/v1'
 
-const TARGET: LoginTarget = {
-  partition: 'persist:account-kick',
-  startUrl: ORIGIN,
-  title: 'Sign in to Kick',
+/** Read-only, matching Twitch and YouTube. `streamkey:read` is the one that answers the
+    question this work started from — Kick documents the scope but no endpoint for it, so
+    whether a key actually comes back is still unverified. `chat:write` and
+    `channel:write` are deliberately absent until something can use them. */
+const SCOPES = ['user:read', 'channel:read', 'streamkey:read']
 
-  /** Only `session_token`. Kick hands every visitor a `kick_session`, so matching that
-      one too would report a signed-in account the moment the window opened. */
-  marker: { url: ORIGIN, names: ['session_token'] },
-
-  width: 1000,
-  height: 800
+const GRANTS: Record<string, string> = {
+  'user:read': 'read your account',
+  'channel:read': 'read your channel',
+  'streamkey:read': 'stream key'
 }
 
-interface ApiUser {
-  id?: number
-  username?: string
-  streamer_channel?: { slug?: string }
+interface UsersResponse {
+  data?: { user_id?: number; name?: string }[]
 }
 
-interface Identity {
-  userId?: string
-  displayName?: string
-}
+export class KickAccount extends OAuthAccount {
+  readonly platform: Platform = 'kick'
 
-export class KickAccount {
-  private identity: Identity | null = null
-  private failure: string | null = null
-  private pending = false
-  private connected = false
+  protected provider(): OAuthProvider | null {
+    const clientId = process.env['KICK_CLIENT_ID'] || BUILT_IN_KICK_CLIENT_ID
+    const clientSecret = process.env['KICK_CLIENT_SECRET'] || BUILT_IN_KICK_CLIENT_SECRET
 
-  constructor(private onState: () => void) {}
-
-  async restore(): Promise<void> {
-    if (!(await isSignedIn(TARGET))) return
-
-    this.connected = true
-    await this.readIdentity()
-    this.onState()
-  }
-
-  async signIn(parent: BrowserWindow | null): Promise<void> {
-    if (this.pending) return
-
-    this.pending = true
-    this.failure = null
-    this.onState()
-
-    try {
-      this.connected = await runLoginWindow(TARGET, parent)
-      if (this.connected) await this.readIdentity()
-    } catch (error) {
-      this.failure = error instanceof Error ? error.message : String(error)
-    } finally {
-      this.pending = false
-      this.onState()
-    }
-  }
-
-  async signOut(): Promise<void> {
-    this.identity = null
-    this.failure = null
-    this.connected = false
-
-    await forgetSession(TARGET)
-    this.onState()
-  }
-
-  state(): AccountState {
-    if (this.pending) return { platform: 'kick', status: 'pending' }
-
-    if (this.failure) {
-      return { platform: 'kick', status: 'error', error: this.failure }
-    }
-
-    if (!this.connected) return { platform: 'kick', status: 'signed-out' }
+    /** Kick's token exchange rejects a request with no secret, so a build carrying only
+        the id would offer a sign-in that cannot complete. Better to read as unconfigured. */
+    if (!clientId || !clientSecret) return null
 
     return {
-      platform: 'kick',
-      status: 'signed-in',
-      userId: this.identity?.userId,
-      displayName: this.identity?.displayName,
-      grants: ['same access as the website']
+      authorizeUrl: 'https://id.kick.com/oauth/authorize',
+      tokenUrl: 'https://id.kick.com/oauth/token',
+      revokeUrl: 'https://id.kick.com/oauth/revoke',
+
+      clientId,
+      clientSecret,
+
+      scopes: SCOPES,
+
+      /** `localhost`, not `127.0.0.1`: Kick's frontend rewrites the first `127.0.0.1` it
+          finds in the URL, and the redirect_uri then no longer matches the registered
+          one. Their docs describe a sacrificial-parameter workaround; using localhost
+          avoids needing it. */
+      redirectHost: 'localhost'
     }
   }
 
-  /** Requests issued through the login partition rather than Node's fetch, so they
-      carry Chromium's TLS fingerprint and the Cloudflare clearance cookie the login
-      window already earned. A bare fetch with the same cookies is refused. */
-  fetch(path: string, init?: RequestInit): Promise<Response> {
-    return sessionFor(TARGET).fetch(`${ORIGIN}${path}`, init)
+  protected grantsFor(scopes: string[]): string[] {
+    return scopes.map((scope) => GRANTS[scope]).filter((grant): grant is string => !!grant)
   }
 
-  /** A name is a nicety; the session is what matters. A failed lookup leaves the
-      account connected and unnamed rather than reporting a sign-in failure. */
-  private async readIdentity(): Promise<void> {
-    try {
-      const response = await this.fetch('/api/v1/user', {
-        headers: { Accept: 'application/json' }
-      })
-      if (!response.ok) return
+  protected async identify(accessToken: string): Promise<AccountIdentity> {
+    const res = await fetch(`${API}/users`, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
+    })
 
-      const user = (await response.json()) as ApiUser
+    if (!res.ok) throw new Error(`users answered ${res.status}`)
 
-      this.identity = {
-        userId: user.id === undefined ? undefined : String(user.id),
-        displayName: user.username ?? user.streamer_channel?.slug
-      }
-    } catch {
-      this.identity = null
+    const user = ((await res.json()) as UsersResponse).data?.[0]
+
+    return {
+      userId: user?.user_id === undefined ? undefined : String(user.user_id),
+      displayName: user?.name
     }
   }
 }

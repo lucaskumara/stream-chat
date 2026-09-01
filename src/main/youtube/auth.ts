@@ -1,123 +1,64 @@
-import type { BrowserWindow } from 'electron'
-import { Innertube, UniversalCache } from 'youtubei.js'
-import type { AccountState } from '@shared/types'
-import type { LoginTarget } from '../accounts/window'
-import { forgetSession, isSignedIn, runLoginWindow, sessionFor } from '../accounts/window'
+import type { Platform } from '@shared/types'
+import type { AccountIdentity } from '../accounts/session'
+import { OAuthAccount } from '../accounts/session'
+import type { OAuthProvider } from '../accounts/oauth'
+import { BUILT_IN_YOUTUBE_CLIENT_ID, BUILT_IN_YOUTUBE_CLIENT_SECRET } from './clientId'
 
-const ORIGIN = 'https://www.youtube.com'
+const API = 'https://www.googleapis.com/youtube/v3'
 
-const TARGET: LoginTarget = {
-  partition: 'persist:account-youtube',
-  startUrl: `https://accounts.google.com/ServiceLogin?service=youtube&continue=${encodeURIComponent(ORIGIN)}`,
-  title: 'Sign in to YouTube',
+/** Read-only, matching the Twitch decision: asking for write authority before anything
+    can use it buys nothing but a scarier consent screen. Sending and going live will
+    need `youtube.force-ssl`, and one more sign-in. */
+const SCOPES = ['https://www.googleapis.com/auth/youtube.readonly']
 
-  /** Google writes these on the YouTube origin only once the account is actually
-      switched in, so their presence is the sign-in signal rather than page URL. */
-  marker: { url: ORIGIN, names: ['SAPISID', '__Secure-3PAPISID'] }
+const GRANTS: Record<string, string> = {
+  'https://www.googleapis.com/auth/youtube.readonly': 'read your channel'
 }
 
-interface Identity {
-  displayName?: string
-  handle?: string
+interface ChannelList {
+  items?: { id?: string; snippet?: { title?: string } }[]
 }
 
-export class YouTubeAccount {
-  private identity: Identity | null = null
-  private failure: string | null = null
-  private pending = false
+export class YouTubeAccount extends OAuthAccount {
+  readonly platform: Platform = 'youtube'
 
-  constructor(private onState: () => void) {}
-
-  async restore(): Promise<void> {
-    if (!(await isSignedIn(TARGET))) return
-
-    await this.readIdentity()
-    this.onState()
-  }
-
-  async signIn(parent: BrowserWindow | null): Promise<void> {
-    if (this.pending) return
-
-    this.pending = true
-    this.failure = null
-    this.onState()
-
-    try {
-      const signedIn = await runLoginWindow(TARGET, parent)
-      if (signedIn) await this.readIdentity()
-    } catch (error) {
-      this.failure = error instanceof Error ? error.message : String(error)
-    } finally {
-      this.pending = false
-      this.onState()
-    }
-  }
-
-  async signOut(): Promise<void> {
-    this.identity = null
-    this.failure = null
-
-    await forgetSession(TARGET)
-    this.onState()
-  }
-
-  state(): AccountState {
-    if (this.pending) return { platform: 'youtube', status: 'pending' }
-
-    if (this.failure) {
-      return { platform: 'youtube', status: 'error', error: this.failure }
-    }
-
-    if (!this.identity) return { platform: 'youtube', status: 'signed-out' }
+  protected provider(): OAuthProvider | null {
+    const clientId = process.env['YOUTUBE_CLIENT_ID'] || BUILT_IN_YOUTUBE_CLIENT_ID
+    if (!clientId) return null
 
     return {
-      platform: 'youtube',
-      status: 'signed-in',
-      userId: this.identity.handle,
-      displayName: this.identity.displayName,
-      grants: ['same access as the website']
+      authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+      tokenUrl: 'https://oauth2.googleapis.com/token',
+      revokeUrl: 'https://oauth2.googleapis.com/revoke',
+
+      clientId,
+      clientSecret:
+        process.env['YOUTUBE_CLIENT_SECRET'] || BUILT_IN_YOUTUBE_CLIENT_SECRET || undefined,
+
+      scopes: SCOPES,
+      redirectHost: '127.0.0.1',
+
+      /** Without both of these Google returns an access token and no refresh token, and
+          the account silently falls out an hour later. */
+      extraAuthParams: { access_type: 'offline', prompt: 'consent' }
     }
   }
 
-  /** The authenticated client later features will send and moderate through. Null
-      when signed out, so a caller cannot mistake an anonymous session for this one. */
-  async authenticated(): Promise<Innertube | null> {
-    const cookie = await cookieHeader()
-    if (!cookie) return null
+  protected grantsFor(scopes: string[]): string[] {
+    return scopes.map((scope) => GRANTS[scope]).filter((grant): grant is string => !!grant)
+  }
 
-    return Innertube.create({
-      cookie,
-      cache: new UniversalCache(false),
-      generate_session_locally: true,
-      retrieve_player: false
+  /** One unit of quota. The whole point of the Data API here is calls like this one —
+      low-frequency and account-scoped — while chat reading stays anonymous. */
+  protected async identify(accessToken: string): Promise<AccountIdentity> {
+    const res = await fetch(`${API}/channels?part=snippet&mine=true`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
     })
+
+    if (!res.ok) throw new Error(`channels.list answered ${res.status}`)
+
+    const channel = ((await res.json()) as ChannelList).items?.[0]
+
+    return { userId: channel?.id, displayName: channel?.snippet?.title }
   }
-
-  private async readIdentity(): Promise<void> {
-    try {
-      const youtube = await this.authenticated()
-      if (!youtube) {
-        this.identity = null
-        return
-      }
-
-      const accounts = await youtube.account.getInfo(true)
-      const active = accounts.find((item) => item.is_selected) ?? accounts[0]
-
-      this.identity = {
-        displayName: active?.account_name?.text,
-        handle: active?.channel_handle?.text
-      }
-    } catch (error) {
-      this.failure = error instanceof Error ? error.message : String(error)
-      this.identity = null
-    }
-  }
-}
-
-async function cookieHeader(): Promise<string> {
-  const cookies = await sessionFor(TARGET).cookies.get({ url: ORIGIN })
-  if (cookies.length === 0) return ''
-
-  return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ')
 }

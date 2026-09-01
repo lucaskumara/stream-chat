@@ -130,8 +130,8 @@ function senderWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow | null 
 function registerAccountHandlers(sources: SourceManager, accounts: AccountManager): void {
   handle(IPC.accounts, () => accounts.list())
 
-  handle(IPC.accountSignIn, async (event, platform: unknown) => {
-    await accounts.signIn(parsePlatform(platform), senderWindow(event))
+  handle(IPC.accountSignIn, async (_e, platform: unknown) => {
+    await accounts.signIn(parsePlatform(platform))
   })
 
   handle(IPC.accountSignOut, async (_e, platform: unknown) => {

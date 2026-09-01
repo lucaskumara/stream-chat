@@ -1,4 +1,4 @@
-import { config, type StoredTwitchTokens } from '../config'
+import { config, type StoredTokens } from '../config'
 
 const ID_BASE = 'https://id.twitch.tv/oauth2'
 
@@ -77,12 +77,12 @@ export class TwitchAuth {
     return config().getClientId()
   }
 
-  getTokens(): StoredTwitchTokens | null {
-    return config().getTokens()
+  getTokens(): StoredTokens | null {
+    return config().getTokens('twitch')
   }
 
   isSignedIn(): boolean {
-    return config().getTokens() !== null
+    return config().getTokens('twitch') !== null
   }
 
   async startDeviceFlow(): Promise<DeviceCodePrompt> {
@@ -174,6 +174,14 @@ export class TwitchAuth {
     return this.failure
   }
 
+  /** Starting the flow can fail before any polling exists to carry the error — a dead
+      id.twitch.tv, a refused client id — and that has to reach the settings row rather
+      than rejecting an IPC call nobody is watching. */
+  reportFailure(message: string): void {
+    this.cancelPolling()
+    this.failure = message
+  }
+
   isPending(): boolean {
     return this.pollTimer !== null
   }
@@ -191,7 +199,7 @@ export class TwitchAuth {
         ? token.scope.split(' ')
         : identity.scopes
 
-    config().setTokens({
+    config().setTokens('twitch', {
       accessToken: token.access_token,
       refreshToken: token.refresh_token,
       expiresAt: Date.now() + token.expires_in * 1000,
@@ -210,7 +218,7 @@ export class TwitchAuth {
   }
 
   async getAccessToken(): Promise<string> {
-    const tokens = config().getTokens()
+    const tokens = config().getTokens('twitch')
     if (!tokens) throw new TwitchAuthError('Not signed in to Twitch.')
 
     if (Date.now() < tokens.expiresAt - REFRESH_MARGIN_MS) return tokens.accessToken
@@ -223,7 +231,7 @@ export class TwitchAuth {
     return this.refreshInFlight
   }
 
-  private async refresh(tokens: StoredTwitchTokens): Promise<string> {
+  private async refresh(tokens: StoredTokens): Promise<string> {
     const clientId = this.getClientId()
     if (!clientId) throw new TwitchAuthError('No Twitch Client ID set.')
 
@@ -234,7 +242,7 @@ export class TwitchAuth {
         refresh_token: tokens.refreshToken
       })
 
-      config().setTokens({
+      config().setTokens('twitch', {
         ...tokens,
         accessToken: res.access_token,
 
@@ -245,7 +253,7 @@ export class TwitchAuth {
       this.onState()
       return res.access_token
     } catch (err) {
-      config().setTokens(null)
+      config().setTokens('twitch', null)
       this.failure = 'Twitch session expired. Sign in again.'
       this.onState()
       throw err
@@ -255,7 +263,7 @@ export class TwitchAuth {
   signOut(): void {
     this.cancelPolling()
     this.failure = null
-    config().setTokens(null)
+    config().setTokens('twitch', null)
     this.onState()
   }
 }
