@@ -275,8 +275,7 @@ button,
 
 .section-label {
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-weight: 600;
   color: var(--fg-4);
 }
 
