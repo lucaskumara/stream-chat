@@ -100,7 +100,7 @@ src/main/             bus.ts (MessageBus), backlog.ts, sources.ts (SourceManager
 src/main/obs/         server.ts — the loopback link server OBS docks connect to
 src/main/twitch/      auth.ts, helix.ts, state.ts, clientId.ts — account only, no wire code
 src/main/emotes/      7TV + BTTV, reached through Channel.emotes — see "Emotes" below
-src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the antd ThemeConfig),
+src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the ink + event-accent tokens),
                       search.ts (the pane filter grammar), components/ — whose
                       tab-strip.ts holds the drag geometry ChannelTabs.tsx draws with
 src/renderer/src/obs/ the OBS dock page — a second renderer entry, no antd
@@ -687,10 +687,13 @@ The window takes every batch; a dock takes one source. The 100ms flush interval 
 message overflow cap are unchanged — and matter more over a socket, not less. The timer runs
 while any sink exists, so buffers are cleared on the last removal rather than on `detach()`.
 
-**The dock page is a second vite renderer entry, and it must not pull antd.** `obs.html` plus
+**The dock page is a second vite renderer entry, and it shares almost nothing.** `obs.html` plus
 `src/renderer/src/obs/` reuse `MessageRow` and `index.css` and nothing else from the chrome.
 Measured on the built output: the dock chunk is 7.4KB and shares only the React chunk, while
-antd's 1.49MB chunk stays behind in the app's entry. Rendering is a plain bottom-pinned list
+antd's 1.49MB chunk stayed behind in the app's entry. That measurement predates v2 removing
+antd from the chrome, so the saving is now much smaller — but the rule still holds for
+whatever the app entry grows next, and the dock has no reason to carry it. Rendering is a
+plain bottom-pinned list
 capped at 200 — no virtualizer, which a dock does not need and which is a dependency the entry
 would otherwise carry.
 
@@ -782,14 +785,11 @@ icon stays rather than vanishing, because a control that disappears exactly when
 it reads as a bug. Clicking a shown tab's pin once a second chat is open is what removes it
 from a split, and that is the only route: membership never changes by dragging.
 
-**The pane bar is per source, and its state lives in the store, not the pane.**
-`ChatPaneBar` sits along the top of every `ChatPane`, under the tab strip, and does three
-things: filters that pane, clears that pane's history, and carries the settings popover that
-hands out that chat's OBS link. Both are keyed by `sourceId` — `store.search[sourceId]`
-(committed terms), `store.searchDraft[sourceId]` (what is half-typed) and
-`clearSource(sourceId)` — because `App` renders a different tree for one pane than for
-several, so a pane *remounts* when the split changes and local `useState` would silently drop
-the search. `forgetSource` deletes both search entries alongside the messages.
+**Pane state lives in the store, not the pane.** `store.search[sourceId]` (committed terms),
+`store.searchDraft[sourceId]` (what is half-typed), `filterOpen[sourceId]` and
+`fontSize[sourceId]` are all keyed by source, because `App` renders a different tree as the
+split changes, so a pane *remounts* and local `useState` would silently drop the search.
+`forgetSource` deletes every one of those entries alongside the messages.
 
 **Two things in that popover are *not* per source, and it says so.** `ChatSettings` puts the
 `showTimestamps` and `showDeleted` switches above the OBS link, under an "Every chat" caption,
@@ -805,11 +805,11 @@ break: a prefix only counts if it is a *known* field, so `https://youtube.com` s
 content search rather than becoming a `https:` field; the author needle drops a leading `@`
 so `author:name` and `author:@name` are the same search on YouTube (whose names carry one)
 and on Twitch and Kick (whose names do not); and everything is lowercased on both sides.
-Terms render as pills via antd's tag-mode `Select` with `tokenSeparators={[',']}`, and the
-**draft is filtered live** — `parseSearch([...terms, draft])` — because tags mode alone would
-not filter anything until you typed a comma. Enter has to clear the draft by hand from
-`onChange`: antd commits a tag without firing `onSearch`, so a controlled `searchValue` keeps
-the text that just became a pill, showing the term twice and filtering by it twice.
+Terms render as pills inside the filter bar's inset field; Enter and `,` commit the draft,
+Backspace on an empty draft removes the last pill, and Escape clears the draft then the
+terms. The **draft is filtered live** — `parseSearch([...terms, draft])` — so typing narrows
+the list before you commit anything, and the `n of m` readout counts the same derived list
+the pane renders.
 
 **Clicking an author name filters by them, and it is delegated on purpose.** The name span in
 `MessageRow` carries `data-author` and nothing else; the click is caught by an `onClick` on
@@ -827,20 +827,12 @@ the one control in the app behind a confirm. That is a deliberate exception to t
 confirmation" rule the tab `×` follows: re-adding a channel costs nothing, but discarded
 messages are gone.
 
-**Anchor pane-bar popovers `bottomRight`, and give them a `minWidth`.** Two separate faults,
-both invisible until the popover actually opens. The bar's controls sit at the right edge of a
-pane, so a `Popconfirm` at the default placement opens past the window's right edge, where it
-is both clipped and *unclickable* — the confirm button lands outside the viewport and the click
-misses (measured: x 1172-1692 in a 1440px window). And antd sizes the popover to its
-*content*, so a short title like "Are you sure?" collapses it to 144px, leaving `Cancel` and
-`Clear` (57px + 47px) wedged edge to edge in a 120px row. `styles={{ root: { minWidth: 200 } }}`
-gives the buttons slack. A long `description` masks both faults by making the popover wide —
-which is how the first version looked fine until the text was shortened.
-
-**antd marks one tab active; the app has several open.** `activeKey` is `visibleIds[0]`
-purely to satisfy antd. Every open tab additionally gets a `tab-shown` class (applied in
-`renderTabBar`) whose CSS mimics the active look, so the strip reflects what is on screen
-rather than what was clicked last.
+**The pane settings popover is anchored, not floating.** It is absolutely positioned at
+`top: 48px; right: 10px` inside the pane's own relatively-positioned box, so it cannot open
+past the window edge the way v1's antd `Popconfirm` did — that one opened clipped *and
+unclickable*, its confirm button landing outside the viewport (measured x 1172-1692 in a
+1440px window). Clearing a pane is no longer behind a confirm: it is a plain button in that
+popover, and the popover closes on clear.
 
 ### Navigation (v2)
 
@@ -1009,7 +1001,8 @@ policy; `packagedCsp()` in `electron.vite.config.ts` swaps in `PACKAGED_CSP` und
 `apply: 'build'`. That drops `script-src 'unsafe-inline'`, which only the dev server's React
 Refresh preamble ever needed, and the localhost/ws allowances in `connect-src`, which nothing
 needed — the renderer makes no network calls at all, main does. `style-src 'unsafe-inline'`
-has to stay: antd's cssinjs injects `<style>` at runtime. Verified against the built
+has to stay, though no longer for antd's cssinjs — the chrome sets colours and sizes through
+inline `style` attributes, which `style-src` governs too. Verified against the built
 `out/renderer/index.html`, which contains no inline script. There are now **two** policies:
 `packagedCsp()` branches on the filename, because `obs.html` is served over http and talks
 to the link server, so it keeps a `connect-src` of `ws://127.0.0.1:*` that the app's
@@ -1224,15 +1217,22 @@ script must live inside the repo, not the scratchpad, or `import 'ws'` will not 
 There is **no browser-only mode any more.** `bridge.ts` is a thin `window.api` accessor that
 throws outside Electron; the in-page simulator went with the mock platform.
 
-**Drive the tab strip only with the app window focused.** Learned the hard way: while the
+**Click through CDP only with the app window focused.** Learned the hard way: while the
 Electron window is occluded, `Input.dispatchMouseEvent` stops being acknowledged part-way
-through a drag — the driver hangs while a *second* CDP client's `Runtime.evaluate` still
-answers instantly — and antd's leave animations never finish, so a dismissed `Modal` leaves
-its `.ant-modal-wrap` in the DOM where it silently swallows every later click, which reads as
-"the app ignores clicks". Raise the window with Win32 `SetForegroundWindow` on the Electron
-process (`Page.bringToFront` is not enough), and run **one scenario per node process** — a
-long-lived driver accumulates the stall. A driver killed mid-drag also leaves the pointer
-button logically held, so start each run with a stray `mouseReleased`.
+through a sequence — the driver hangs while a *second* CDP client's `Runtime.evaluate` still
+answers instantly, so it reads as "the app ignores clicks". Raise the window with Win32
+`SetForegroundWindow` on the Electron process (`Page.bringToFront` is not enough), and run
+**one scenario per node process** — a long-lived driver accumulates the stall. A driver
+killed mid-click also leaves the pointer button logically held, so start each run with a
+stray `mouseReleased`. Dispatching `element.click()` from `Runtime.evaluate` sidesteps all of
+this and is enough for anything that is not testing hit-testing itself.
+
+**React ignores a plain `el.value = x` from a driver.** It tracks the last value on the node,
+so the assignment looks like no change and `onChange` never fires. Go through the prototype
+setter and dispatch the event yourself:
+`Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, text)`
+then `el.dispatchEvent(new Event('input', { bubbles: true }))`. The same applies to
+`HTMLSelectElement` with a `change` event.
 
 The three YouTube resolve outcomes are all worth exercising, and each has a stable probe: a
 live channel with chat (`@LofiGirl`), a real channel that is not streaming (`@Google` -> the
