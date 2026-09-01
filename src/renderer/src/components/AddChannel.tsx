@@ -3,7 +3,7 @@ import { ChevronDown } from 'lucide-react'
 import type { Platform } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
 import { bridge, remoteMessage } from '../bridge'
-import { PLATFORM_COLOR } from './PlatformIcon'
+import { PLATFORM_COLOR } from '../theme'
 
 const PLATFORM_NAME: Record<Platform, string> = {
   twitch: 'Twitch',

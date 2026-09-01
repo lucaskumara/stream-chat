@@ -17,8 +17,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import type { Badge, ChatMessage, Fragment } from '@shared/types'
-import { BADGE_WASH, EVENT_ACCENT, ROW_WASH } from '../theme'
-import { PLATFORM_COLOR } from './PlatformIcon'
+import { BADGE_WASH, EVENT_ACCENT, PLATFORM_COLOR, ROW_WASH } from '../theme'
 
 const KIND_GLYPH: Partial<Record<ChatMessage['kind'], LucideIcon>> = {
   subscription: Star,

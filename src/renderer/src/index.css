@@ -1,11 +1,5 @@
 @import 'tailwindcss';
 
-@theme {
-  --color-twitch: #9146ff;
-  --color-youtube: #ff0033;
-  --color-kick: #53fc18;
-}
-
 /* The v2 palette, from the handoff. Every surface, border and text tone in the
    chrome is one of these — nothing computes a shade of its own. */
 :root {

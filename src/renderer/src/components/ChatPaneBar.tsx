@@ -1,8 +1,7 @@
 import { memo, useCallback } from 'react'
 import { Search, Settings, X } from 'lucide-react'
 import type { SourceState } from '@shared/types'
-import { PLATFORM_COLOR } from './PlatformIcon'
-import { INK } from '../theme'
+import { PLATFORM_COLOR } from '../theme'
 import { termLabel } from '../search'
 
 const PLATFORM_NAME: Record<SourceState['platform'], string> = {
@@ -74,7 +73,7 @@ function ChatPaneBarImpl({
         <span
           aria-hidden
           className="h-[6px] w-[6px] flex-none rounded-full"
-          style={{ background: offline ? INK.offlineDot : PLATFORM_COLOR[source.platform] }}
+          style={{ background: offline ? 'var(--offline-dot)' : PLATFORM_COLOR[source.platform] }}
         />
 
         <span className="truncate text-[14px] font-semibold" style={{ color: '#f0f0f0' }}>

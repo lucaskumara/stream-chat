@@ -100,9 +100,9 @@ src/main/             bus.ts (MessageBus), backlog.ts, sources.ts (SourceManager
 src/main/obs/         server.ts — the loopback link server OBS docks connect to
 src/main/twitch/      auth.ts, helix.ts, state.ts, clientId.ts — account only, no wire code
 src/main/emotes/      7TV + BTTV, reached through Channel.emotes — see "Emotes" below
-src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the ink + event-accent tokens),
-                      search.ts (the pane filter grammar), components/ — whose
-                      tab-strip.ts holds the drag geometry ChannelTabs.tsx draws with
+src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the platform + event-accent
+                      tokens no CSS variable can carry), search.ts (the pane filter grammar),
+                      components/ and views/ — the title bar's three screens
 src/renderer/src/obs/ the OBS dock page — a second renderer entry, no antd
 ```
 
@@ -737,14 +737,20 @@ tones for every control, which meant fighting antd's own vocabulary on every one
 replaced by plain elements styled with Tailwind and the token variables. That deleted the
 whole antd/Tailwind layering problem with it: `index.css` no longer declares
 `@layer theme, base, antd, components, utilities`, and `main.tsx` no longer wraps the tree in
-`StyleProvider`/`ConfigProvider`. **`antd` and `@ant-design/cssinjs` are still in
-`package.json` and are now unused** — they are devDependencies, so nothing ships, but they can
-be dropped.
+`StyleProvider`/`ConfigProvider`. **`antd`, `@ant-design/cssinjs` and the four `@dnd-kit`
+packages are gone from `package.json`** — nothing had imported any of them since v2, and they
+were devDependencies, so the installer never carried them either way.
 
-**Tokens live in `index.css` as custom properties, and `theme.ts` mirrors them for TS.**
-Everything in the chrome is one of `--ink-900/800/700/600`, `--line`, `--line-2`,
-`--hover-row`, `--segment-on`, `--fg`/`--fg-2`/`--fg-3`/`--fg-4`, `--heading`. Nothing
-computes a shade of its own. The four `--text-*` variables v1 used are gone: the chrome is
+**Tokens live in `index.css` as custom properties, and nowhere else.** Everything in the
+chrome is one of `--ink-900/800/700/600`, `--line`, `--line-2`, `--hover-row`,
+`--segment-on`, `--fg`/`--fg-2`/`--fg-3`/`--fg-4`, `--heading`. Nothing computes a shade of
+its own. `theme.ts` briefly carried an `INK` object mirroring all of them for TS; twelve of
+its fourteen keys were never read, because an inline `style` takes `var(--fg-4)` perfectly
+well, so the mirror is gone. What is left there genuinely cannot be a CSS variable:
+`PLATFORM_COLOR`, which is indexed by a message's platform, and `EVENT_ACCENT`, whose hexes
+are composed with `ROW_WASH`/`BADGE_WASH` at render time. `PLATFORM_COLOR` was also
+duplicated by a Tailwind `@theme` block declaring `--color-twitch/-youtube/-kick`; no
+utility ever referenced those, and they are gone too. The four `--text-*` variables v1 used are gone: the chrome is
 14px with 17px screen titles and 12px section labels, and chat text is the per-pane
 `--chat-font-size`.
 
@@ -871,9 +877,12 @@ run, and reordered tabs with dnd-kit through `components/tab-strip.ts`. The v2 h
 specifies neither, and both fought the "fewer visible controls" goal, so the state, the band,
 the drag geometry and its tests were removed together. `SourceManager.reorder` and the
 `sources:reorder` IPC survive on the main side with no caller in the UI — restoring drag
-reordering means writing a new interaction, not rewiring an old one.
+reordering means writing a new interaction, not rewiring an old one. The renderer store's
+own `reorderSources` did **not** survive: a restored interaction would call the IPC and take
+the new order back through `setSources`, so a second local permutation was dead the day
+dragging went.
 
-### Main process### Main process
+### Main process
 
 **Nothing is persisted but the Twitch token.** `config.json` holds `version` and the
 encrypted `twitch.tokensEnc`, and that is the whole file. Channels are deliberately *not*
@@ -1085,7 +1094,9 @@ lifecycle with identical per-platform filenames.
 Two separate caps, easy to confuse: `MessageBus` buffers **2,000** messages between 100ms
 flushes (overflow is dropped with a warning), while the renderer store keeps **500** per
 source (`DEFAULT_CAPACITY`) and evicts from the front. The load test above predates the
-store cap; it exercised the DOM, not the 500-message ring.
+store cap; it exercised the DOM, not the 500-message ring. The store's ring is settable from
+Settings -> General (200/500/1000) — `setCapacity` re-caps what is already held rather than
+waiting for eviction, or lowering the number would leave the longer history on screen.
 
 Badges and author colours are **back** on all three platforms, resolved in main and verified
 against live chat in the running app (70 badge images, zero broken; 27 distinct name
@@ -1148,7 +1159,7 @@ tests, so nothing bundles them. What is covered:
 | every IPC argument validator | `ipc.ts` |
 | resolve and naming on all three platforms | `platforms/*/channel.ts` |
 | the pane filter grammar | `renderer/search.ts` |
-| the whole zustand store, groups included | `renderer/store.ts` |
+| the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |
 

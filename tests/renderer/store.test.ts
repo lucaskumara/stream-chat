@@ -148,29 +148,35 @@ describe('toggleSplit', () => {
   })
 })
 
-describe('reorderSources', () => {
-  it('permutes the list', () => {
-    state().setSources([source('src-1'), source('src-2')])
+describe('setCapacity', () => {
+  it('trims what is already held down to the new capacity', () => {
+    state().ingest({
+      messages: [message('a'), message('b'), message('c')],
+      moderation: []
+    })
 
-    state().reorderSources(['src-2', 'src-1'])
+    state().setCapacity(2)
 
-    expect(state().sources.map((held) => held.id)).toEqual(['src-2', 'src-1'])
+    expect(state().bySource['src-1'].map((held) => held.id)).toEqual(['b', 'c'])
   })
 
-  it('refuses an order that does not name every source', () => {
-    state().setSources([source('src-1'), source('src-2')])
+  it('caps every later batch at the new capacity', () => {
+    state().setCapacity(2)
 
-    state().reorderSources(['src-2'])
+    state().ingest({
+      messages: [message('a'), message('b'), message('c')],
+      moderation: []
+    })
 
-    expect(state().sources.map((held) => held.id)).toEqual(['src-1', 'src-2'])
+    expect(state().bySource['src-1'].map((held) => held.id)).toEqual(['b', 'c'])
   })
 
-  it('ignores an id it does not know', () => {
-    state().setSources([source('src-1'), source('src-2')])
+  it('leaves a source shorter than the capacity alone', () => {
+    state().ingest({ messages: [message('a')], moderation: [] })
 
-    state().reorderSources(['src-2', 'src-1', 'ghost'])
+    state().setCapacity(200)
 
-    expect(state().sources.map((held) => held.id)).toEqual(['src-2', 'src-1'])
+    expect(state().bySource['src-1'].map((held) => held.id)).toEqual(['a'])
   })
 })
 

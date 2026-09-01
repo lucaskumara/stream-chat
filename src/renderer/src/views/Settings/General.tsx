@@ -45,7 +45,7 @@ export function General(): React.ReactElement {
             label="Keep the last"
             value={String(s.capacity)}
             options={CAPACITIES}
-            onSelect={() => {}}
+            onSelect={(value) => s.setCapacity(Number(value))}
           />
         </ControlRow>
       </Group>

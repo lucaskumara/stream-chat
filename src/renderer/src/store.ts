@@ -72,7 +72,6 @@ interface ChatState {
 
   setSources: (states: SourceState[]) => void
   setTwitchAuth: (state: TwitchAuthState) => void
-  reorderSources: (orderedIds: string[]) => void
   showSource: (sourceId: string) => void
   toggleSplit: (sourceId: string) => void
   ingest: (batch: ChatBatch) => void
@@ -83,6 +82,7 @@ interface ChatState {
   closeGear: () => void
   setShowDeleted: (showDeleted: boolean) => void
   setShowTimestamps: (showTimestamps: boolean) => void
+  setCapacity: (capacity: number) => void
   setDensity: (density: Density) => void
   setThemeChoice: (theme: ThemeChoice) => void
   setColorByPlatform: (on: boolean) => void
@@ -242,17 +242,6 @@ export const useStore = create<ChatState>()((set) => ({
 
   setTwitchAuth: (twitchAuth) => set({ twitchAuth }),
 
-  reorderSources: (orderedIds) =>
-    set((s) => {
-      const byId = new Map(s.sources.map((source) => [source.id, source]))
-
-      const ordered = orderedIds
-        .map((id) => byId.get(id))
-        .filter((source): source is SourceState => source !== undefined)
-
-      return ordered.length === s.sources.length ? { sources: ordered } : s
-    }),
-
   /** A tab click shows only that channel and returns to the Chat view. It is no longer
       a no-op on a shown tab: with a split open, clicking one member collapses to it. */
   showSource: (sourceId) =>
@@ -306,6 +295,14 @@ export const useStore = create<ChatState>()((set) => ({
   setShowDeleted: (showDeleted) => set({ showDeleted }),
 
   setShowTimestamps: (showTimestamps) => set({ showTimestamps }),
+
+  setCapacity: (capacity) =>
+    set((s) => ({
+      capacity,
+      bySource: Object.fromEntries(
+        Object.entries(s.bySource).map(([sourceId, held]) => [sourceId, capped(held, capacity)])
+      )
+    })),
 
   setDensity: (density) => set({ density }),
 
@@ -368,5 +365,5 @@ export const useStore = create<ChatState>()((set) => ({
       filterOpen: omit(s.filterOpen, sourceId),
       gearOpenFor: s.gearOpenFor === sourceId ? null : s.gearOpenFor,
       visibleIds: s.visibleIds.filter((id) => id !== sourceId)
-    })),
+    }))
 }))

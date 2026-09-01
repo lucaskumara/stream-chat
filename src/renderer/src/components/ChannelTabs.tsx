@@ -1,8 +1,7 @@
 import { memo, useState } from 'react'
 import { Columns2, Plus, X } from 'lucide-react'
 import type { SourceState } from '@shared/types'
-import { PLATFORM_COLOR } from './PlatformIcon'
-import { INK } from '../theme'
+import { PLATFORM_COLOR } from '../theme'
 
 function TabAction({
   label,
@@ -33,7 +32,7 @@ function TabAction({
       style={{
         borderRadius: 4,
         background: hover ? '#303030' : 'transparent',
-        color: hover ? '#e0e0e0' : lit ? '#b4b4b4' : INK.fg4,
+        color: hover ? '#e0e0e0' : lit ? '#b4b4b4' : 'var(--fg-4)',
         opacity: visible || lit ? 1 : 0
       }}
     >
@@ -84,7 +83,7 @@ function ChannelTabImpl({
         aria-hidden
         className="h-[6px] w-[6px] flex-none rounded-full"
         style={{
-          background: offline ? INK.offlineDot : PLATFORM_COLOR[source.platform],
+          background: offline ? 'var(--offline-dot)' : PLATFORM_COLOR[source.platform],
           opacity: shown ? 1 : 0.55
         }}
       />

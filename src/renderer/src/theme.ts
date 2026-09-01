@@ -1,25 +1,10 @@
-/** The v2 palette. Mirrors the custom properties in index.css for the places that
-    need a raw value in TS — inline styles, canvas-free SVG fills, event accents. */
-export const INK = {
-  app: '#141414',
-  inset: '#181818',
-  card: '#1c1c1c',
-  raised: '#242424',
+import type { Platform } from '@shared/types'
 
-  line: '#262626',
-  line2: '#303030',
-
-  hoverRow: '#1e1e1e',
-  segmentOn: '#333333',
-
-  fg: '#e6e6e6',
-  fg2: '#9d9d9d',
-  fg3: '#767676',
-  fg4: '#5f5f5f',
-  heading: '#f2f2f2',
-
-  offlineDot: '#4a4a4a'
-} as const
+export const PLATFORM_COLOR: Record<Platform, string> = {
+  twitch: '#9146ff',
+  youtube: '#ff0033',
+  kick: '#53fc18'
+}
 
 export type EventKind = 'subscription' | 'raid' | 'donation' | 'announcement' | 'system'
 

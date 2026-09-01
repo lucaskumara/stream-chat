@@ -1,6 +1,6 @@
 import type { Platform } from '@shared/types'
 import { bridge } from '../../bridge'
-import { PLATFORM_COLOR } from '../../components/PlatformIcon'
+import { PLATFORM_COLOR } from '../../theme'
 import { useStore } from '../../store'
 
 interface Row {
