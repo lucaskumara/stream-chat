@@ -14,7 +14,7 @@ lives — read it before touching the message pipeline, emotes, or either Twitch
 ```bash
 npm run dev        # electron-vite dev — launches the app and the renderer dev server
 npm run typecheck  # all three tsconfig projects; the fastest correctness gate
-npm run test       # vitest, the pure-logic suite — 343 cases in ~1.5s
+npm run test       # vitest, the pure-logic suite — 359 cases in ~1.5s
 npm run test:watch # the same suite, re-running as files change
 npm run build      # typecheck, then build main + preload + renderer
 ```
@@ -1222,7 +1222,7 @@ YouTube super-chats and memberships are **not** mapped at all — see the YouTub
 
 ## Verifying changes
 
-`npm run typecheck` is the first gate — both tsconfig projects must pass — and
+`npm run typecheck` is the first gate — all three tsconfig projects must pass — and
 `npm run test` is the second. Neither proves the app works; that still takes the running
 app, below.
 
@@ -1324,8 +1324,24 @@ answers instantly, so it reads as "the app ignores clicks". Raise the window wit
 `SetForegroundWindow` on the Electron process (`Page.bringToFront` is not enough), and run
 **one scenario per node process** — a long-lived driver accumulates the stall. A driver
 killed mid-click also leaves the pointer button logically held, so start each run with a
-stray `mouseReleased`. Dispatching `element.click()` from `Runtime.evaluate` sidesteps all of
-this and is enough for anything that is not testing hit-testing itself.
+stray `mouseReleased`.
+
+**`element.click()` is not a click, and it will pass on a control the user cannot press.**
+Dispatching it from `Runtime.evaluate` sidesteps every hassle above, which is exactly why it
+is tempting — but it invokes the handler directly and never hit-tests, so anything covering
+the element is invisible to it. That shipped a dead tab strip here: an Electron drag region
+was swallowing the OS-level clicks while a probe driving `element.click()` reported the tabs
+working, twice. Any control inside the title bar, under an overlay, or near a drag region
+has to be verified with a real `Input.dispatchMouseEvent` at its measured centre. Keep
+`element.click()` for driving a control you have *already* proven is reachable.
+
+**To judge how something rasterises, magnify the real screenshot — do not re-render it.**
+`Page.captureScreenshot` with a `scale` above 1 re-runs the vector paint at that scale and
+comes back crisp no matter how blurry the app looks, so it cannot show a sub-pixel problem.
+Capture the clip at `scale: 1`, then draw it into an off-DOM `<canvas>` at 8x with
+`imageSmoothingEnabled = false` and export that — a canvas created in JS and never appended
+does not disturb the app. This is what confirmed the platform marks were landing on
+fractional boxes.
 
 **React ignores a plain `el.value = x` from a driver.** It tracks the last value on the node,
 so the assignment looks like no change and `onChange` never fires. Go through the prototype
