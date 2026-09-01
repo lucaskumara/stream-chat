@@ -1,33 +1,22 @@
-import { Settings as SettingsIcon } from 'lucide-react'
 import type { SettingsPane } from '../../store'
 import { useStore } from '../../store'
-import { EmptyBlock } from '../../components/controls'
 import { Accounts } from './Accounts'
 import { Appearance } from './Appearance'
+import { Chat } from './Chat'
 import { General } from './General'
 
 const PANES: { pane: SettingsPane; label: string }[] = [
   { pane: 'general', label: 'General' },
   { pane: 'appearance', label: 'Appearance' },
-  { pane: 'accounts', label: 'Accounts' },
-  { pane: 'notifications', label: 'Notifications' },
-  { pane: 'shortcuts', label: 'Keyboard shortcuts' }
+  { pane: 'chat', label: 'Chat' },
+  { pane: 'accounts', label: 'Accounts' }
 ]
 
 const TITLES: Record<SettingsPane, { title: string; blurb: string }> = {
-  general: { title: 'General', blurb: 'How the app starts, and what every chat shows.' },
-  appearance: { title: 'Appearance', blurb: 'Theme, density and the default chat text size.' },
-  accounts: { title: 'Accounts', blurb: 'Connect an account to send messages and moderate.' },
-  notifications: { title: 'Notifications', blurb: 'What the app tells you about, and how.' },
-  shortcuts: { title: 'Keyboard shortcuts', blurb: 'Keys for the things you do most.' }
-}
-
-function Nothing(): React.ReactElement {
-  return (
-    <div className="flex justify-center py-[26px]">
-      <EmptyBlock icon={SettingsIcon} detail="Nothing here yet." />
-    </div>
-  )
+  general: { title: 'General', blurb: 'How the app starts.' },
+  appearance: { title: 'Appearance', blurb: 'The theme the whole app is painted in.' },
+  chat: { title: 'Chat', blurb: 'What every chat shows, how it reads, and how much it keeps.' },
+  accounts: { title: 'Accounts', blurb: 'Connect an account to send messages and moderate.' }
 }
 
 export function Settings(): React.ReactElement {
@@ -57,7 +46,7 @@ export function Settings(): React.ReactElement {
               style={{
                 borderRadius: 6,
                 background: on ? 'var(--ink-700)' : 'transparent',
-                color: on ? '#f2f2f2' : 'var(--fg-2)'
+                color: on ? 'var(--heading)' : 'var(--fg-2)'
               }}
               onMouseEnter={(e) => {
                 if (!on) e.currentTarget.style.background = 'var(--hover-row)'
@@ -83,8 +72,8 @@ export function Settings(): React.ReactElement {
 
           {pane === 'general' && <General />}
           {pane === 'appearance' && <Appearance />}
+          {pane === 'chat' && <Chat />}
           {pane === 'accounts' && <Accounts />}
-          {(pane === 'notifications' || pane === 'shortcuts') && <Nothing />}
         </div>
       </div>
     </div>

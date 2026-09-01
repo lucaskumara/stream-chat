@@ -21,17 +21,10 @@ export const CHAT_FONT_DEFAULT = 15
 
 export type View = 'chats' | 'broadcast' | 'settings'
 
-export type SettingsPane =
-  | 'general'
-  | 'appearance'
-  | 'accounts'
-  | 'notifications'
-  | 'shortcuts'
+export type SettingsPane = 'general' | 'appearance' | 'chat' | 'accounts'
 
 export type Density = 'comfortable' | 'compact'
-export type ThemeChoice = 'dark' | 'midnight' | 'system'
-
-export type GeneralFlag = 'launchAtStartup' | 'reopenChannels' | 'keepOnTop' | 'closeToTray'
+export type ThemeChoice = 'dark' | 'system' | 'light'
 
 interface ChatState {
   sources: SourceState[]
@@ -73,10 +66,11 @@ interface ChatState {
   colorByPlatform: boolean
   defaultFontSize: number
 
-  launchAtStartup: boolean
+  /** What the OS asks for, kept here so resolvedTheme can answer 'system' from the
+      store rather than from a media query every component would have to repeat. */
+  systemDark: boolean
+
   reopenChannels: boolean
-  keepOnTop: boolean
-  closeToTray: boolean
 
   /** Chat row size per source, in px from CHAT_FONT_SIZES. Missing means the default. */
   fontSize: Record<string, number>
@@ -99,9 +93,10 @@ interface ChatState {
   setCapacity: (capacity: number) => void
   setDensity: (density: Density) => void
   setThemeChoice: (theme: ThemeChoice) => void
+  setSystemDark: (systemDark: boolean) => void
   setColorByPlatform: (on: boolean) => void
   stepDefaultFontSize: (steps: number) => void
-  setFlag: (flag: GeneralFlag, on: boolean) => void
+  setReopenChannels: (on: boolean) => void
   setSearch: (sourceId: string, terms: string[]) => void
   setSearchDraft: (sourceId: string, draft: string) => void
   addSearchTerm: (sourceId: string, term: string) => void
@@ -231,10 +226,9 @@ export const useStore = create<ChatState>()((set) => ({
   colorByPlatform: true,
   defaultFontSize: CHAT_FONT_DEFAULT,
 
-  launchAtStartup: true,
+  systemDark: true,
+
   reopenChannels: true,
-  keepOnTop: false,
-  closeToTray: true,
 
   twitchAuth: { status: 'signed-out' },
 
@@ -318,12 +312,14 @@ export const useStore = create<ChatState>()((set) => ({
 
   setThemeChoice: (themeChoice) => set({ themeChoice }),
 
+  setSystemDark: (systemDark) => set({ systemDark }),
+
   setColorByPlatform: (colorByPlatform) => set({ colorByPlatform }),
 
   stepDefaultFontSize: (steps) =>
     set((s) => ({ defaultFontSize: steppedSize(s.defaultFontSize, steps) })),
 
-  setFlag: (flag, on) => set({ [flag]: on } as Pick<ChatState, GeneralFlag>),
+  setReopenChannels: (reopenChannels) => set({ reopenChannels }),
 
   setSearch: (sourceId, terms) =>
     set((s) => ({ search: { ...s.search, [sourceId]: terms } })),

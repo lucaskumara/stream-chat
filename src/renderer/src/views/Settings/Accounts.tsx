@@ -52,7 +52,7 @@ export function Accounts(): React.ReactElement {
             />
 
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[14px]" style={{ color: '#ededed' }}>
+              <div className="truncate text-[14px]" style={{ color: 'var(--heading)' }}>
                 {row.name}
               </div>
               <div className="truncate text-[13px]" style={{ color: 'var(--fg-4)' }}>

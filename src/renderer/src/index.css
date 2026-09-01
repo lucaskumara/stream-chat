@@ -23,9 +23,76 @@
   --offline-dot: #4a4a4a;
   --close-hover: #c42b1c;
 
+  --button-solid: #3a3a3a;
+  --button-solid-hover: #454545;
+  --button-solid-fg: #f2f2f2;
+
+  --toggle-on: #6f6f6f;
+  --toggle-off: rgba(255, 255, 255, 0.14);
+  --toggle-knob: #ffffff;
+
+  --pill: #2f2f2f;
+  --ghost-icon: #2e2e2e;
+  --scroll-thumb: #303030;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --error: #f08c8c;
+
+  /* Chat row art: a mention's wash, a link, and the chip a badge with no image
+     falls back to. Set here so the row inverts with everything else. */
+  --mention-bg: rgba(255, 255, 255, 0.1);
+  --link: #c9c9c9;
+  --chip-bg: rgba(64, 64, 64, 0.6);
+  --chip-fg: #d4d4d4;
+
   /* Chat rows are sized per pane by the stepper; the em units in MessageRow size
      emote and badge images off this, so those scale with the text. */
   --chat-font-size: 15px;
+
+  color-scheme: dark;
+}
+
+/* The same ramp inverted. App.tsx stamps data-theme from the theme setting, resolving
+   'system' against prefers-color-scheme itself, so there is one light palette rather
+   than a media-query copy of it — and the OBS dock, which never stamps, stays dark. */
+:root[data-theme='light'] {
+  --ink-900: #ffffff;
+  --ink-800: #f5f5f5;
+  --ink-700: #ebebeb;
+  --ink-600: #e6e6e6;
+
+  --line: #e4e4e4;
+  --line-2: #d6d6d6;
+
+  --hover-row: #f0f0f0;
+  --segment-on: #ffffff;
+
+  --fg: #1c1c1c;
+  --fg-2: #575757;
+  --fg-3: #767676;
+  --fg-4: #949494;
+  --heading: #0d0d0d;
+
+  --offline-dot: #b0b0b0;
+
+  --button-solid: #1f1f1f;
+  --button-solid-hover: #333333;
+  --button-solid-fg: #ffffff;
+
+  --toggle-on: #4a4a4a;
+  --toggle-off: rgba(0, 0, 0, 0.18);
+
+  --pill: #e4e4e4;
+  --ghost-icon: #dcdcdc;
+  --scroll-thumb: #cfcfcf;
+  --shadow: rgba(0, 0, 0, 0.18);
+  --error: #c23b3b;
+
+  --mention-bg: rgba(0, 0, 0, 0.07);
+  --link: #3b3b3b;
+  --chip-bg: rgba(0, 0, 0, 0.1);
+  --chip-fg: #4a4a4a;
+
+  color-scheme: light;
 }
 
 html {
@@ -112,7 +179,7 @@ button,
 
 .titlebar-button:hover {
   background: var(--ink-600);
-  color: #ededed;
+  color: var(--heading);
 }
 
 .titlebar-close:hover {
@@ -140,7 +207,7 @@ button,
 .icon-button:hover,
 .icon-button[data-on='true'] {
   background: var(--ink-600);
-  color: #ededed;
+  color: var(--heading);
 }
 
 .icon-button:disabled {
@@ -182,13 +249,13 @@ button,
   gap: 7px;
   border: 0;
   border-radius: 6px;
-  background: #3a3a3a;
-  color: var(--heading);
+  background: var(--button-solid);
+  color: var(--button-solid-fg);
   cursor: pointer;
 }
 
 .primary-button:hover:not(:disabled) {
-  background: #454545;
+  background: var(--button-solid-hover);
 }
 
 .primary-button:disabled {
@@ -217,7 +284,7 @@ button,
 
 .chat-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #303030 transparent;
+  scrollbar-color: var(--scroll-thumb) transparent;
 }
 
 .chat-scroll::-webkit-scrollbar {
@@ -225,7 +292,7 @@ button,
 }
 
 .chat-scroll::-webkit-scrollbar-thumb {
-  background: #303030;
+  background: var(--scroll-thumb);
   border-radius: 999px;
 }
 

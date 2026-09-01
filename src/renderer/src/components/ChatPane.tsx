@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, MessageSquare } from 'lucide-react'
 import type { ChatMessage, SourceState } from '@shared/types'
+import type { ThemeMode } from '../theme'
 import { bridge } from '../bridge'
 import { authorTerm, matchesSearch, parseSearch } from '../search'
 import type { Density } from '../store'
@@ -23,6 +24,7 @@ export interface ChatPaneProps {
   showDeleted: boolean
   showTimestamps: boolean
   density: Density
+  mode: ThemeMode
   filterOpen: boolean
   gearOpen: boolean
   onToggleFilter: () => void
@@ -48,6 +50,7 @@ export function ChatPane({
   showDeleted,
   showTimestamps,
   density,
+  mode,
   filterOpen,
   gearOpen,
   onToggleFilter,
@@ -217,6 +220,7 @@ export function ChatPane({
                     showTimestamps={showTimestamps}
                     showPlatform={showPlatform}
                     compact={density === 'compact'}
+                    mode={mode}
                     onOpenLink={openLink}
                   />
                 </div>
@@ -244,11 +248,11 @@ export function ChatPane({
             style={{
               bottom: 10,
               transform: 'translateX(-50%)',
-              background: '#2b2b2b',
+              background: 'var(--ink-600)',
               border: '1px solid var(--line-2)',
               borderRadius: 999,
-              color: '#ededed',
-              boxShadow: '0 6px 18px rgba(0,0,0,.5)'
+              color: 'var(--heading)',
+              boxShadow: '0 6px 18px var(--shadow)'
             }}
           >
             <ArrowDown size={14} strokeWidth={1.8} />

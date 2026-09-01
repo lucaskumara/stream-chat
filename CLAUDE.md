@@ -234,14 +234,23 @@ Kick's `sub_gifter`, which Kick colours by *count* through its own `getGiftBadge
 (1-4 green, 5-9 teal, 10-24 purple, 25-49 pink, and up), and YouTube's `OWNER`, which has no
 icon at all — YouTube tints the owner's *name* instead, so it keeps the text chip.
 
-**The legibility lift blends toward white — it must not scale channels.** Chat runs on
-`#12151a`, and platform-chosen names are picked against lighter backgrounds. `readableColor`
-raises anything under `LUMINANCE_FLOOR`. Multiplying each channel by a boost factor (the
-shape this code had originally) cannot lift a saturated colour at all: `#0000FF` is already
-at 255 on its only lit channel, so it came out unchanged and unreadable — and `#0000FF` is
-in the default palette, so it is not a rare case. Blending toward white by
-`(floor - luminance) / (1 - luminance)` lands every hue exactly on the floor and keeps the
-hue. Verified in the running app: `#0000FF` renders `rgb(90, 90, 255)`.
+**The legibility lift blends toward white — it must not scale channels.** Platform-chosen
+names are picked against that site's own background, so half of them are illegible on ours.
+`readable` in `renderer/contrast.ts` raises anything under `LUMINANCE_FLOOR`. Multiplying
+each channel by a boost factor (the shape this code had originally) cannot lift a saturated
+colour at all: `#0000FF` is already at 255 on its only lit channel, so it came out unchanged
+and unreadable — and `#0000FF` is in the default palette, so it is not a rare case. Blending
+toward white by `(floor - luminance) / (1 - luminance)` lands every hue exactly on the floor
+and keeps the hue. Verified in the running app: `#0000FF` renders `rgb(90, 90, 255)`.
+
+**On light, the same function scales down, and that direction *is* exact.** The luminance
+here is linear in the channels, so multiplying all three by `ceiling / luminance` lands the
+colour on `LUMINANCE_CEILING` and leaves the hue untouched — no blend needed. The two
+directions are not symmetric: scaling can only darken, blending is the only way up. Both
+`nameColor` and `readable` take the resolved `ThemeMode`, and `MessageRow` runs the badge
+glyph colours, the event badge text and the monetary chip through `readable` too, so every
+piece of chat-row art inverts with the palette. The mode is an optional prop defaulting to
+`'dark'`: the OBS dock omits it, which is what it renders on.
 
 **The MessageBus batches every 100ms. Never send one IPC message per chat message.** A busy
 channel does tens per second and per-message IPC saturates the renderer with
@@ -746,8 +755,10 @@ were devDependencies, so the installer never carried them either way.
 
 **Tokens live in `index.css` as custom properties, and nowhere else.** Everything in the
 chrome is one of `--ink-900/800/700/600`, `--line`, `--line-2`, `--hover-row`,
-`--segment-on`, `--fg`/`--fg-2`/`--fg-3`/`--fg-4`, `--heading`. Nothing computes a shade of
-its own. `theme.ts` briefly carried an `INK` object mirroring all of them for TS; twelve of
+`--segment-on`, `--fg`/`--fg-2`/`--fg-3`/`--fg-4`, `--heading`, plus the ones the light
+theme forced out of the components: `--button-solid`/`-hover`/`-fg`, `--toggle-on`/`-off`/
+`-knob`, `--pill`, `--ghost-icon`, `--scroll-thumb`, `--shadow`, `--error`, `--mention-bg`,
+`--link`, `--chip-bg`/`--chip-fg`. Nothing computes a shade of its own. `theme.ts` briefly carried an `INK` object mirroring all of them for TS; twelve of
 its fourteen keys were never read, because an inline `style` takes `var(--fg-4)` perfectly
 well, so the mirror is gone. What is left there genuinely cannot be a CSS variable:
 `PLATFORM_COLOR`, which is indexed by a message's platform, and `EVENT_ACCENT`, whose hexes
@@ -756,6 +767,16 @@ duplicated by a Tailwind `@theme` block declaring `--color-twitch/-youtube/-kick
 utility ever referenced those, and they are gone too. The four `--text-*` variables v1 used are gone: the chrome is
 14px with 17px screen titles and 12px section labels, and chat text is the per-pane
 `--chat-font-size`.
+
+**There is a light theme, and it is one inverted block — not a media query.** `App` resolves
+`themeChoice` ('dark' | 'system' | 'light') against `store.systemDark` through
+`resolvedTheme` in `theme.ts`, then stamps `document.documentElement.dataset.theme` with the
+answer, so `:root[data-theme='light']` in `index.css` is the only light palette and 'system'
+is decided in exactly one place. Two things follow. The OBS dock is a second renderer entry
+that never stamps, so it keeps the `:root` dark palette whatever the app is set to — which is
+right, it renders over a stream. And every colour in the chrome had to become a token first:
+a hardcoded `#f2f2f2` or `bg-white` does not invert, so the light theme is what the token
+list above is *for*. `color-scheme` is set in both blocks so native scrollbars follow.
 
 **The shared controls are in `components/controls.tsx`** — `Toggle`, `ControlRow`,
 `Segmented`, `Stepper`, `Picker`, `EmptyBlock` — so the pane popover and the settings screen
@@ -865,7 +886,9 @@ returns to the Chat view, since the click came from Broadcast or Settings just a
 layout you are *in* rather than the one a click would give: `Square` while merged, and
 `Columns2`/`Columns3` while split — the count only chooses between the two split icons, and
 in split mode it is exactly `visible.length`, which is why the tab bar needs nothing else to
-draw it. Disabled below two visible platforms, where it would do nothing visible. Merging is
+draw it. It is **absent** below two *connected* chats rather than disabled — merging only
+ever collapses connected chats, so with one or none the button could do nothing, and a dead
+control is not worth the space it holds on the window's centre line. Merging is
 a viewing mode over connected chats only — a visible platform with no channel keeps its own
 column either way, because its connect form has nowhere else to go, so
 [merged chat][connect form] is a normal state rather than a glitch.
@@ -1182,7 +1205,7 @@ Two separate caps, easy to confuse: `MessageBus` buffers **2,000** messages betw
 flushes (overflow is dropped with a warning), while the renderer store keeps **500** per
 source (`DEFAULT_CAPACITY`) and evicts from the front. The load test above predates the
 store cap; it exercised the DOM, not the 500-message ring. The store's ring is settable from
-Settings -> General (200/500/1000) — `setCapacity` re-caps what is already held rather than
+Settings -> Chat (200/500/1000) — `setCapacity` re-caps what is already held rather than
 waiting for eviction, or lowering the number would leave the longer history on screen.
 
 Badges and author colours are **back** on all three platforms, resolved in main and verified
@@ -1245,6 +1268,8 @@ tests, so nothing bundles them. What is covered:
 | every IPC argument validator | `ipc.ts` |
 | resolve and naming on all three platforms | `platforms/*/channel.ts` |
 | the pane filter grammar | `renderer/search.ts` |
+| the author and badge colour lift, both directions | `renderer/contrast.ts` |
+| resolving 'system' onto a palette | `renderer/theme.ts` |
 | the per-platform channel parse | `renderer/connect.ts` |
 | the merged-column k-way merge | `renderer/merge.ts` |
 | the split/merged column model | `renderer/layout.ts` |

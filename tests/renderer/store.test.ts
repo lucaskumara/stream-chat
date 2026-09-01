@@ -410,3 +410,20 @@ describe('display options', () => {
     expect(state().showDeleted).toBe(false)
   })
 })
+
+describe('theme', () => {
+  it('starts dark, with the OS reading as dark until App asks', () => {
+    expect(state().themeChoice).toBe('dark')
+    expect(state().systemDark).toBe(true)
+  })
+
+  // The choice and what the OS asks for are held apart, so 'system' can be answered
+  // from the store rather than from a media query every component repeats.
+  it('keeps the choice and the OS reading independent', () => {
+    state().setThemeChoice('system')
+    state().setSystemDark(false)
+
+    expect(state().themeChoice).toBe('system')
+    expect(state().systemDark).toBe(false)
+  })
+})

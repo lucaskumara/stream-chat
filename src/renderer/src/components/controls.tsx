@@ -20,13 +20,18 @@ export function Toggle({
       className="relative h-[18px] w-[30px] flex-none cursor-pointer border-0 p-0"
       style={{
         borderRadius: 999,
-        background: on ? '#6f6f6f' : 'rgba(255,255,255,.14)'
+        background: on ? 'var(--toggle-on)' : 'var(--toggle-off)'
       }}
     >
       <span
         aria-hidden
-        className="absolute h-[12px] w-[12px] rounded-full bg-white"
-        style={{ top: 3, left: on ? 15 : 3, transition: 'left .18s' }}
+        className="absolute h-[12px] w-[12px] rounded-full"
+        style={{
+          top: 3,
+          left: on ? 15 : 3,
+          background: 'var(--toggle-knob)',
+          transition: 'left .18s'
+        }}
       />
     </button>
   )
@@ -80,7 +85,7 @@ export function Segmented<T extends string>({
             className="h-[24px] cursor-pointer rounded-[5px] border-0 px-[11px] text-[13px]"
             style={{
               background: on ? 'var(--segment-on)' : 'transparent',
-              color: on ? '#f2f2f2' : 'var(--fg-3)'
+              color: on ? 'var(--heading)' : 'var(--fg-3)'
             }}
           >
             {option.label}
@@ -192,10 +197,10 @@ export function EmptyBlock({
       className="flex flex-col items-center justify-center text-center"
       style={{ gap: title ? 14 : 10, color: 'var(--fg-4)' }}
     >
-      <Icon size={size} strokeWidth={1.5} aria-hidden className="flex-none" style={{ color: '#2e2e2e' }} />
+      <Icon size={size} strokeWidth={1.5} aria-hidden className="flex-none" style={{ color: 'var(--ghost-icon)' }} />
 
       {title && (
-        <span className="text-[14px]" style={{ color: '#e0e0e0' }}>
+        <span className="text-[14px]" style={{ color: 'var(--fg)' }}>
           {title}
         </span>
       )}

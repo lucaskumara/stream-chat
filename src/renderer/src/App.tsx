@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react'
 import type { ChatMessage, SourceState } from '@shared/types'
 import { bridge } from './bridge'
 import { chatColumns, columnLabel, columnPaneId, type ChatColumn } from './layout'
+import { resolvedTheme, type ThemeMode } from './theme'
 import { mergeMessages } from './merge'
 import { useStore } from './store'
 import { ChatPane } from './components/ChatPane'
@@ -16,10 +17,12 @@ const EMPTY_MESSAGES: ChatMessage[] = []
 function Pane({
   column,
   messages,
+  mode,
   onDisconnect
 }: {
   column: ChatColumn
   messages: ChatMessage[]
+  mode: ThemeMode
   onDisconnect: (source: SourceState) => void
 }): React.ReactElement {
   const s = useStore()
@@ -37,6 +40,7 @@ function Pane({
       showDeleted={s.showDeleted}
       showTimestamps={s.showTimestamps}
       density={s.density}
+      mode={mode}
       filterOpen={s.filterOpen[paneId] === true}
       gearOpen={s.gearOpenFor === paneId}
       onToggleFilter={() => s.toggleFilter(paneId)}
@@ -62,9 +66,11 @@ function Pane({
 
 function Column({
   column,
+  mode,
   onDisconnect
 }: {
   column: ChatColumn
+  mode: ThemeMode
   onDisconnect: (source: SourceState) => void
 }): React.ReactElement {
   const bySource = useStore((s) => s.bySource)
@@ -78,14 +84,16 @@ function Column({
     return <ConnectChannel platform={column.platform} />
   }
 
-  return <Pane column={column} messages={messages} onDisconnect={onDisconnect} />
+  return <Pane column={column} messages={messages} mode={mode} onDisconnect={onDisconnect} />
 }
 
 function Chats({
   columns,
+  mode,
   onDisconnect
 }: {
   columns: ChatColumn[]
+  mode: ThemeMode
   onDisconnect: (source: SourceState) => void
 }): React.ReactElement {
   return (
@@ -96,7 +104,7 @@ function Chats({
           className="flex min-w-0 flex-1"
           style={{ borderLeft: at === 0 ? undefined : '1px solid var(--line)' }}
         >
-          <Column column={column} onDisconnect={onDisconnect} />
+          <Column column={column} mode={mode} onDisconnect={onDisconnect} />
         </div>
       ))}
     </div>
@@ -111,6 +119,11 @@ export default function App(): React.ReactElement {
   const togglePlatform = useStore((s) => s.togglePlatform)
   const merged = useStore((s) => s.merged)
   const toggleMerged = useStore((s) => s.toggleMerged)
+  const themeChoice = useStore((s) => s.themeChoice)
+  const systemDark = useStore((s) => s.systemDark)
+  const setSystemDark = useStore((s) => s.setSystemDark)
+
+  const mode = resolvedTheme(themeChoice, systemDark)
 
   const columns = useMemo(
     () => chatColumns(visiblePlatforms, sources, merged),
@@ -155,6 +168,24 @@ export default function App(): React.ReactElement {
     }
   }, [ingest, setSources, setTwitchAuth])
 
+  // The palette is stamped on the root rather than resolved in CSS, so 'system' has
+  // one home and the OBS dock — a second entry that never stamps — stays dark.
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+
+    setSystemDark(media.matches)
+
+    const onChange = (event: MediaQueryListEvent): void => setSystemDark(event.matches)
+
+    media.addEventListener('change', onChange)
+
+    return () => media.removeEventListener('change', onChange)
+  }, [setSystemDark])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = mode
+  }, [mode])
+
   const disconnect = useCallback(
     (source: SourceState) => {
       void bridge().api.removeSource(source.id)
@@ -175,7 +206,7 @@ export default function App(): React.ReactElement {
         onMerged={toggleMerged}
       />
 
-      {view === 'chats' && <Chats columns={columns} onDisconnect={disconnect} />}
+      {view === 'chats' && <Chats columns={columns} mode={mode} onDisconnect={disconnect} />}
       {view === 'broadcast' && <Broadcast />}
       {view === 'settings' && <Settings />}
     </div>

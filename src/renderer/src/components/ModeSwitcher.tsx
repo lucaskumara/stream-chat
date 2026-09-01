@@ -34,10 +34,10 @@ function ModeSwitcherImpl({ view, onSelect }: ModeSwitcherProps): React.ReactEle
             className="flex h-[26px] cursor-pointer items-center gap-[7px] rounded-[5px] border-0 px-[11px] text-[14px]"
             style={{
               background: on ? 'var(--segment-on)' : 'transparent',
-              color: on ? '#f2f2f2' : 'var(--fg-3)'
+              color: on ? 'var(--heading)' : 'var(--fg-3)'
             }}
             onMouseEnter={(e) => {
-              if (!on) e.currentTarget.style.color = '#e0e0e0'
+              if (!on) e.currentTarget.style.color = 'var(--fg)'
             }}
             onMouseLeave={(e) => {
               if (!on) e.currentTarget.style.color = 'var(--fg-3)'

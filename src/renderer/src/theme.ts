@@ -1,4 +1,16 @@
 import type { Platform } from '@shared/types'
+import type { ThemeChoice } from './store'
+
+export type ThemeMode = 'dark' | 'light'
+
+/** The setting says what the user picked; this says which palette to paint. 'system'
+    is resolved here rather than in a CSS media query, so there is one light block in
+    index.css and the OBS dock — which never stamps data-theme — stays dark. */
+export function resolvedTheme(choice: ThemeChoice, systemDark: boolean): ThemeMode {
+  if (choice === 'system') return systemDark ? 'dark' : 'light'
+
+  return choice
+}
 
 export const PLATFORM_COLOR: Record<Platform, string> = {
   twitch: '#9146ff',

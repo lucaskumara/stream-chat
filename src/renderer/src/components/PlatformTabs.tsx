@@ -25,10 +25,10 @@ function PlatformTab({
       className="flex h-[26px] cursor-pointer items-center gap-[7px] rounded-[5px] border-0 px-[11px] text-[14px]"
       style={{
         background: on ? 'var(--segment-on)' : 'transparent',
-        color: on ? '#f2f2f2' : 'var(--fg-3)'
+        color: on ? 'var(--heading)' : 'var(--fg-3)'
       }}
       onMouseEnter={(e) => {
-        if (!on) e.currentTarget.style.color = '#e0e0e0'
+        if (!on) e.currentTarget.style.color = 'var(--fg)'
       }}
       onMouseLeave={(e) => {
         if (!on) e.currentTarget.style.color = 'var(--fg-3)'
@@ -58,6 +58,10 @@ function PlatformTabsImpl({
   onToggle,
   onToggleMerged
 }: PlatformTabsProps): React.ReactElement {
+  const connected = visible.filter((platform) =>
+    sources.some((source) => source.platform === platform)
+  ).length
+
   const LayoutIcon = merged ? Square : visible.length > 2 ? Columns3 : Columns2
 
   return (
@@ -84,20 +88,25 @@ function PlatformTabsImpl({
         })}
       </div>
 
-      {/* Shows the layout you are in rather than the one a click would give — with one
+{/* Shows the layout you are in rather than the one a click would give — with one
           icon and two meanings, a control that reads as state is the legible half. It
           still only ever toggles merged/split; the column count picks which split icon
-          to draw, and in split mode that count is exactly the visible tabs. */}
-      <button
-        type="button"
-        className="icon-button layout-toggle"
-        aria-label={merged ? 'Split the chats into columns' : 'Merge the chats into one column'}
-        aria-pressed={merged}
-        disabled={visible.length < 2}
-        onClick={onToggleMerged}
-      >
-        <LayoutIcon size={15} strokeWidth={1.8} />
-      </button>
+          to draw, and in split mode that count is exactly the visible tabs.
+
+          Merging only ever collapses connected chats, so below two of those the button
+          is absent rather than disabled — a control that could do nothing is not worth
+          the space it holds on the centre line. */}
+      {connected > 1 && (
+        <button
+          type="button"
+          className="icon-button layout-toggle"
+          aria-label={merged ? 'Split the chats into columns' : 'Merge the chats into one column'}
+          aria-pressed={merged}
+          onClick={onToggleMerged}
+        >
+          <LayoutIcon size={15} strokeWidth={1.8} />
+        </button>
+      )}
     </div>
   )
 }

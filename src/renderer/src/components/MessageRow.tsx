@@ -17,7 +17,8 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import type { Badge, ChatMessage, Fragment } from '@shared/types'
-import { BADGE_WASH, EVENT_ACCENT, PLATFORM_COLOR, ROW_WASH } from '../theme'
+import { nameColor, readable } from '../contrast'
+import { BADGE_WASH, EVENT_ACCENT, PLATFORM_COLOR, ROW_WASH, type ThemeMode } from '../theme'
 import { PlatformMark } from './PlatformMark'
 
 const KIND_GLYPH: Partial<Record<ChatMessage['kind'], LucideIcon>> = {
@@ -45,57 +46,6 @@ const BADGE_GLYPH: Record<string, { icon: LucideIcon; color: string }> = {
   'sub-gifter': { icon: Gift, color: '#c070ff' }
 }
 
-const DEFAULT_NAME_COLORS = [
-  '#FF0000',
-  '#0000FF',
-  '#00FF00',
-  '#B22222',
-  '#FF7F50',
-  '#9ACD32',
-  '#FF4500',
-  '#2E8B57',
-  '#DAA520',
-  '#D2691E',
-  '#5F9EA0',
-  '#1E90FF',
-  '#FF69B4',
-  '#8A2BE2',
-  '#00FF7F'
-]
-
-const LUMINANCE_FLOOR = 0.4
-
-function readableColor(hex: string): string {
-  if (!/^#[0-9a-f]{6}$/i.test(hex)) return '#a1a1a1'
-
-  const channels = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16))
-
-  const luminance =
-    (0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]) / 255
-
-  if (luminance >= LUMINANCE_FLOOR) return hex
-
-  const towardsWhite = (LUMINANCE_FLOOR - luminance) / (1 - luminance)
-  const lifted = channels.map((value) =>
-    Math.round(value + (255 - value) * towardsWhite)
-  )
-
-  return `rgb(${lifted[0]}, ${lifted[1]}, ${lifted[2]})`
-}
-
-function nameColor(msg: ChatMessage): string {
-  if (msg.authorColor) return readableColor(msg.authorColor)
-
-  const seed = msg.authorId || msg.authorName
-  let hash = 0
-
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0
-
-  const picked = DEFAULT_NAME_COLORS[Math.abs(hash) % DEFAULT_NAME_COLORS.length]
-
-  return readableColor(picked)
-}
-
 function formatTime(ts: number): string {
   const d = new Date(ts)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -103,7 +53,7 @@ function formatTime(ts: number): string {
 
 function Emote({ name, url }: { name: string; url: string }): React.ReactElement {
   const [failed, setFailed] = useState(false)
-  if (failed) return <span className="text-neutral-300">{name}</span>
+  if (failed) return <span style={{ color: 'var(--chip-fg)' }}>{name}</span>
   return (
     <img
       src={url}
@@ -116,7 +66,7 @@ function Emote({ name, url }: { name: string; url: string }): React.ReactElement
   )
 }
 
-function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
+function BadgeView({ badge, mode }: { badge: Badge; mode: ThemeMode }): React.ReactElement {
   const [failed, setFailed] = useState(false)
 
   if (badge.url && !failed) {
@@ -144,7 +94,7 @@ function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
         strokeWidth={2.5}
         aria-label={badge.label}
         className="mr-1 inline-block align-middle"
-        style={{ color: glyph.color }}
+        style={{ color: readable(glyph.color, mode) }}
       />
     )
   }
@@ -152,7 +102,8 @@ function BadgeView({ badge }: { badge: Badge }): React.ReactElement {
   return (
     <span
       title={badge.label}
-      className="mr-1 rounded-sm bg-neutral-700/60 px-1 text-[.75em] font-semibold tracking-wide text-neutral-300 uppercase"
+      className="mr-1 rounded-sm px-1 text-[.75em] font-semibold tracking-wide uppercase"
+      style={{ background: 'var(--chip-bg)', color: 'var(--chip-fg)' }}
     >
       {badge.label.slice(0, 3)}
     </span>
@@ -175,7 +126,7 @@ function FragmentView({
       return (
         <span
           className="px-[4px] py-px"
-          style={{ background: 'rgba(255,255,255,.1)', borderRadius: 3, color: '#f2f2f2' }}
+          style={{ background: 'var(--mention-bg)', borderRadius: 3, color: 'var(--heading)' }}
         >
           {fragment.text}
         </span>
@@ -185,7 +136,13 @@ function FragmentView({
         <button
           type="button"
           className="cursor-pointer underline"
-          style={{ color: '#c9c9c9', textUnderlineOffset: 2, background: 'none', border: 0, padding: 0 }}
+          style={{
+            color: 'var(--link)',
+            textUnderlineOffset: 2,
+            background: 'none',
+            border: 0,
+            padding: 0
+          }}
           onClick={() => onOpenLink(fragment.href)}
         >
           {fragment.text}
@@ -200,6 +157,11 @@ export interface MessageRowProps {
   showTimestamps: boolean
   showPlatform: boolean
   compact?: boolean
+
+  /** Which background the row is painted on, so the author colour, the badge glyphs
+      and the event badge are lifted or darkened toward it. The OBS dock omits it and
+      keeps the dark treatment, which is what it renders on. */
+  mode?: ThemeMode
   onOpenLink: (url: string) => void
 }
 
@@ -209,6 +171,7 @@ function MessageRowImpl({
   showTimestamps,
   showPlatform,
   compact,
+  mode = 'dark',
   onOpenLink
 }: MessageRowProps): React.ReactElement {
   const event = EVENT_ACCENT[msg.kind as keyof typeof EVENT_ACCENT]
@@ -268,7 +231,7 @@ function MessageRowImpl({
             className="mr-1 inline-block px-[5px] py-px text-[.75em] font-bold uppercase"
             style={{
               background: `${event.accent}${BADGE_WASH}`,
-              color: event.badgeText,
+              color: readable(event.badgeText, mode),
               borderRadius: 3,
               letterSpacing: '.06em'
             }}
@@ -278,12 +241,12 @@ function MessageRowImpl({
         )}
 
         {msg.badges?.map((badge, i) => (
-          <BadgeView key={`${badge.label}-${i}`} badge={badge} />
+          <BadgeView key={`${badge.label}-${i}`} badge={badge} mode={mode} />
         ))}
 
         <span
           className="cursor-pointer font-semibold hover:underline"
-          style={{ color: nameColor(msg) }}
+          style={{ color: nameColor(msg, mode) }}
           data-author={msg.authorName}
         >
           {msg.authorDisplayName ?? msg.authorName}
@@ -293,7 +256,11 @@ function MessageRowImpl({
         {msg.monetary && (
           <span
             className="mr-1 inline-block px-[5px] py-px font-semibold"
-            style={{ background: 'rgba(52,211,153,.18)', color: '#6ee7b7', borderRadius: 3 }}
+            style={{
+              background: 'rgba(52,211,153,.18)',
+              color: readable('#6ee7b7', mode),
+              borderRadius: 3
+            }}
           >
             {msg.monetary.currency === 'bits'
               ? `${msg.monetary.amount.toLocaleString()} bits`

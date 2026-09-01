@@ -62,7 +62,7 @@ function ChatPaneBarImpl({
         className="flex h-[44px] items-center gap-[10px] pr-[8px] pl-[12px]"
         style={{ borderBottom: '1px solid var(--line)' }}
       >
-        <span className="truncate text-[14px] font-semibold" style={{ color: '#f0f0f0' }}>
+        <span className="truncate text-[14px] font-semibold" style={{ color: 'var(--heading)' }}>
           {label}
         </span>
 
@@ -111,7 +111,7 @@ function ChatPaneBarImpl({
               <span
                 key={term}
                 className="flex h-[20px] flex-none items-center gap-[5px] pr-[5px] pl-[8px] text-[13px]"
-                style={{ background: '#2f2f2f', borderRadius: 999, color: 'var(--fg)' }}
+                style={{ background: 'var(--pill)', borderRadius: 999, color: 'var(--fg)' }}
               >
                 {termLabel(term)}
                 <button

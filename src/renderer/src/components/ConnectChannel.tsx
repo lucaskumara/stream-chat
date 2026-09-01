@@ -106,7 +106,7 @@ export function ConnectChannel({ platform }: ConnectChannelProps): React.ReactEl
 
         <p
           className="mt-[10px] mb-0 text-[13px]"
-          style={{ color: error ? '#f08c8c' : 'var(--fg-4)' }}
+          style={{ color: error ? 'var(--error)' : 'var(--fg-4)' }}
         >
           {error ?? CONNECT_HINT[platform]}
         </p>
