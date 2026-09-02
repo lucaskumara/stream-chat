@@ -29,8 +29,6 @@ const IPC = {
   platforms: 'platforms:list',
   savePlatform: 'platforms:save',
   broadcast: 'broadcast:state',
-  broadcastStart: 'broadcast:start',
-  broadcastStop: 'broadcast:stop',
   batch: 'chat:batch',
   sourceState: 'sources:state',
   platformState: 'platforms:state',
@@ -113,11 +111,6 @@ const api: ChatApi = {
   },
 
   broadcast: (): Promise<BroadcastState> => ipcRenderer.invoke(IPC.broadcast),
-
-  broadcastStart: (platforms: Platform[]): Promise<void> =>
-    ipcRenderer.invoke(IPC.broadcastStart, platforms),
-
-  broadcastStop: (): Promise<void> => ipcRenderer.invoke(IPC.broadcastStop),
 
   onBroadcast: (cb: (state: BroadcastState) => void): (() => void) => {
     const handler = (_e: Electron.IpcRendererEvent, state: BroadcastState): void => cb(state)

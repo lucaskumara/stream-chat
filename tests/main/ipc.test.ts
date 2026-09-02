@@ -184,4 +184,16 @@ describe('parsePlatformPatch', () => {
   it('ignores fields it does not know', () => {
     expect(parsePlatformPatch({ channel: 'x', nonsense: 'y' })).toEqual({ channel: 'x' })
   })
+
+  it('reads the forward switch', () => {
+    expect(parsePlatformPatch({ forward: true })).toEqual({ forward: true })
+    expect(parsePlatformPatch({ forward: false })).toEqual({ forward: false })
+  })
+
+  // The renderer is untrusted, and a truthy string here would silently switch forwarding
+  // on for a platform the user did not pick.
+  it('refuses a forward that is not a boolean', () => {
+    expect(() => parsePlatformPatch({ forward: 'yes' })).toThrow(/must be a boolean/)
+    expect(() => parsePlatformPatch({ forward: 1 })).toThrow(/must be a boolean/)
+  })
 })

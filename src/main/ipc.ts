@@ -32,8 +32,6 @@ export const IPC = {
   savePlatform: 'platforms:save',
 
   broadcast: 'broadcast:state',
-  broadcastStart: 'broadcast:start',
-  broadcastStop: 'broadcast:stop',
 
   batch: 'chat:batch',
   sourceState: 'sources:state',
@@ -77,7 +75,8 @@ export function platformConfigs(): PlatformConfig[] {
     platform,
     channel: all[platform].channel,
     ingestUrl: all[platform].ingestUrl,
-    hasStreamKey: all[platform].streamKey.length > 0
+    hasStreamKey: all[platform].streamKey.length > 0,
+    forward: all[platform].forward
   }))
 }
 
@@ -93,12 +92,6 @@ function registerPlatformHandlers(onPlatformChange: () => Promise<void>): void {
 
 function registerBroadcastHandlers(relay: Relay): void {
   handle(IPC.broadcast, () => relay.state())
-
-  handle(IPC.broadcastStart, (_e, platforms: unknown) => {
-    relay.start(parsePlatforms(platforms))
-  })
-
-  handle(IPC.broadcastStop, () => relay.stop())
 }
 
 function registerSourceHandlers(sources: SourceManager, bus: MessageBus): void {
@@ -199,12 +192,6 @@ export function parseWebUrl(value: unknown): string {
   return parsed.toString()
 }
 
-export function parsePlatforms(value: unknown): Platform[] {
-  if (!Array.isArray(value)) throw new Error('platforms must be an array')
-
-  return value.map(parsePlatform)
-}
-
 export function parsePlatform(value: unknown): Platform {
   const platform = PLATFORMS.find((candidate) => candidate === value)
   if (!platform) throw new Error(`unknown platform: ${String(value)}`)
@@ -227,6 +214,12 @@ export function parsePlatformPatch(value: unknown): PlatformPatch {
     if (record[field] === undefined) continue
 
     patch[field] = requireString(record[field], field).trim().slice(0, MAX_KEY_LENGTH)
+  }
+
+  if (record.forward !== undefined) {
+    if (typeof record.forward !== 'boolean') throw new Error('forward must be a boolean')
+
+    patch.forward = record.forward
   }
 
   return patch

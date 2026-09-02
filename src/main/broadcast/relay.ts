@@ -23,10 +23,25 @@ export function destinationsFor(
     .filter((destination): destination is Destination => destination.url.length > 0)
 }
 
+/** Kick's dashboard hands out a host with no path — `rtmps://<hash>.global-contribute.
+    live-video.net:443` — and expects the encoder to append `/app`. OBS users hit the same
+    thing. Without it the connection is refused with a bare I/O error that says nothing
+    about the cause, so the app appends it rather than making anyone know that.
+
+    Twitch's already ends `/app` and YouTube's `/live2`, so this only ever fires on Kick. */
+export function normalizeIngest(url: string): string {
+  const trimmed = url.trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+
+  const path = trimmed.replace(/^\w+:\/\//, '')
+
+  return path.includes('/') ? trimmed : `${trimmed}/app`
+}
+
 /** The two halves join with exactly one slash however the user pasted them — a trailing
     slash on the URL is the normal shape in Kick's dashboard and OBS accepts either. */
 export function destinationUrl(setup: PlatformSetup | undefined): string {
-  const base = setup?.ingestUrl.trim().replace(/\/+$/, '') ?? ''
+  const base = normalizeIngest(setup?.ingestUrl ?? '')
   const key = setup?.streamKey.trim() ?? ''
 
   if (!base || !key) return ''

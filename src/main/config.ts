@@ -21,7 +21,7 @@ interface PersistedShape {
 const EMPTY: PersistedShape = { version: 3 }
 
 function blank(platform: Platform): PlatformSetup {
-  return { channel: '', ingestUrl: DEFAULT_INGEST[platform], streamKey: '' }
+  return { channel: '', ingestUrl: DEFAULT_INGEST[platform], streamKey: '', forward: false }
 }
 
 class Config {

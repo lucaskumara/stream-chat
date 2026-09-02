@@ -5,11 +5,12 @@ import {
   destinationUrl,
   ingestUrl,
   listenUrl,
+  normalizeIngest,
   relayArgs
 } from '@main/broadcast/relay'
 
 function setup(partial: Partial<PlatformSetup>): PlatformSetup {
-  return { channel: '', ingestUrl: '', streamKey: '', ...partial }
+  return { channel: '', ingestUrl: '', streamKey: '', forward: false, ...partial }
 }
 
 const ALL: Record<Platform, PlatformSetup> = {
@@ -17,6 +18,33 @@ const ALL: Record<Platform, PlatformSetup> = {
   youtube: setup({ ingestUrl: 'rtmp://a.rtmp.youtube.com/live2', streamKey: 'yt-key' }),
   kick: setup({ ingestUrl: 'rtmps://hash.contribute.example/app/', streamKey: 'sk_1' })
 }
+
+describe('normalizeIngest', () => {
+  // Kick's dashboard gives a bare host and expects the encoder to append /app. Without
+  // it the connection is refused with an I/O error that names no cause — this cost a
+  // live debugging session.
+  it('appends /app to a Kick host that carries no path', () => {
+    expect(normalizeIngest('rtmps://hash.global-contribute.live-video.net:443')).toBe(
+      'rtmps://hash.global-contribute.live-video.net:443/app'
+    )
+  })
+
+  it('appends it through a trailing slash too', () => {
+    expect(normalizeIngest('rtmps://hash.live-video.net/')).toBe('rtmps://hash.live-video.net/app')
+  })
+
+  it('leaves a URL that already has a path alone', () => {
+    expect(normalizeIngest('rtmps://ingest.example/app/')).toBe('rtmps://ingest.example/app')
+    expect(normalizeIngest('rtmp://a.rtmp.youtube.com/live2')).toBe(
+      'rtmp://a.rtmp.youtube.com/live2'
+    )
+  })
+
+  it('does not invent a path for an empty value', () => {
+    expect(normalizeIngest('')).toBe('')
+    expect(normalizeIngest('   ')).toBe('')
+  })
+})
 
 describe('destinationUrl', () => {
   // Kick's dashboard gives a URL with a trailing slash and OBS accepts either shape, so

@@ -99,6 +99,10 @@ export interface PlatformSetup {
   channel: string
   ingestUrl: string
   streamKey: string
+
+  /** Whether to forward the OBS stream here. Persisted, so it survives a restart and the
+      relay is listening again before the user thinks to check. */
+  forward: boolean
 }
 
 export type PlatformPatch = Partial<PlatformSetup>
@@ -108,6 +112,7 @@ export interface PlatformConfig {
   channel: string
   ingestUrl: string
   hasStreamKey: boolean
+  forward: boolean
 }
 
 /** Twitch publishes one global ingest for everybody and YouTube's is fixed, so both are
@@ -120,14 +125,16 @@ export const DEFAULT_INGEST: Record<Platform, string> = {
 }
 
 /** What the Broadcast screen shows: where OBS should push, and what is being forwarded. */
+/** `off` means nothing is switched on to forward to. `waiting` means the relay is
+    listening and OBS has not connected. `forwarding` means video is flowing. */
+export type BroadcastStatus = 'off' | 'waiting' | 'forwarding'
+
 export interface BroadcastState {
-  running: boolean
+  status: BroadcastStatus
 
   /** The two values to paste into OBS -> Settings -> Stream -> Custom. */
   obsServer: string
   obsKey: string
-
-  ingestUrl: string
 
   destinations: Platform[]
   error?: string
@@ -165,8 +172,6 @@ export interface ChatApi {
   onPlatforms(cb: (configs: PlatformConfig[]) => void): () => void
 
   broadcast(): Promise<BroadcastState>
-  broadcastStart(platforms: Platform[]): Promise<void>
-  broadcastStop(): Promise<void>
 
   onBroadcast(cb: (state: BroadcastState) => void): () => void
 }

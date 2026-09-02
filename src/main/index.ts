@@ -65,6 +65,7 @@ const relay = new Relay(broadcastRelay)
 
 async function platformsChanged(): Promise<void> {
   broadcastPlatforms()
+  relay.sync()
   await syncChannels()
 }
 
@@ -170,6 +171,7 @@ if (!app.requestSingleInstanceLock()) {
 
     mainWindow.webContents.once('did-finish-load', () => {
       broadcastPlatforms()
+      relay.sync()
 
       void syncChannels()
     })
@@ -192,7 +194,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.on('before-quit', () => {
-    relay.stop()
+    relay.shutdown()
     unregisterIpc()
     void obs.stop()
     bus.detach()

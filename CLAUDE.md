@@ -748,6 +748,27 @@ ffmpeg: an RTMP listener on 1935 that tees every enabled destination. OBS is con
 — server `rtmp://localhost:1935/live`, key the session's relay key — and never learns which
 platforms are downstream.
 
+**There is no start button, and that is the design.** A platform's `forward` switch is
+persisted, and `Relay.sync()` brings the listener in line with it: switched on means
+listening, switched off means not. Pressing Go Live in OBS is what begins forwarding, which
+is the only moment the user was going to act on anyway. `status` is therefore `off` (nothing
+switched on), `waiting` (listening, no encoder yet) or `forwarding`.
+
+**OBS disconnecting ends the ffmpeg process, so the listener is rebuilt.** `-listen 1`
+serves exactly one session and exits, which would otherwise mean one stream per app launch.
+`restart` respawns it, with a doubling backoff for a process that dies inside
+`MIN_HEALTHY_MS` so a busy 1935 cannot spin.
+
+**"Is it forwarding?" is read off ffmpeg's stats line.** It prints `frame=`/`size=` only
+once packets are moving, which is the earliest honest signal that an encoder connected —
+the process starting says nothing, since it starts in order to wait.
+
+**Kick's ingest URL needs `/app` appended and their dashboard does not include it.** The
+value they hand out is a bare host, and the encoder is expected to add the path — OBS users
+hit the same thing. Without it ffmpeg reports `error opening: I/O error`, which names
+neither the cause nor the platform. `normalizeIngest` appends `/app` to any ingest with no
+path of its own, so it fires on Kick and never on Twitch (`/app`) or YouTube (`/live2`).
+
 **`-map 0` is not optional.** Without it ffmpeg's default stream selection hands the tee
 muxer nothing and it dies with "Output file does not contain any stream", which reads like a
 broken pipeline rather than a missing flag.

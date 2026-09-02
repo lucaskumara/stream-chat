@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Copy, Radio, Square } from 'lucide-react'
+import { Copy } from 'lucide-react'
 import type { BroadcastState, Platform } from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { bridge } from '../bridge'
@@ -20,7 +20,6 @@ export function Broadcast(): React.ReactElement {
   const setPane = useStore((s) => s.setSettingsPane)
 
   const [state, setState] = useState<BroadcastState | null>(null)
-  const [chosen, setChosen] = useState<Platform[]>([])
 
   useEffect(() => {
     const { api } = bridge()
@@ -33,15 +32,6 @@ export function Broadcast(): React.ReactElement {
   /** A platform can be forwarded to once it has a key. Twitch and YouTube carry a fixed
       ingest, so in practice that is the moment the key is pasted. */
   const ready = PLATFORMS.filter((p) => platforms.find((c) => c.platform === p)?.hasStreamKey)
-
-  useEffect(() => {
-    setChosen((current) => {
-      const kept = current.filter((p) => ready.includes(p))
-      return kept.length === current.length ? current : kept
-    })
-  }, [ready.join(',')])
-
-  const running = state?.running === true
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto chat-scroll" style={{ background: 'var(--ink-900)' }}>
@@ -91,12 +81,8 @@ export function Broadcast(): React.ReactElement {
               {ready.includes(platform) ? (
                 <Toggle
                   label={`Forward to ${NAME[platform]}`}
-                  on={chosen.includes(platform)}
-                  onChange={(on) =>
-                    setChosen((current) =>
-                      on ? [...current, platform] : current.filter((p) => p !== platform)
-                    )
-                  }
+                  on={platforms.find((c) => c.platform === platform)?.forward === true}
+                  onChange={(on) => void bridge().api.savePlatform(platform, { forward: on })}
                 />
               ) : (
                 <button
@@ -114,32 +100,43 @@ export function Broadcast(): React.ReactElement {
           ))}
         </div>
 
-        <button
-          type="button"
-          disabled={!running && chosen.length === 0}
-          onClick={() => {
-            const { api } = bridge()
-            void (running ? api.broadcastStop() : api.broadcastStart(chosen))
-          }}
-          className="primary-button mt-[18px] flex h-[38px] w-full items-center justify-center gap-[8px] text-[14px]"
-        >
-          {running ? <Square size={14} strokeWidth={2} /> : <Radio size={15} strokeWidth={1.8} />}
-          {running ? 'Stop forwarding' : 'Start forwarding'}
-        </button>
-
-        {running && (
-          <p className="mt-[10px] mb-0 text-[13px]" style={{ color: 'var(--fg-3)' }}>
-            Waiting for OBS. Press Start Streaming in OBS and it goes out to{' '}
-            {state?.destinations.map((p) => NAME[p]).join(', ')}.
-          </p>
-        )}
+        <Status state={state} />
 
         {state?.error && (
-          <p className="mt-[10px] mb-0 text-[13px]" style={{ color: 'var(--error)' }}>
+          <p className="mt-[8px] mb-0 text-[13px]" style={{ color: 'var(--error)' }}>
             {state.error}
           </p>
         )}
       </div>
+    </div>
+  )
+}
+
+/** No start button: a switched-on platform means the relay is listening, and OBS pressing
+    Go Live is what begins the forwarding. */
+function Status({ state }: { state: BroadcastState | null }): React.ReactElement {
+  const status = state?.status ?? 'off'
+
+  const dot =
+    status === 'forwarding' ? '#3fb950' : status === 'waiting' ? 'var(--fg-4)' : 'var(--line-2)'
+
+  const text =
+    status === 'forwarding'
+      ? `Forwarding to ${state?.destinations.map((p) => NAME[p]).join(', ')}`
+      : status === 'waiting'
+        ? 'Listening — press Go Live in OBS'
+        : 'Switch on a platform above to start listening'
+
+  return (
+    <div className="mt-[16px] flex items-center gap-[8px]">
+      <span
+        aria-hidden
+        className="h-[8px] w-[8px] flex-none rounded-full"
+        style={{ background: dot }}
+      />
+      <span className="text-[13px]" style={{ color: 'var(--fg-3)' }}>
+        {text}
+      </span>
     </div>
   )
 }
