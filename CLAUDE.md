@@ -859,12 +859,14 @@ popover, and the popover closes on clear.
 
 ### Sending messages
 
+**Twitch and Kick both send; YouTube does not.** `CAN_SEND` in `Composer.tsx` is the
+renderer's copy of that fact and grows as each lands.
+
 **Sending is a watcher capability, not a feed one.** `ChatWatcher.send?` is optional: absent
 means the platform cannot send in this build at all, which is how the renderer decides
 whether to draw a composer. Present but throwing `SendUnavailableError` means the platform
 can send and this session cannot — signed out, or holding a token minted before the write
-scope. Twitch is the only implementation today; Kick and YouTube panes get no box rather
-than one that only ever refuses.
+scope. YouTube panes get no box rather than one that only ever refuses.
 
 **Twitch sends over Helix regardless of which feed is running.** `POST /chat/messages` needs
 `broadcaster_id` and `sender_id`, so it does not care whether the anonymous IRC feed or the
@@ -875,7 +877,12 @@ EventSub feed is reading — only that a token exists. That is why `send` lives 
 it; `this.channel` is what sending reads `broadcasterId` off, and `detach()` clears it so a
 send between re-resolves fails cleanly instead of addressing a stale channel.
 
-**A 200 from Twitch is not proof the message was said.** The response carries
+**A 200 is not proof the message was said, on either platform.** Twitch and Kick both
+answer 200 while dropping a message — Twitch with `is_sent: false` and a `drop_reason`,
+Kick with `is_sent: false` and a `message`. Both are turned into errors, or the composer
+clears itself and looks successful.
+
+**The Twitch case in detail.** The response carries
 `is_sent: false` with a `drop_reason` when Twitch accepts the call and drops the message —
 followers-only mode, a duplicate, AutoMod. `sendChatMessage` turns that into an error, or
 the composer would clear itself and look successful.
@@ -1060,10 +1067,29 @@ an old one.
 
 ### Accounts and sign-in
 
-**Signing in unlocks nothing yet, on purpose.** All three platforms connect from Settings ->
-Accounts and no feature reads the result. `OAuthAccount.accessToken()` and `TwitchAuth`
-are the seams sending, moderating and stream-key reads will come through. Chat still reads
-anonymously on every platform whether or not an account is connected.
+**Signing in picks the channel and enables the composer.** Twitch and Kick both send;
+YouTube does not yet. `OAuthAccount.accessToken()` and `TwitchAuth` are the seams the rest
+will come through.
+
+**Kick's `streamkey:read` is deliberately not requested, and the OpenAPI spec is why.**
+`api.kick.com/swagger/doc.yaml` lists every path Kick publishes and none of them returns a
+stream key — the scope is documented with nothing behind it. Asking for it would put a
+permission on the consent screen that no code can spend. It goes back the day an endpoint
+appears. Measured separately: an unauthenticated `POST /public/v1/chat` answers a clean
+`401 {"message":"Unauthorized"}` rather than a Cloudflare 403, so the community reports of
+that endpoint being edge-blocked do not reproduce here.
+
+**Kick's own channel comes from `/public/v1/channels` with no parameters**, which is
+documented as returning the authenticated user's channel. The **slug** is what chat connects
+to and it is not always the username, so `identify` reads `slug` for `channel` and only
+borrows `/users` for a nicer display name — a failure there falls back to the slug rather
+than losing the sign-in.
+
+**Kick's send needs a `broadcaster_user_id` from the *public* API, not the one on
+`KickChannel`.** That id comes from Kick's internal v2 API, and assuming the two numbering
+schemes agree would be a guess — the same class of trap as `chatroom.id` versus `channel.id`.
+`KickAccount.broadcasterId(slug)` asks `/public/v1/channels?slug=`, cached per slug because
+a channel's id does not move while it is open.
 
 **Every flow is the platform's own documented one, and every one opens the real browser.**
 Nothing is scraped, no page is driven, and no password passes through this app. An earlier
@@ -1415,6 +1441,7 @@ tests, so nothing bundles them. What is covered:
 | authorize-URL building, scope and refresh-token handling | `accounts/oauth.ts` |
 | PKCE challenges and the redirect state check | `accounts/pkce.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |
+| Kick identity, grants, sending and broadcaster lookup | `kick/auth.ts` |
 
 **Keep the tests out of `src/renderer`, and not only for tidiness.** Tailwind v4 scans the
 renderer root for class candidates and takes them from prose, not just from JSX. Four test

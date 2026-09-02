@@ -80,7 +80,8 @@ const eventsub = new EventSubHub(helix, (status, error) => {
 const irc = new IrcHub()
 
 const sources = new SourceManager(bus, broadcastSources, {
-  twitch: { auth, helix, eventsub, irc }
+  twitch: { auth, helix, eventsub, irc },
+  kick: { account: accounts.kick }
 })
 
 const obs = new ObsServer(

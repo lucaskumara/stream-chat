@@ -12,8 +12,10 @@ import { YouTubeAccount } from '../youtube/auth'
     Nothing here ever sees a password, and no credential is scraped from a page. This
     class is where the difference between the two shapes stops mattering upstream. */
 export class AccountManager {
-  private readonly youtube: YouTubeAccount
-  private readonly kick: KickAccount
+  /** Public because the chat watchers need them: Kick sends through its account, and
+      YouTube will. `PlatformServices` is handed these at construction. */
+  readonly youtube: YouTubeAccount
+  readonly kick: KickAccount
 
   constructor(
     private readonly twitch: TwitchAuth,
@@ -70,11 +72,5 @@ export class AccountManager {
     if (platform === 'youtube') return this.youtube.signOut()
 
     return this.kick.signOut()
-  }
-
-  /** Reached by nothing yet. Sending, moderating and reading a stream key all need an
-      authenticated client, and this is where each will get one. */
-  authenticated(): { youtube: YouTubeAccount; kick: KickAccount } {
-    return { youtube: this.youtube, kick: this.kick }
   }
 }

@@ -2,11 +2,14 @@ import type { Badge, ChatMessage, Fragment, Platform } from "@shared/types";
 import {
   BaseChatWatcher,
   messageId,
+  SendUnavailableError,
   type ChatFeed,
+  type ChatWatcherContext,
   type FeedSink,
   withEmotes,
 } from "../../watcher";
 import type { ChannelLookup, RetryPolicy } from "../../channel";
+import type { KickAccount } from "../../../kick/auth";
 import { splitLinks } from "../../links";
 import { plainTextOf, REPLY_EXCERPT_LIMIT } from "../../fragments";
 import { resolveChannel, type KickChannel } from "./channel";
@@ -62,6 +65,10 @@ interface UserBannedEvent {
   user?: { id?: number };
 }
 
+export interface KickServices {
+  account: KickAccount;
+}
+
 export class KickChatWatcher extends BaseChatWatcher<KickChannel> {
   readonly platform: Platform = "kick";
 
@@ -71,12 +78,41 @@ export class KickChatWatcher extends BaseChatWatcher<KickChannel> {
     jitterMs: 10_000,
   };
 
+  constructor(
+    context: ChatWatcherContext,
+    private readonly services: KickServices,
+  ) {
+    super(context);
+  }
+
   protected resolve(identifier: string): Promise<ChannelLookup<KickChannel>> {
     return resolveChannel(identifier);
   }
 
   protected createFeed(channel: KickChannel, sink: FeedSink): ChatFeed {
     return new KickChatFeed(this.sourceId, channel, sink);
+  }
+
+  /** Reading is anonymous and sending is not, so a Kick chat can be on screen with no
+      account behind it — the composer asks first, and this is the backstop. */
+  async send(text: string): Promise<void> {
+    const { account } = this.services;
+
+    if (!account.isSignedIn()) {
+      throw new SendUnavailableError("Sign in to Kick to send messages.");
+    }
+
+    const channel = this.channel;
+    if (!channel) throw new SendUnavailableError("This channel is not connected.");
+
+    const broadcasterId = await account.broadcasterId(channel.slug);
+    if (broadcasterId === null) {
+      throw new SendUnavailableError(
+        `Kick would not say who owns ${channel.slug}.`,
+      );
+    }
+
+    await account.sendChatMessage(broadcasterId, text);
   }
 }
 

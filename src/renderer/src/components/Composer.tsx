@@ -3,9 +3,15 @@ import { SendHorizontal } from 'lucide-react'
 import type { AccountState, Platform } from '@shared/types'
 import { bridge, remoteMessage } from '../bridge'
 
-/** Which platforms this build can send on at all. Kick and YouTube come next; until they
-    do, their panes get no composer rather than a box that only ever refuses. */
-export const CAN_SEND: readonly Platform[] = ['twitch']
+/** Which platforms this build can send on at all. YouTube comes next; until it does, its
+    pane gets no composer rather than a box that only ever refuses. */
+export const CAN_SEND: readonly Platform[] = ['twitch', 'kick']
+
+const NAME: Record<Platform, string> = {
+  twitch: 'Twitch',
+  youtube: 'YouTube',
+  kick: 'Kick'
+}
 
 const MAX_LENGTH = 500
 
@@ -33,7 +39,7 @@ export function Composer({
 
   if (!CAN_SEND.includes(platform)) return null
 
-  const blocked = blockedReason(account)
+  const blocked = blockedReason(account, platform)
 
   const send = async (): Promise<void> => {
     const body = text.trim()
@@ -119,12 +125,23 @@ export function Composer({
 }
 
 /** Null means the box is usable. Everything else is a reason phrased as the placeholder,
-    so the input itself explains why it will not take a message. */
-function blockedReason(account: AccountState | undefined): string | null {
-  if (!account || account.status !== 'signed-in') return 'Sign in to Twitch to chat'
+    so the input itself explains why it will not take a message. The `send chat` grant is
+    read off the token the account actually holds, so a sign-in predating the write scope
+    reads as "sign in again" rather than failing at the moment of sending. */
+function blockedReason(
+  account: AccountState | undefined,
+  platform: Platform
+): string | null {
+  const name = NAME[platform]
+
+  if (account?.status === 'not-configured') {
+    return `This build cannot sign in to ${name}`
+  }
+
+  if (!account || account.status !== 'signed-in') return `Sign in to ${name} to chat`
 
   if (!account.grants?.includes('send chat')) {
-    return 'Sign in to Twitch again to allow sending'
+    return `Sign in to ${name} again to allow sending`
   }
 
   return null
