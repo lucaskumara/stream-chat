@@ -86,7 +86,10 @@ class Config {
 
     try {
       const json = safeStorage.decryptString(Buffer.from(enc, 'base64'))
-      return { ...blank(platform), ...(JSON.parse(json) as Partial<PlatformSetup>) }
+      return fixIngest(platform, {
+        ...blank(platform),
+        ...(JSON.parse(json) as Partial<PlatformSetup>)
+      })
     } catch (err) {
       console.warn(`[config] ${platform} setup decrypt failed, treating as unset:`, err)
       return blank(platform)
@@ -103,7 +106,10 @@ class Config {
   /** A patch, so the renderer can save a channel without having to send back a stream
       key it was never given. An empty string clears a field; undefined leaves it. */
   update(platform: Platform, patch: PlatformPatch): PlatformSetup {
-    const next: PlatformSetup = { ...this.setup(platform), ...definedOnly(patch) }
+    const next = fixIngest(platform, {
+      ...this.setup(platform),
+      ...definedOnly(patch)
+    })
 
     if (!safeStorage.isEncryptionAvailable()) {
       console.warn('[config] OS encryption unavailable — setup kept in memory only')
@@ -117,6 +123,15 @@ class Config {
 
     return next
   }
+}
+
+/** Twitch and YouTube publish one ingest for everybody, so theirs is not user data — it
+    is a constant, and a stale value saved by an earlier build must not outrank it. Kick's
+    is per-channel, so whatever is stored is the only thing that can be right. */
+function fixIngest(platform: Platform, setup: PlatformSetup): PlatformSetup {
+  const fixed = DEFAULT_INGEST[platform]
+
+  return fixed ? { ...setup, ingestUrl: fixed } : setup
 }
 
 function definedOnly(patch: PlatformPatch): Partial<PlatformSetup> {
