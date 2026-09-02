@@ -15,6 +15,11 @@ files:
   - '!{.env,.env.*,.npmrc,.gitattributes}'
   - '!**/*.tsbuildinfo'
 
+# ffmpeg cannot be executed from inside app.asar, so it is unpacked beside it. The relay
+# resolves its path by swapping app.asar for app.asar.unpacked.
+asarUnpack:
+  - 'node_modules/ffmpeg-static/**'
+
 win:
   executableName: stream-chat
   target:

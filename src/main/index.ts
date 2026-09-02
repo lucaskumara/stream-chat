@@ -9,6 +9,7 @@ import { ObsServer } from './obs/server'
 import { IrcHub } from './chat/platforms/twitch'
 import { keepRendererAlive } from './lifecycle'
 import { config } from './config'
+import { Relay } from './broadcast'
 
 const isDev = !app.isPackaged
 
@@ -53,6 +54,14 @@ async function runSync(): Promise<void> {
     else await sources.removeByPlatform(platform)
   }
 }
+
+function broadcastRelay(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC.broadcastState, relay.state())
+  }
+}
+
+const relay = new Relay(broadcastRelay)
 
 async function platformsChanged(): Promise<void> {
   broadcastPlatforms()
@@ -152,7 +161,7 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     app.setAppUserModelId('com.lucaskumara.streamchat')
 
-    registerIpc(sources, obs, bus, platformsChanged)
+    registerIpc(sources, obs, bus, relay, platformsChanged)
 
     void obs.start()
 
@@ -183,6 +192,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.on('before-quit', () => {
+    relay.stop()
     unregisterIpc()
     void obs.stop()
     bus.detach()

@@ -6,6 +6,7 @@ import type { MessageBus } from './bus'
 import type { ObsServer } from './obs/server'
 import type { SourceManager } from './sources'
 import { config } from './config'
+import type { Relay } from './broadcast'
 
 const MAX_LABEL_LENGTH = 80
 const MAX_IDENTIFIER_LENGTH = 100
@@ -30,9 +31,14 @@ export const IPC = {
   platforms: 'platforms:list',
   savePlatform: 'platforms:save',
 
+  broadcast: 'broadcast:state',
+  broadcastStart: 'broadcast:start',
+  broadcastStop: 'broadcast:stop',
+
   batch: 'chat:batch',
   sourceState: 'sources:state',
-  platformState: 'platforms:state'
+  platformState: 'platforms:state',
+  broadcastState: 'broadcast:changed'
 } as const
 
 type IpcHandler = Parameters<typeof ipcMain.handle>[1]
@@ -50,10 +56,12 @@ export function registerIpc(
   sources: SourceManager,
   obs: ObsServer,
   bus: MessageBus,
+  relay: Relay,
   onPlatformChange: () => Promise<void>
 ): void {
   registerSourceHandlers(sources, bus)
   registerPlatformHandlers(onPlatformChange)
+  registerBroadcastHandlers(relay)
 
   registerShellHandlers()
   registerWindowHandlers()
@@ -81,6 +89,16 @@ function registerPlatformHandlers(onPlatformChange: () => Promise<void>): void {
 
     await onPlatformChange()
   })
+}
+
+function registerBroadcastHandlers(relay: Relay): void {
+  handle(IPC.broadcast, () => relay.state())
+
+  handle(IPC.broadcastStart, (_e, platforms: unknown) => {
+    relay.start(parsePlatforms(platforms))
+  })
+
+  handle(IPC.broadcastStop, () => relay.stop())
 }
 
 function registerSourceHandlers(sources: SourceManager, bus: MessageBus): void {
@@ -179,6 +197,12 @@ export function parseWebUrl(value: unknown): string {
     throw new Error(`refusing to open protocol: ${parsed.protocol}`)
   }
   return parsed.toString()
+}
+
+export function parsePlatforms(value: unknown): Platform[] {
+  if (!Array.isArray(value)) throw new Error('platforms must be an array')
+
+  return value.map(parsePlatform)
 }
 
 export function parsePlatform(value: unknown): Platform {

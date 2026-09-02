@@ -741,6 +741,48 @@ makes the same URL usable as an on-stream browser *source* rather than a dock. W
 default: `Number(null)` is `0` and `Number.isFinite(0)` is true, so guarding only on finiteness
 silently snapped every dock to the smallest font in `CHAT_FONT_SIZES`.
 
+### Broadcast (the relay)
+
+**OBS pushes into the app, and the app fans it out.** `Relay` in `main/broadcast/` runs one
+ffmpeg: an RTMP listener on 1935 that tees every enabled destination. OBS is configured once
+— server `rtmp://localhost:1935/live`, key the session's relay key — and never learns which
+platforms are downstream.
+
+**`-map 0` is not optional.** Without it ffmpeg's default stream selection hands the tee
+muxer nothing and it dies with "Output file does not contain any stream", which reads like a
+broken pipeline rather than a missing flag.
+
+**Everything is `-c copy`.** No transcode, so the relay costs almost no CPU and every
+platform gets byte-identical video — measured at three destinations with matching MD5s. The
+price is that OBS's single encode must satisfy the strictest platform: 2s keyframes and
+6000 kbps, which is Twitch's ceiling.
+
+**`onfail=ignore` on every destination.** Measured on ffmpeg 6.1 a dying destination leaves
+the others running either way, but the documented default is to abort, so it is set rather
+than assumed.
+
+**A clean teardown looks exactly like a fault on ffmpeg's stderr.** "Error retrieving a
+packet from demuxer: I/O error" is what a *finished* stream prints. Matching on the word
+error therefore reports a failure every time the user presses stop — `REAL_FAILURE` narrows
+it to a destination actually refusing us, and `stopping` suppresses it during teardown.
+
+**The relay key is a path segment, and that is what protects the port.** RTMP matches the
+whole application path, so a push carrying the wrong key never reaches us. It is generated
+per session rather than stored: a relay that is not running has no key worth keeping.
+ffmpeg listens on `127.0.0.1` while OBS is told `localhost`, so nothing on the network can
+push in.
+
+**ffmpeg cannot be run from inside `app.asar`.** `asarUnpack` puts `ffmpeg-static` beside
+the archive and `ffmpegPath()` swaps `app.asar` for `app.asar.unpacked`. It adds ~79MB, so
+the installer goes from 113MB to roughly 190MB.
+
+**A local relay saves no upload bandwidth.** Three destinations is 3x upstream whether the
+fan-out happens here or in an OBS multi-output plugin — only a cloud relay changes that,
+which is what Restream sells. What this buys is one place to configure and one button.
+
+**No account is needed for any of it.** Stream keys are paste-once values; Twitch and Kick
+go live on RTMP connect, and YouTube does too as long as Auto-start is on in Studio.
+
 ### Renderer UI
 
 **There is no component library any more — the chrome is hand-built.** v1 built the tab
@@ -1196,7 +1238,10 @@ inline `style` attributes, which `style-src` governs too. Verified against the b
 to the link server, so it keeps a `connect-src` of `ws://127.0.0.1:*` that the app's
 `connect-src 'none'` must not gain.
 
-**Only `ws` and `youtubei.js` reach the installer.** electron-builder ships `dependencies` and
+**`ffmpeg-static` is a dependency, not a devDependency**, and is `asarUnpack`ed — a binary
+inside the archive cannot be executed. It is by far the largest thing in the build.
+
+**Only `ws`, `youtubei.js` and `ffmpeg-static` reach the installer.** electron-builder ships `dependencies` and
 prunes `devDependencies`, so the packed `node_modules` is `ws`, `youtubei.js` and its three
 transitive packages — nothing else. A package in the wrong list is a shipping bug.
 
@@ -1342,6 +1387,7 @@ tests, so nothing bundles them. What is covered:
 | the per-platform channel parse | `renderer/connect.ts` |
 | the merged-column k-way merge | `renderer/merge.ts` |
 | the split/merged column model | `renderer/layout.ts` |
+| relay destinations and ffmpeg arguments | `broadcast/relay.ts` |
 | the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |

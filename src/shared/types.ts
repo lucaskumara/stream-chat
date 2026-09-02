@@ -119,6 +119,20 @@ export const DEFAULT_INGEST: Record<Platform, string> = {
   kick: ''
 }
 
+/** What the Broadcast screen shows: where OBS should push, and what is being forwarded. */
+export interface BroadcastState {
+  running: boolean
+
+  /** The two values to paste into OBS -> Settings -> Stream -> Custom. */
+  obsServer: string
+  obsKey: string
+
+  ingestUrl: string
+
+  destinations: Platform[]
+  error?: string
+}
+
 export type HostPlatform = 'darwin' | 'win32' | 'linux' | 'other'
 
 export interface ChatApi {
@@ -149,4 +163,10 @@ export interface ChatApi {
   savePlatform(platform: Platform, patch: PlatformPatch): Promise<void>
 
   onPlatforms(cb: (configs: PlatformConfig[]) => void): () => void
+
+  broadcast(): Promise<BroadcastState>
+  broadcastStart(platforms: Platform[]): Promise<void>
+  broadcastStop(): Promise<void>
+
+  onBroadcast(cb: (state: BroadcastState) => void): () => void
 }

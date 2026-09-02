@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AddSourceRequest,
+  BroadcastState,
   ChatApi,
   ChatBatch,
   ChatMessage,
@@ -27,9 +28,13 @@ const IPC = {
   windowMaximized: 'window:maximized',
   platforms: 'platforms:list',
   savePlatform: 'platforms:save',
+  broadcast: 'broadcast:state',
+  broadcastStart: 'broadcast:start',
+  broadcastStop: 'broadcast:stop',
   batch: 'chat:batch',
   sourceState: 'sources:state',
-  platformState: 'platforms:state'
+  platformState: 'platforms:state',
+  broadcastState: 'broadcast:changed'
 } as const
 
 const HOSTS: HostPlatform[] = ['darwin', 'win32', 'linux']
@@ -104,6 +109,21 @@ const api: ChatApi = {
     ipcRenderer.on(IPC.platformState, handler)
     return () => {
       ipcRenderer.off(IPC.platformState, handler)
+    }
+  },
+
+  broadcast: (): Promise<BroadcastState> => ipcRenderer.invoke(IPC.broadcast),
+
+  broadcastStart: (platforms: Platform[]): Promise<void> =>
+    ipcRenderer.invoke(IPC.broadcastStart, platforms),
+
+  broadcastStop: (): Promise<void> => ipcRenderer.invoke(IPC.broadcastStop),
+
+  onBroadcast: (cb: (state: BroadcastState) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, state: BroadcastState): void => cb(state)
+    ipcRenderer.on(IPC.broadcastState, handler)
+    return () => {
+      ipcRenderer.off(IPC.broadcastState, handler)
     }
   }
 }
