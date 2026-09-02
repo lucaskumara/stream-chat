@@ -13,21 +13,16 @@ const NAME: Record<Platform, string> = {
   kick: 'Kick'
 }
 
-/** Where each platform actually shows these values. Opened in the real browser, since
-    that is where the user is already signed in. */
+/** Where each platform actually shows these values, and which of them it shows. Twitch
+    publishes no stream URL anywhere — the encoder picks an ingest server — so its button
+    only promises the key. Opened in the real browser, where the user is already signed in. */
 const HELP: Record<Platform, { label: string; url: string }> = {
-  twitch: {
-    label: 'Twitch dashboard → Settings → Stream',
-    url: 'https://dashboard.twitch.tv/settings/stream'
-  },
+  twitch: { label: 'Get your stream key', url: 'https://dashboard.twitch.tv/settings/stream' },
   youtube: {
-    label: 'YouTube Studio → Go live → Stream',
+    label: 'Get your URL and key',
     url: 'https://studio.youtube.com/channel/UC/livestreaming'
   },
-  kick: {
-    label: 'Kick dashboard → Settings → Stream',
-    url: 'https://kick.com/dashboard/settings/stream'
-  }
+  kick: { label: 'Get your URL and key', url: 'https://kick.com/dashboard/settings/stream' }
 }
 
 const CHANNEL_HINT: Record<Platform, string> = {
@@ -36,10 +31,15 @@ const CHANNEL_HINT: Record<Platform, string> = {
   kick: 'kick.com/<name>'
 }
 
-/** YouTube will not start a broadcast just because video arrives unless this is on. */
-const EXTRA: Partial<Record<Platform, string>> = {
-  youtube: 'Turn on Auto-start in YouTube Studio, or pushing video will not go live.',
-  kick: 'Kick gives every channel its own stream URL, so both fields must be pasted.'
+const EXTRA: Record<Platform, string> = {
+  twitch:
+    'Twitch shows a stream key but no URL — the one above is Twitch’s global ingest and is already correct.',
+
+  /** YouTube will not start a broadcast just because video arrives unless this is on. */
+  youtube:
+    'Studio shows both. Turn on Auto-start there, or pushing video will not go live.',
+
+  kick: 'Kick gives every channel its own stream URL, so both come from your dashboard.'
 }
 
 export function Platforms(): React.ReactElement {
@@ -92,7 +92,7 @@ function PlatformCard({
           onClick={() => void bridge().api.openExternal(help.url)}
         >
           <ExternalLink size={12} strokeWidth={1.8} />
-          Where to find these
+          {help.label}
         </button>
       </div>
 
@@ -112,7 +112,7 @@ function PlatformCard({
           platform={platform}
           field="ingestUrl"
           label="Stream URL"
-          placeholder={DEFAULT_INGEST[platform] || 'rtmps://…'}
+          placeholder={DEFAULT_INGEST[platform] || 'rtmps://…from your Kick dashboard'}
           value={config?.ingestUrl ?? ''}
         />
 
@@ -126,11 +126,9 @@ function PlatformCard({
           alreadySet={config?.hasStreamKey === true}
         />
 
-        {EXTRA[platform] && (
-          <p className="mt-[10px] mb-0 text-[12px]" style={{ color: 'var(--fg-4)' }}>
-            {EXTRA[platform]}
-          </p>
-        )}
+        <p className="mt-[10px] mb-0 text-[12px]" style={{ color: 'var(--fg-4)' }}>
+          {EXTRA[platform]}
+        </p>
       </div>
     </section>
   )
