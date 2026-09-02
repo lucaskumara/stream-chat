@@ -12,8 +12,7 @@ vi.mock('electron', () => ({
 
 const {
   parseAddSource,
-  parseMessageText,
-  parseWatchTarget,
+  parsePlatformPatch,
   parsePlatform,
   parseSourceIds,
   parseWebUrl,
@@ -146,57 +145,43 @@ describe('parseAddSource', () => {
   })
 })
 
-describe('parseMessageText', () => {
-  it('trims surrounding whitespace', () => {
-    expect(parseMessageText('  hello  ')).toBe('hello')
+describe('parsePlatformPatch', () => {
+  it('reads the three fields', () => {
+    expect(
+      parsePlatformPatch({ channel: 'excorpse', ingestUrl: 'rtmp://x', streamKey: 'k' })
+    ).toEqual({ channel: 'excorpse', ingestUrl: 'rtmp://x', streamKey: 'k' })
   })
 
-  it('refuses a message that is empty or only whitespace', () => {
-    for (const value of ['', '   ', '\n\t']) {
-      expect(() => parseMessageText(value)).toThrow(/empty/)
+  // The renderer is never given the stream key back, so it saves a channel by sending
+  // that field alone — an absent field must mean "leave it", not "clear it".
+  it('carries only the fields that were sent', () => {
+    expect(parsePlatformPatch({ channel: 'excorpse' })).toEqual({ channel: 'excorpse' })
+  })
+
+  it('accepts an empty patch', () => {
+    expect(parsePlatformPatch({})).toEqual({})
+  })
+
+  // A stream key copied out of a dashboard drags whitespace in more often than not.
+  it('trims every field', () => {
+    expect(parsePlatformPatch({ streamKey: '  live_123  ' })).toEqual({ streamKey: 'live_123' })
+  })
+
+  it('lets an empty string through, which is how a field is cleared', () => {
+    expect(parsePlatformPatch({ streamKey: '' })).toEqual({ streamKey: '' })
+  })
+
+  it('refuses a non-string field', () => {
+    expect(() => parsePlatformPatch({ channel: 7 })).toThrow(/channel must be a string/)
+  })
+
+  it('refuses a patch that is not an object', () => {
+    for (const value of [null, undefined, 'twitch', 7]) {
+      expect(() => parsePlatformPatch(value)).toThrow(/must be an object/)
     }
   })
 
-  it('refuses a non-string', () => {
-    for (const value of [null, undefined, 7, {}, []]) {
-      expect(() => parseMessageText(value)).toThrow()
-    }
-  })
-
-  // Twitch caps a message at 500 characters, so main clamps rather than trusting the
-  // renderer to have done it and spending a request to be told no.
-  it('clamps to the platform limit', () => {
-    expect(parseMessageText('x'.repeat(600))).toHaveLength(500)
-  })
-
-  it('leaves a message at the limit untouched', () => {
-    expect(parseMessageText('x'.repeat(500))).toHaveLength(500)
-  })
-})
-
-describe('parseWatchTarget', () => {
-  // Null is the normal state: no override, so the pane shows the account's own channel.
-  it('treats null and undefined as "back to my own channel"', () => {
-    expect(parseWatchTarget(null)).toBeNull()
-    expect(parseWatchTarget(undefined)).toBeNull()
-  })
-
-  it('treats an empty or blank string the same way', () => {
-    expect(parseWatchTarget('')).toBeNull()
-    expect(parseWatchTarget('   ')).toBeNull()
-  })
-
-  it('trims a channel name', () => {
-    expect(parseWatchTarget('  lofigirl  ')).toBe('lofigirl')
-  })
-
-  it('refuses a non-string that is not null', () => {
-    for (const value of [7, {}, [], true]) {
-      expect(() => parseWatchTarget(value)).toThrow()
-    }
-  })
-
-  it('clamps an absurdly long identifier', () => {
-    expect(parseWatchTarget('x'.repeat(500))).toHaveLength(100)
+  it('ignores fields it does not know', () => {
+    expect(parsePlatformPatch({ channel: 'x', nonsense: 'y' })).toEqual({ channel: 'x' })
   })
 })

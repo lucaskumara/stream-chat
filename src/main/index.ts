@@ -1,16 +1,14 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
-import type { Platform, SourceState } from '@shared/types'
+import type { SourceState } from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { MessageBus } from './bus'
 import { SourceManager } from './sources'
-import { IPC, registerIpc, unregisterIpc } from './ipc'
+import { IPC, platformConfigs, registerIpc, unregisterIpc } from './ipc'
 import { ObsServer } from './obs/server'
-import { TwitchAuth } from './twitch/auth'
-import { Helix } from './twitch/helix'
-import { EventSubHub, IrcHub } from './chat/platforms/twitch'
+import { IrcHub } from './chat/platforms/twitch'
 import { keepRendererAlive } from './lifecycle'
-import { AccountManager } from './accounts'
+import { config } from './config'
 
 const isDev = !app.isPackaged
 
@@ -26,20 +24,18 @@ function broadcastSources(states: SourceState[]): void {
   obs.sourcesChanged()
 }
 
-function broadcastAccounts(): void {
+function broadcastPlatforms(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC.accountState, accounts.list())
+    mainWindow.webContents.send(IPC.platformState, platformConfigs())
   }
-
-  void syncOwnChannels()
 }
 
-/** The app opens one chat per platform and it is always the signed-in user's own, so
-    every account change is also a source change: a sign-in opens that channel, a sign-out
-    closes it. This is the only place a source is created. */
+/** The app opens one chat per platform, and which one comes from the settings screen.
+    Every save is therefore also a source change. This is the only place a source is
+    created. Single-flighted, because saves arrive in bursts as fields are edited. */
 let syncing: Promise<void> | null = null
 
-function syncOwnChannels(): Promise<void> {
+function syncChannels(): Promise<void> {
   syncing ??= runSync().finally(() => {
     syncing = null
   })
@@ -47,41 +43,26 @@ function syncOwnChannels(): Promise<void> {
   return syncing
 }
 
-/** A channel being watched instead of the account's own. Sending works into any channel —
-    `broadcaster_id` is the target and `sender_id` is you — so this is how another chat gets
-    read and typed into without weakening the rule that a sign-in picks the channel. */
-const watching = new Map<Platform, string>()
-
-async function watchChannel(platform: Platform, identifier: string | null): Promise<void> {
-  if (identifier) watching.set(platform, identifier)
-  else watching.delete(platform)
-
-  await syncOwnChannels()
-}
-
 async function runSync(): Promise<void> {
-  for (const platform of PLATFORMS) {
-    const wanted = watching.get(platform) ?? accounts.ownChannel(platform)
+  const setup = config().all()
 
-    if (wanted) await sources.ensureOnly(platform, wanted)
+  for (const platform of PLATFORMS) {
+    const channel = setup[platform].channel
+
+    if (channel) await sources.ensureOnly(platform, channel)
     else await sources.removeByPlatform(platform)
   }
 }
 
-const auth = new TwitchAuth(broadcastAccounts)
-const helix = new Helix(auth)
-
-const accounts = new AccountManager(auth, broadcastAccounts)
-
-const eventsub = new EventSubHub(helix, (status, error) => {
-  if (status === 'error') console.warn('[eventsub]', error)
-})
+async function platformsChanged(): Promise<void> {
+  broadcastPlatforms()
+  await syncChannels()
+}
 
 const irc = new IrcHub()
 
 const sources = new SourceManager(bus, broadcastSources, {
-  twitch: { auth, helix, eventsub, irc },
-  kick: { account: accounts.kick }
+  twitch: { irc }
 })
 
 const obs = new ObsServer(
@@ -171,7 +152,7 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     app.setAppUserModelId('com.lucaskumara.streamchat')
 
-    registerIpc(sources, accounts, obs, bus, watchChannel)
+    registerIpc(sources, obs, bus, platformsChanged)
 
     void obs.start()
 
@@ -179,9 +160,9 @@ if (!app.requestSingleInstanceLock()) {
     bus.attach(mainWindow)
 
     mainWindow.webContents.once('did-finish-load', () => {
-      broadcastAccounts()
+      broadcastPlatforms()
 
-      void accounts.restore().then(broadcastAccounts)
+      void syncChannels()
     })
 
     mainWindow.on('closed', () => {
@@ -205,8 +186,6 @@ if (!app.requestSingleInstanceLock()) {
     unregisterIpc()
     void obs.stop()
     bus.detach()
-    auth.cancelPolling()
-    eventsub.shutdown()
     irc.shutdown()
     void sources.disconnectAll()
   })

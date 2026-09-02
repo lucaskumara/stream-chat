@@ -1,12 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
-  AccountState,
   AddSourceRequest,
   ChatApi,
   ChatBatch,
   ChatMessage,
   HostPlatform,
   Platform,
+  PlatformConfig,
+  PlatformPatch,
   SourceState
 } from '@shared/types'
 
@@ -16,8 +17,6 @@ const IPC = {
   removeSource: 'sources:remove',
   reorderSources: 'sources:reorder',
   sourceBacklog: 'sources:backlog',
-  sendMessage: 'chat:send',
-  watchChannel: 'sources:watch',
   openExternal: 'shell:open-external',
   copyText: 'clipboard:write',
   obsLink: 'obs:link',
@@ -26,12 +25,11 @@ const IPC = {
   windowClose: 'window:close',
   windowIsMaximized: 'window:is-maximized',
   windowMaximized: 'window:maximized',
-  accounts: 'accounts:list',
-  accountSignIn: 'accounts:sign-in',
-  accountSignOut: 'accounts:sign-out',
+  platforms: 'platforms:list',
+  savePlatform: 'platforms:save',
   batch: 'chat:batch',
   sourceState: 'sources:state',
-  accountState: 'accounts:state'
+  platformState: 'platforms:state'
 } as const
 
 const HOSTS: HostPlatform[] = ['darwin', 'win32', 'linux']
@@ -54,12 +52,6 @@ const api: ChatApi = {
 
   sourceBacklog: (sourceId: string): Promise<ChatMessage[]> =>
     ipcRenderer.invoke(IPC.sourceBacklog, sourceId),
-
-  sendMessage: (sourceId: string, text: string): Promise<void> =>
-    ipcRenderer.invoke(IPC.sendMessage, sourceId, text),
-
-  watchChannel: (platform: Platform, identifier: string | null): Promise<void> =>
-    ipcRenderer.invoke(IPC.watchChannel, platform, identifier),
 
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke(IPC.openExternal, url),
@@ -101,19 +93,17 @@ const api: ChatApi = {
     }
   },
 
-  accounts: (): Promise<AccountState[]> => ipcRenderer.invoke(IPC.accounts),
+  platforms: (): Promise<PlatformConfig[]> => ipcRenderer.invoke(IPC.platforms),
 
-  accountSignIn: (platform: Platform): Promise<void> =>
-    ipcRenderer.invoke(IPC.accountSignIn, platform),
+  savePlatform: (platform: Platform, patch: PlatformPatch): Promise<void> =>
+    ipcRenderer.invoke(IPC.savePlatform, platform, patch),
 
-  accountSignOut: (platform: Platform): Promise<void> =>
-    ipcRenderer.invoke(IPC.accountSignOut, platform),
-
-  onAccounts: (cb: (states: AccountState[]) => void): (() => void) => {
-    const handler = (_e: Electron.IpcRendererEvent, states: AccountState[]): void => cb(states)
-    ipcRenderer.on(IPC.accountState, handler)
+  onPlatforms: (cb: (configs: PlatformConfig[]) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, configs: PlatformConfig[]): void =>
+      cb(configs)
+    ipcRenderer.on(IPC.platformState, handler)
     return () => {
-      ipcRenderer.off(IPC.accountState, handler)
+      ipcRenderer.off(IPC.platformState, handler)
     }
   }
 }

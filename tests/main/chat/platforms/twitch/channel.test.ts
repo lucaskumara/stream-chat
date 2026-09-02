@@ -1,6 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { TwitchAuth } from "@main/twitch/auth";
-import type { Helix } from "@main/twitch/helix";
 
 const twitchGql = vi.fn();
 
@@ -10,26 +8,17 @@ vi.mock("@main/chat/platforms/twitch/gql", () => ({
 
 const { resolveChannel } = await import("@main/chat/platforms/twitch/channel");
 
-const signedOut = { isSignedIn: () => false } as unknown as TwitchAuth;
-const signedIn = { isSignedIn: () => true } as unknown as TwitchAuth;
-
-function helixReturning(user: unknown): Helix {
-  return { getUserByLogin: async () => user } as unknown as Helix;
-}
-
-const noHelix = {} as Helix;
-
 beforeEach(() => {
   twitchGql.mockReset();
 });
 
-describe("resolveChannel, signed out", () => {
+describe("resolveChannel", () => {
   // Twitch chat reads whether or not the channel is live, so a channel that
   // exists always connects — and must carry the cased name when it does.
   it("takes the cased display name from anonymous GQL", async () => {
     twitchGql.mockResolvedValue({ user: { id: "100", displayName: "Excorpse" } });
 
-    const lookup = await resolveChannel("excorpse", signedOut, noHelix);
+    const lookup = await resolveChannel("excorpse");
 
     expect(lookup.state).toBe("ok");
     expect(lookup.state === "ok" && lookup.channel.displayName).toBe("Excorpse");
@@ -39,7 +28,7 @@ describe("resolveChannel, signed out", () => {
   it("carries the numeric user id 7TV needs, not the login", async () => {
     twitchGql.mockResolvedValue({ user: { id: "100289331", displayName: "Excorpse" } });
 
-    const lookup = await resolveChannel("excorpse", signedOut, noHelix);
+    const lookup = await resolveChannel("excorpse");
 
     expect(lookup.state === "ok" && lookup.channel.emotes).toEqual({
       platform: "twitch",
@@ -50,7 +39,7 @@ describe("resolveChannel, signed out", () => {
   it("strips a leading @ and lowercases before asking", async () => {
     twitchGql.mockResolvedValue({ user: { id: "1", displayName: "Excorpse" } });
 
-    await resolveChannel("@ExCorpse", signedOut, noHelix);
+    await resolveChannel("@ExCorpse");
 
     expect(twitchGql).toHaveBeenCalledWith(expect.any(String), { login: "excorpse" });
   });
@@ -59,7 +48,7 @@ describe("resolveChannel, signed out", () => {
   it("refuses a login nobody owns", async () => {
     twitchGql.mockResolvedValue({ user: null });
 
-    const lookup = await resolveChannel("nobodyowns", signedOut, noHelix);
+    const lookup = await resolveChannel("nobodyowns");
 
     expect(lookup.state).toBe("missing");
     expect(lookup.state === "missing" && lookup.reason).toMatch(/nobodyowns/);
@@ -70,7 +59,7 @@ describe("resolveChannel, signed out", () => {
   it("still connects when GQL is unreachable, falling back to the login", async () => {
     twitchGql.mockResolvedValue(null);
 
-    const lookup = await resolveChannel("excorpse", signedOut, noHelix);
+    const lookup = await resolveChannel("excorpse");
 
     expect(lookup.state).toBe("ok");
     expect(lookup.state === "ok" && lookup.channel.displayName).toBe("excorpse");
@@ -79,48 +68,12 @@ describe("resolveChannel, signed out", () => {
   it("treats a thrown GQL error the same way", async () => {
     twitchGql.mockRejectedValue(new Error("socket hang up"));
 
-    expect((await resolveChannel("excorpse", signedOut, noHelix)).state).toBe("ok");
+    expect((await resolveChannel("excorpse")).state).toBe("ok");
   });
 
   it("refuses an empty identifier before asking anything", async () => {
-    expect((await resolveChannel("   ", signedOut, noHelix)).state).toBe("missing");
+    expect((await resolveChannel("   ")).state).toBe("missing");
     expect(twitchGql).not.toHaveBeenCalled();
   });
 });
 
-describe("resolveChannel, signed in", () => {
-  it("takes the cased display name from Helix", async () => {
-    const helix = helixReturning({ id: "100", login: "excorpse", display_name: "Excorpse" });
-
-    const lookup = await resolveChannel("excorpse", signedIn, helix);
-
-    expect(lookup.state === "ok" && lookup.channel.displayName).toBe("Excorpse");
-  });
-
-  it("falls back to the login when Helix has no display name", async () => {
-    const helix = helixReturning({ id: "100", login: "excorpse", display_name: "" });
-
-    const lookup = await resolveChannel("excorpse", signedIn, helix);
-
-    expect(lookup.state === "ok" && lookup.channel.displayName).toBe("excorpse");
-  });
-
-  it("refuses a login Helix does not know", async () => {
-    expect((await resolveChannel("nobody", signedIn, helixReturning(null))).state).toBe(
-      "missing"
-    );
-  });
-
-  it("retries rather than refusing when Helix throws", async () => {
-    const helix = {
-      getUserByLogin: async () => {
-        throw new Error("503 from Twitch");
-      }
-    } as unknown as Helix;
-
-    expect(await resolveChannel("excorpse", signedIn, helix)).toEqual({
-      state: "unreachable",
-      reason: "503 from Twitch"
-    });
-  });
-});

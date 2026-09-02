@@ -114,24 +114,6 @@ export class SourceManager {
     })
   }
 
-  /** Which platforms can send at all, so the renderer draws a composer only where one
-      could work. This is a capability of the code, not of the account — a signed-out
-      Twitch still reports true and refuses with a reason when asked to send. */
-  canSend(sourceId: string): boolean {
-    return typeof this.entries.get(sourceId)?.watcher.send === 'function'
-  }
-
-  async send(sourceId: string, text: string): Promise<void> {
-    const entry = this.entries.get(sourceId)
-    if (!entry) throw new Error('no such chat')
-
-    if (!entry.watcher.send) {
-      throw new Error(`sending is not supported on ${entry.state.platform} yet`)
-    }
-
-    await entry.watcher.send(text)
-  }
-
   async remove(sourceId: string): Promise<void> {
     const entry = this.entries.get(sourceId)
     if (!entry) return

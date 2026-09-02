@@ -1,11 +1,11 @@
 import { BrowserWindow, clipboard, ipcMain, shell } from 'electron'
-import type { AddSourceRequest, Platform } from '@shared/types'
+import type { AddSourceRequest, Platform, PlatformConfig, PlatformPatch } from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { obsChatPath } from '@shared/obs'
 import type { MessageBus } from './bus'
 import type { ObsServer } from './obs/server'
 import type { SourceManager } from './sources'
-import type { AccountManager } from './accounts'
+import { config } from './config'
 
 const MAX_LABEL_LENGTH = 80
 const MAX_IDENTIFIER_LENGTH = 100
@@ -17,8 +17,6 @@ export const IPC = {
   removeSource: 'sources:remove',
   reorderSources: 'sources:reorder',
   sourceBacklog: 'sources:backlog',
-  sendMessage: 'chat:send',
-  watchChannel: 'sources:watch',
   openExternal: 'shell:open-external',
   copyText: 'clipboard:write',
   obsLink: 'obs:link',
@@ -29,13 +27,12 @@ export const IPC = {
   windowIsMaximized: 'window:is-maximized',
   windowMaximized: 'window:maximized',
 
-  accounts: 'accounts:list',
-  accountSignIn: 'accounts:sign-in',
-  accountSignOut: 'accounts:sign-out',
+  platforms: 'platforms:list',
+  savePlatform: 'platforms:save',
 
   batch: 'chat:batch',
   sourceState: 'sources:state',
-  accountState: 'accounts:state'
+  platformState: 'platforms:state'
 } as const
 
 type IpcHandler = Parameters<typeof ipcMain.handle>[1]
@@ -51,21 +48,39 @@ function handle(channel: string, listener: IpcHandler): void {
 
 export function registerIpc(
   sources: SourceManager,
-  accounts: AccountManager,
   obs: ObsServer,
   bus: MessageBus,
-  watch: (platform: Platform, identifier: string | null) => Promise<void>
+  onPlatformChange: () => Promise<void>
 ): void {
   registerSourceHandlers(sources, bus)
-
-  handle(IPC.watchChannel, async (_e, platform: unknown, identifier: unknown) => {
-    await watch(parsePlatform(platform), parseWatchTarget(identifier))
-  })
+  registerPlatformHandlers(onPlatformChange)
 
   registerShellHandlers()
   registerWindowHandlers()
-  registerAccountHandlers(sources, accounts)
   registerObsHandlers(sources, obs)
+}
+
+/** The stream key is write-only from the renderer's side: it can set one and be told
+    whether one exists, but never read it back. */
+export function platformConfigs(): PlatformConfig[] {
+  const all = config().all()
+
+  return PLATFORMS.map((platform) => ({
+    platform,
+    channel: all[platform].channel,
+    ingestUrl: all[platform].ingestUrl,
+    hasStreamKey: all[platform].streamKey.length > 0
+  }))
+}
+
+function registerPlatformHandlers(onPlatformChange: () => Promise<void>): void {
+  handle(IPC.platforms, () => platformConfigs())
+
+  handle(IPC.savePlatform, async (_e, platform: unknown, patch: unknown) => {
+    config().update(parsePlatform(platform), parsePlatformPatch(patch))
+
+    await onPlatformChange()
+  })
 }
 
 function registerSourceHandlers(sources: SourceManager, bus: MessageBus): void {
@@ -87,33 +102,8 @@ function registerSourceHandlers(sources: SourceManager, bus: MessageBus): void {
     sources.reorder(parseSourceIds(orderedIds))
   })
 
-  handle(IPC.sendMessage, async (_e, sourceId: unknown, text: unknown) => {
-    await sources.send(requireString(sourceId, 'sourceId'), parseMessageText(text))
-  })
 }
 
-/** Null means "go back to the account's own channel", which is the normal state — the
-    override exists so another channel's chat can be read and typed into while testing. */
-export function parseWatchTarget(value: unknown): string | null {
-  if (value === null || value === undefined) return null
-
-  const identifier = requireString(value, 'identifier').trim()
-
-  return identifier ? identifier.slice(0, MAX_IDENTIFIER_LENGTH) : null
-}
-
-const MAX_MESSAGE_LENGTH = 500
-
-/** Twitch caps a message at 500 characters and Kick at 500 grapheme clusters, so the
-    renderer is not trusted to have enforced either. An empty message is refused here
-    rather than spending a request to be told so. */
-export function parseMessageText(value: unknown): string {
-  const text = requireString(value, 'text').trim()
-
-  if (!text) throw new Error('message is empty')
-
-  return text.slice(0, MAX_MESSAGE_LENGTH)
-}
 
 function registerShellHandlers(): void {
   handle(IPC.openExternal, async (_e, url: unknown) => {
@@ -159,25 +149,6 @@ function senderWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow | null 
   return BrowserWindow.fromWebContents(event.sender)
 }
 
-/** Signing out of Twitch drops its chats, because the transport is chosen by whether a
-    token exists — the other two do not touch chat at all, so their sessions come and go
-    without disturbing anything on screen. */
-function registerAccountHandlers(sources: SourceManager, accounts: AccountManager): void {
-  handle(IPC.accounts, () => accounts.list())
-
-  handle(IPC.accountSignIn, async (_e, platform: unknown) => {
-    await accounts.signIn(parsePlatform(platform))
-  })
-
-  handle(IPC.accountSignOut, async (_e, platform: unknown) => {
-    const target = parsePlatform(platform)
-
-    if (target === 'twitch') await sources.removeByPlatform('twitch')
-
-    await accounts.signOut(target)
-  })
-}
-
 export function unregisterIpc(): void {
   for (const channel of registered) ipcMain.removeHandler(channel)
 
@@ -214,6 +185,27 @@ export function parsePlatform(value: unknown): Platform {
   const platform = PLATFORMS.find((candidate) => candidate === value)
   if (!platform) throw new Error(`unknown platform: ${String(value)}`)
   return platform
+}
+
+const MAX_KEY_LENGTH = 500
+
+/** Every field optional so a save can carry one of them. Strings only, and trimmed —
+    a pasted stream key drags whitespace in more often than not. */
+export function parsePlatformPatch(value: unknown): PlatformPatch {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('patch must be an object')
+  }
+
+  const record = value as Record<string, unknown>
+  const patch: PlatformPatch = {}
+
+  for (const field of ['channel', 'ingestUrl', 'streamKey'] as const) {
+    if (record[field] === undefined) continue
+
+    patch[field] = requireString(record[field], field).trim().slice(0, MAX_KEY_LENGTH)
+  }
+
+  return patch
 }
 
 export function parseAddSource(value: unknown): AddSourceRequest {

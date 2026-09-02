@@ -1,6 +1,6 @@
 import type { SettingsPane } from '../../store'
 import { useStore } from '../../store'
-import { Accounts } from './Accounts'
+import { Platforms } from './Platforms'
 import { Appearance } from './Appearance'
 import { Chat } from './Chat'
 import { General } from './General'
@@ -9,14 +9,17 @@ const PANES: { pane: SettingsPane; label: string }[] = [
   { pane: 'general', label: 'General' },
   { pane: 'appearance', label: 'Appearance' },
   { pane: 'chat', label: 'Chat' },
-  { pane: 'accounts', label: 'Accounts' }
+  { pane: 'platforms', label: 'Platforms' }
 ]
 
 const TITLES: Record<SettingsPane, { title: string; blurb: string }> = {
   general: { title: 'General', blurb: 'How the app starts.' },
   appearance: { title: 'Appearance', blurb: 'The theme the whole app is painted in.' },
   chat: { title: 'Chat', blurb: 'What every chat shows, how it reads, and how much it keeps.' },
-  accounts: { title: 'Accounts', blurb: 'Connect an account to send messages and moderate.' }
+  platforms: {
+    title: 'Platforms',
+    blurb: 'Which chat to open, and where to forward your stream.'
+  }
 }
 
 export function Settings(): React.ReactElement {
@@ -62,7 +65,7 @@ export function Settings(): React.ReactElement {
       </nav>
 
       <div className="min-w-0 flex-1 overflow-y-auto px-[28px] py-[22px] chat-scroll">
-        <div className="max-w-[520px]">
+        <div className="max-w-[560px]">
           <h1 className="m-0 text-[17px] font-semibold" style={{ color: 'var(--heading)' }}>
             {title}
           </h1>
@@ -73,7 +76,7 @@ export function Settings(): React.ReactElement {
           {pane === 'general' && <General />}
           {pane === 'appearance' && <Appearance />}
           {pane === 'chat' && <Chat />}
-          {pane === 'accounts' && <Accounts />}
+          {pane === 'platforms' && <Platforms />}
         </div>
       </div>
     </div>

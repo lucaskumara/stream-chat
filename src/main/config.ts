@@ -1,48 +1,36 @@
 import { app, safeStorage } from 'electron'
-import type { Platform } from '@shared/types'
-import { PLATFORMS } from '@shared/types'
-import { BUILT_IN_TWITCH_CLIENT_ID } from './twitch/clientId'
+import type { Platform, PlatformPatch, PlatformSetup } from '@shared/types'
+import { DEFAULT_INGEST, PLATFORMS } from '@shared/types'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-export interface StoredTokens {
-  accessToken: string
-  refreshToken: string
-
-  expiresAt: number
-  scopes: string[]
-  userId: string
-  login: string
-
-  /** The identifier the chat watcher resolves — a Twitch login, a Kick slug, a YouTube
-      channel id. Usually the same string as `login`, but not on every platform, and this
-      is the one the app connects with. */
-  channel?: string
-}
-
 interface PlatformSlot {
-  tokensEnc?: string
+  setupEnc?: string
 }
 
-/** Version 2 added the youtube and kick slots. The twitch slot is byte-identical to
-    version 1's, so a config written by an older build is upgraded in place rather than
-    discarded — signing in again after an update would be a rude way to ship this. */
+/** Version 3 replaced the OAuth token slots with the streaming setup. Nothing carries
+    forward: the tokens it dropped authorised features that no longer exist, so an older
+    config is read for its shape and its contents discarded. */
 interface PersistedShape {
-  version: 2
+  version: 3
   twitch?: PlatformSlot
   youtube?: PlatformSlot
   kick?: PlatformSlot
 }
 
-const EMPTY: PersistedShape = { version: 2 }
+const EMPTY: PersistedShape = { version: 3 }
+
+function blank(platform: Platform): PlatformSetup {
+  return { channel: '', ingestUrl: DEFAULT_INGEST[platform], streamKey: '' }
+}
 
 class Config {
   private path: string
   private data: PersistedShape
 
-  /** Where tokens go when the OS has no encryption backend: this session only, never
-      the disk. Writing them in the clear is not an option. */
-  private memoryTokens = new Map<Platform, StoredTokens>()
+  /** Where the setup goes when the OS has no encryption backend: this session only,
+      never the disk. A stream key in the clear is not an option. */
+  private memory = new Map<Platform, PlatformSetup>()
 
   constructor() {
     this.path = join(app.getPath('userData'), 'config.json')
@@ -60,10 +48,10 @@ class Config {
         kick?: PlatformSlot
       }
 
-      if (parsed?.version !== 1 && parsed?.version !== 2) return { ...EMPTY }
+      if (parsed?.version !== 3) return { ...EMPTY }
 
       return {
-        version: 2,
+        version: 3,
         twitch: parsed.twitch,
         youtube: parsed.youtube,
         kick: parsed.kick
@@ -86,50 +74,55 @@ class Config {
     }
   }
 
-  getClientId(): string | undefined {
-    return process.env['TWITCH_CLIENT_ID'] || BUILT_IN_TWITCH_CLIENT_ID || undefined
-  }
-
-  getTokens(platform: Platform): StoredTokens | null {
-    const held = this.memoryTokens.get(platform)
+  /** The whole record is encrypted, not just the key: a channel name is the one thing
+      this app deliberately never used to keep, so if it must be stored now it is stored
+      the same way the secret is. */
+  setup(platform: Platform): PlatformSetup {
+    const held = this.memory.get(platform)
     if (held) return held
 
-    const enc = this.data[platform]?.tokensEnc
-    if (!enc) return null
+    const enc = this.data[platform]?.setupEnc
+    if (!enc) return blank(platform)
 
     try {
       const json = safeStorage.decryptString(Buffer.from(enc, 'base64'))
-      return JSON.parse(json) as StoredTokens
+      return { ...blank(platform), ...(JSON.parse(json) as Partial<PlatformSetup>) }
     } catch (err) {
-      console.warn(`[config] ${platform} token decrypt failed, treating as signed out:`, err)
-      return null
+      console.warn(`[config] ${platform} setup decrypt failed, treating as unset:`, err)
+      return blank(platform)
     }
   }
 
-  setTokens(platform: Platform, tokens: StoredTokens | null): void {
-    if (tokens === null) {
-      this.memoryTokens.delete(platform)
+  all(): Record<Platform, PlatformSetup> {
+    return Object.fromEntries(PLATFORMS.map((p) => [p, this.setup(p)])) as Record<
+      Platform,
+      PlatformSetup
+    >
+  }
 
-      if (this.data[platform]) delete this.data[platform]?.tokensEnc
-
-      this.write()
-      return
-    }
+  /** A patch, so the renderer can save a channel without having to send back a stream
+      key it was never given. An empty string clears a field; undefined leaves it. */
+  update(platform: Platform, patch: PlatformPatch): PlatformSetup {
+    const next: PlatformSetup = { ...this.setup(platform), ...definedOnly(patch) }
 
     if (!safeStorage.isEncryptionAvailable()) {
-      console.warn('[config] OS encryption unavailable — tokens kept in memory only')
-      this.memoryTokens.set(platform, tokens)
-      return
+      console.warn('[config] OS encryption unavailable — setup kept in memory only')
+      this.memory.set(platform, next)
+      return next
     }
 
-    const enc = safeStorage.encryptString(JSON.stringify(tokens)).toString('base64')
-    this.data[platform] = { ...this.data[platform], tokensEnc: enc }
+    const enc = safeStorage.encryptString(JSON.stringify(next)).toString('base64')
+    this.data[platform] = { ...this.data[platform], setupEnc: enc }
     this.write()
-  }
 
-  clearAllTokens(): void {
-    for (const platform of PLATFORMS) this.setTokens(platform, null)
+    return next
   }
+}
+
+function definedOnly(patch: PlatformPatch): Partial<PlatformSetup> {
+  return Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined)
+  ) as Partial<PlatformSetup>
 }
 
 let instance: Config | null = null

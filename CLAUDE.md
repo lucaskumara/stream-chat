@@ -857,74 +857,6 @@ unclickable*, its confirm button landing outside the viewport (measured x 1172-1
 1440px window). Clearing a pane is no longer behind a confirm: it is a plain button in that
 popover, and the popover closes on clear.
 
-### Sending messages
-
-**Twitch and Kick both send; YouTube does not.** `CAN_SEND` in `Composer.tsx` is the
-renderer's copy of that fact and grows as each lands.
-
-**Sending is a watcher capability, not a feed one.** `ChatWatcher.send?` is optional: absent
-means the platform cannot send in this build at all, which is how the renderer decides
-whether to draw a composer. Present but throwing `SendUnavailableError` means the platform
-can send and this session cannot — signed out, or holding a token minted before the write
-scope. YouTube panes get no box rather than one that only ever refuses.
-
-**Twitch sends over Helix regardless of which feed is running.** `POST /chat/messages` needs
-`broadcaster_id` and `sender_id`, so it does not care whether the anonymous IRC feed or the
-EventSub feed is reading — only that a token exists. That is why `send` lives on
-`TwitchChatWatcher` rather than on either feed.
-
-**`BaseChatWatcher` now retains the resolved channel.** `open()` used to consume it and drop
-it; `this.channel` is what sending reads `broadcasterId` off, and `detach()` clears it so a
-send between re-resolves fails cleanly instead of addressing a stale channel.
-
-**A 200 is not proof the message was said, on either platform.** Twitch and Kick both
-answer 200 while dropping a message — Twitch with `is_sent: false` and a `drop_reason`,
-Kick with `is_sent: false` and a `message`. Both are turned into errors, or the composer
-clears itself and looks successful.
-
-**The Twitch case in detail.** The response carries
-`is_sent: false` with a `drop_reason` when Twitch accepts the call and drops the message —
-followers-only mode, a duplicate, AutoMod. `sendChatMessage` turns that into an error, or
-the composer would clear itself and look successful.
-
-**No local echo, on any platform.** We read Twitch as an anonymous `justinfan`, Kick over a
-broadcast Pusher channel, and YouTube by polling the public continuation, so our own message
-arrives back through the normal pipeline exactly like anyone else's — badges, colour and
-all. Adding an optimistic echo would double-print every message.
-
-**The composer is drawn only where a column holds exactly one chat.** That is what a split
-pane is; a merged column has no single target. `ChatPane` already computed `alone` for the
-dock link and disconnect, and the composer keys off the same value rather than being told
-whether it is the merged pane.
-
-**Whether sending is *allowed* is read off the account's grants, not off `SCOPES`.** The
-composer disables itself when the Twitch account lacks the `send chat` grant, which is
-derived from the scopes the stored token actually carries. Adding `user:write:chat` to
-`SCOPES` does not retroactively grant it, so `AccountState.needsReauth` exists to say so and
-the settings row's button becomes "Reconnect".
-
-**Main clamps and refuses message text itself.** `parseMessageText` trims, rejects empty, and
-slices to 500 — Twitch's cap and Kick's. The renderer is not trusted to have done it, and an
-empty message is refused before a request is spent being told so.
-
-**A chat that is not connected cannot be sent to, and the box says which.**
-`blockedReason` in `renderer/composer.ts` checks the account first — a missing scope is the
-user's to fix — then the source's own status. On YouTube `offline` is the *normal* state
-rather than a fault: its live chat exists only while a broadcast runs, so the placeholder
-reads "You are not live" plus YouTube's own reason ("not streaming right now", "live chat is
-turned off for this stream"). Twitch and Kick chatrooms exist whether or not the channel is
-live, so they only reach that branch on a real disconnect. Main refuses these anyway —
-`BaseChatWatcher.detach` clears the channel, so `send` throws — this is about saying so
-before a message is typed rather than after it is sent.
-
-**`CAN_SEND` and `blockedReason` live in `renderer/composer.ts`, not in the component.**
-`tsconfig.test.json` sets no `jsx`, so a test importing a `.tsx` fails the typecheck even
-though vitest runs it. Pure renderer logic belongs in a `.ts` beside the components, which
-is what `search.ts`, `contrast.ts`, `layout.ts` and `merge.ts` already do.
-
-**Enter sends, Shift+Enter breaks the line.** The composer is a `textarea` rather than an
-`input` so the second half of that is possible.
-
 ### Navigation (v2)
 
 The title bar owns navigation. There is no sidebar and no tab strip below it.
@@ -1080,114 +1012,51 @@ tab *is* the control. `SourceManager.reorder` and the `sources:reorder` IPC surv
 side with no caller in the UI; restoring dragging means writing a new interaction, not rewiring
 an old one.
 
-### Accounts and sign-in
+### Platform setup
 
-**Signing in picks the channel and enables the composer.** Twitch and Kick both send;
-YouTube does not yet. `OAuthAccount.accessToken()` and `TwitchAuth` are the seams the rest
-will come through.
+**There are no accounts any more.** OAuth for all three platforms, the Twitch device flow,
+EventSub, Helix and the message composer were all deleted when messaging was dropped. Chat
+is read anonymously on every platform, which is what it always did on Kick and YouTube and
+what `TwitchIrcFeed` still does on Twitch. `TwitchChatWatcher` therefore has one feed, not
+two, and `resolveChannel` has one path.
 
-**Kick's `streamkey:read` is deliberately not requested, and the OpenAPI spec is why.**
-`api.kick.com/swagger/doc.yaml` lists every path Kick publishes and none of them returns a
-stream key — the scope is documented with nothing behind it. Asking for it would put a
-permission on the consent screen that no code can spend. It goes back the day an endpoint
-appears. Measured separately: an unauthenticated `POST /public/v1/chat` answers a clean
-`401 {"message":"Unauthorized"}` rather than a Cloudflare 403, so the community reports of
-that endpoint being edge-blocked do not reproduce here.
+**Settings -> Platforms is the only place a platform is configured**, and it holds three
+fields each: the channel whose chat to open, and the stream URL and key to forward video
+to. `syncChannels` in `main/index.ts` reacts to every save, so setting a channel opens its
+chat and clearing it closes it. That is the only route by which a source is created.
 
-**Kick's own channel comes from `/public/v1/channels` with no parameters**, which is
-documented as returning the authenticated user's channel. The **slug** is what chat connects
-to and it is not always the username, so `identify` reads `slug` for `channel` and only
-borrows `/users` for a nicer display name — a failure there falls back to the slug rather
-than losing the sign-in.
+**The stream key never leaves main.** `platformConfigs()` reports `hasStreamKey: boolean`
+rather than the value, so the renderer cannot read a key back even though it can set one —
+which is also what lets the field show dots and a Replace button rather than a real value.
+A save is a *patch*: an absent field means "leave it", so the renderer can save a channel
+without having to send back a key it was never given.
 
-**Kick's send needs a `broadcaster_user_id` from the *public* API, not the one on
-`KickChannel`.** That id comes from Kick's internal v2 API, and assuming the two numbering
-schemes agree would be a guess — the same class of trap as `chatroom.id` versus `channel.id`.
-`KickAccount.broadcasterId(slug)` asks `/public/v1/channels?slug=`, cached per slug because
-a channel's id does not move while it is open.
+**The whole setup record is encrypted, not just the key.** A channel name is the one thing
+this app deliberately never used to keep — see the persistence invariant below — so now
+that it must be stored, it is stored the way the secret is.
 
-**Every flow is the platform's own documented one, and every one opens the real browser.**
-Nothing is scraped, no page is driven, and no password passes through this app. An earlier
-version of this work signed YouTube and Kick in by capturing session cookies from an
-embedded window; that is against Google's OAuth policy — they disallow the authorization
-endpoint "inside an embedded user-agent" — and it was replaced wholesale. Do not bring it
-back.
+**Twitch and YouTube ingest URLs are prefilled; Kick's cannot be.** Twitch publishes one
+global endpoint for everybody (`ingest.global-contribute.live-video.net`) and YouTube's is
+fixed. Kick runs on Amazon IVS, which provisions an ingest host *per channel* — that hashed
+subdomain is the broadcaster's own — so there is nothing to prefill and no API to ask.
+`DEFAULT_INGEST` in `shared/types.ts` carries the two that are knowable.
 
-**Twitch is device code because Twitch offers a secretless app nothing else.** Its
-authorization code grant requires a `client_secret`, it does not support PKCE at all, and
-public clients are restricted to the device grant — so the code-confirmation step is not a
-design choice we made and cannot be polished away. What *can* be done is saying so before
-the browser opens, which is why the Twitch row reads "Opens twitch.tv to confirm a code".
-The `verification_uri` already carries `?device-code=`, so the code arrives prefilled.
-Device-flow access tokens last 4 hours and its refresh tokens are **one time use**, which
-is why `refresh` must store the returned refresh token and not the one it sent.
+**YouTube needs Auto-start switched on in Studio**, or pushing video to the key does not
+start a broadcast. That is the whole reason restreaming does not need the Data API: with
+auto-start, YouTube behaves like Twitch and Kick — connect RTMP and you are live — and the
+`liveBroadcasts.insert`/`bind`/`transition` dance disappears.
 
-**YouTube and Kick are authorization code + PKCE onto a loopback redirect**, which is what
-Google documents for installed apps and what Kick documents full stop. `accounts/session.ts`
-holds the whole flow once; a platform supplies only its `OAuthProvider`, an `identify` call
-and the wording for its scopes.
-
-**The two loopback hosts are not interchangeable.** Google documents `http://127.0.0.1:port`;
-Kick asks for `localhost` because their Next.js frontend rewrites the first `127.0.0.1` it
-finds in the URL, breaking the exact-match on `redirect_uri` (their docs offer a
-sacrificial-parameter workaround instead, which using `localhost` avoids needing). Both land
-on port 4569, so `LoopbackReceiver` binds **both** families — Windows resolves `localhost`
-to `::1` first, so an IPv4-only listener would simply never see Kick's callback. Same
-reasoning as `ObsServer`, and the same trap.
-
-**An IPv6 literal must be bracketed in a URL, and getting that wrong took down the whole
-app.** `LoopbackReceiver`'s request handler built its `new URL` base from the bound host,
-so on the `::1` listener it produced `http://::1:4569` — not a valid URL — and threw on
-every request arriving over IPv6. Windows resolves `localhost` to `::1` first and Kick's
-`redirect_uri` *must* be `localhost`, so this was the exact path every Kick sign-in took:
-the browser hung forever with no response. Worse, an uncaught throw in a main-process
-request handler raises Electron's "A JavaScript error occurred in the main process" dialog,
-which blocks the event loop — so the OBS server on 4568 and every IPC handler stopped
-answering too, and the app looked hung rather than broken. The base is now a fixed literal
-(only the path and query are ever read) and the handler cannot throw out of itself.
-`obs/server.ts` was never affected because it hardcodes a `127.0.0.1` base.
-
-**Only a redirect carrying `code` or `error` ends the wait.** Anything on the machine can
-hit 4569 while a sign-in is open — a browser prefetch, a scanner, a stray curl — and a bare
-hit on `/callback` used to settle the promise and fail the sign-in with "no authorization
-code" while the user was still reading the consent screen.
-
-**The `state` check is the point of the loopback, not decoration.** Anything on the machine
-can hit 4569 while a sign-in is open. `readRedirect` refuses a redirect whose `state` is not
-the one just issued, before any code is exchanged.
-
-**Google needs `access_type=offline` *and* `prompt=consent`.** Without both it returns an
-access token and no refresh token, and the account falls out silently about an hour later —
-which reads as "the sign-in randomly stopped working" rather than as a missing parameter.
-
-**Kick's `client_secret` is a real credential and it ships in the binary.** Kick requires it
-on both the authorization-code and refresh grants and documents no public-client option, so
-a build either carries one or has no Kick sign-in. This is unlike `BUILT_IN_TWITCH_CLIENT_ID`,
-which identifies the app and authorises nothing. Both `clientId.ts` files default to empty,
-which renders as `not-configured` and offers no sign-in — the correct state for a build
-nobody has provisioned. Kick's is refused unless *both* id and secret are present, since an
-id alone would offer a sign-in that cannot complete.
-
-**Only Twitch asks for a write scope, and only because the composer uses it.**
-`user:read:chat user:write:chat channel:read:stream_key` on Twitch,
-`youtube.readonly` on Google, `user:read channel:read streamkey:read` on Kick. Requesting
-write authority before anything can use it buys nothing but a scarier consent screen; the
-cost is one further sign-in when sending lands. Twitch grants are read off the *stored*
-token rather than off `SCOPES`, because adding a scope does not retroactively grant it —
-`twitchScopesStale` is the separate question of whether a sign-in needs redoing.
-
-**A name is decoration; the token is the account.** An identity lookup that fails leaves the
-sign-in intact and unnamed rather than discarding a good token.
-
-**`config.json` is version 2 and holds a slot per platform.** The twitch slot is
-byte-identical to version 1's, so an older config is upgraded in place rather than discarded
-— dropping it would sign the user out on update for no reason.
+**`config.json` is version 3 and nothing carries forward from version 2.** The tokens it
+held authorised features that no longer exist, so an older file is read for its shape and
+its contents discarded.
 
 ### Main process
 
-**Nothing is persisted but OAuth tokens — one slot per platform since accounts landed.**
-Channel names are still not saved, which is the part of this rule that was a privacy
-decision. `config.json` holds `version` and the
+**What is persisted is the platform setup — channel, ingest URL and stream key, encrypted,
+one slot per platform.** Channel names *are* now saved, which reverses the earlier privacy
+decision: they are configuration rather than session state once a channel is chosen in
+settings rather than typed per session. They are inside the encrypted blob for that reason.
+`config.json` holds `version` and the
 encrypted `twitch.tokensEnc`, and that is the whole file. Channels are deliberately *not*
 saved: the app opens empty every launch and every channel on screen was added this session.
 An earlier build restored saved channels at startup, which meant `config.json` accumulated a
@@ -1458,7 +1327,7 @@ tests, so nothing bundles them. What is covered:
 | YouTube's poll clamp | `platforms/youtube/index.ts` |
 | third-party emote substitution | `emotes/index.ts` |
 | the dock backlog and the batching bus | `backlog.ts`, `bus.ts` |
-| every IPC argument validator | `ipc.ts` |
+| every IPC argument validator, including the platform patch | `ipc.ts` |
 | resolve and naming on all three platforms | `platforms/*/channel.ts` |
 | the pane filter grammar | `renderer/search.ts` |
 | the author and badge colour lift, both directions | `renderer/contrast.ts` |
@@ -1468,12 +1337,7 @@ tests, so nothing bundles them. What is covered:
 | the split/merged column model | `renderer/layout.ts` |
 | the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
-| the outgoing message validator and the watch override | `ipc.ts` |
-| the Twitch account state and scope staleness | `twitch/state.ts` |
-| authorize-URL building, scope and refresh-token handling | `accounts/oauth.ts` |
-| PKCE challenges and the redirect state check | `accounts/pkce.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |
-| Kick identity, grants, sending and broadcaster lookup | `kick/auth.ts` |
 
 **Keep the tests out of `src/renderer`, and not only for tidiness.** Tailwind v4 scans the
 renderer root for class candidates and takes them from prose, not just from JSX. Four test

@@ -1,11 +1,11 @@
 import { create } from 'zustand'
 import { PLATFORMS } from '@shared/types'
 import type {
-  AccountState,
   ChatBatch,
   ChatMessage,
   ModerationEvent,
   Platform,
+  PlatformConfig,
   SourceState
 } from '@shared/types'
 
@@ -21,7 +21,7 @@ export const CHAT_FONT_DEFAULT = 15
 
 export type View = 'chats' | 'broadcast' | 'settings'
 
-export type SettingsPane = 'general' | 'appearance' | 'chat' | 'accounts'
+export type SettingsPane = 'general' | 'appearance' | 'chat' | 'platforms'
 
 export type Density = 'comfortable' | 'compact'
 export type ThemeChoice = 'dark' | 'system' | 'light'
@@ -72,10 +72,10 @@ interface ChatState {
   /** Chat row size per source, in px from CHAT_FONT_SIZES. Missing means the default. */
   fontSize: Record<string, number>
 
-  accounts: AccountState[]
+  platforms: PlatformConfig[]
 
   setSources: (states: SourceState[]) => void
-  setAccounts: (accounts: AccountState[]) => void
+  setPlatforms: (platforms: PlatformConfig[]) => void
   togglePlatform: (platform: Platform) => void
   toggleMerged: () => void
   ingest: (batch: ChatBatch) => void
@@ -225,7 +225,7 @@ export const useStore = create<ChatState>()((set) => ({
 
   reopenChannels: true,
 
-  accounts: [],
+  platforms: [],
 
   /** A cold start adopts whatever main already has — the backlog replay after a
       renderer crash otherwise leaves the connect form up over a live chat. Later
@@ -241,7 +241,7 @@ export const useStore = create<ChatState>()((set) => ({
       return { sources: states, visiblePlatforms: PLATFORMS.filter((held) => live.has(held)) }
     }),
 
-  setAccounts: (accounts) => set({ accounts }),
+  setPlatforms: (platforms) => set({ platforms }),
 
   /** Panes run in tab order rather than the order they were switched on, so a split
       reads left to right the same as the strip above it. The last pane cannot be

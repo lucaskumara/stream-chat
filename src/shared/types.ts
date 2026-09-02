@@ -92,40 +92,31 @@ export interface AddSourceRequest {
   identifier?: string
 }
 
-export type AccountStatus =
-  | 'not-configured'
-  | 'signed-out'
-  | 'pending'
-  | 'signed-in'
-  | 'error'
-
-export interface DeviceCodePrompt {
-  userCode: string
-  verificationUri: string
-  expiresAt: number
-  interval: number
+/** What a platform needs to be useful: a channel to read chat from, and where to push
+    video. The stream key is a secret and never leaves the main process — the renderer is
+    told only whether one is set. */
+export interface PlatformSetup {
+  channel: string
+  ingestUrl: string
+  streamKey: string
 }
 
-export interface AccountState {
+export type PlatformPatch = Partial<PlatformSetup>
+
+export interface PlatformConfig {
   platform: Platform
-  status: AccountStatus
+  channel: string
+  ingestUrl: string
+  hasStreamKey: boolean
+}
 
-  userId?: string
-  displayName?: string
-
-  /** What this connection unlocks, phrased for the settings row. Main resolves it
-      because only main knows whether a scope was actually granted. */
-  grants?: string[]
-
-  error?: string
-
-  /** A working sign-in that predates a scope this build now asks for. The account still
-      functions; what it cannot do is whatever the new scope was for. */
-  needsReauth?: boolean
-
-  /** Twitch is the only platform with a public-client OAuth flow, so it is the only
-      one that shows a code. The other two redirect back to a loopback listener. */
-  prompt?: DeviceCodePrompt
+/** Twitch publishes one global ingest for everybody and YouTube's is fixed, so both are
+    prefilled. Kick runs on Amazon IVS, which gives every channel its own ingest host, so
+    there is nothing to prefill and no API to ask. */
+export const DEFAULT_INGEST: Record<Platform, string> = {
+  twitch: 'rtmps://ingest.global-contribute.live-video.net/app/',
+  youtube: 'rtmp://a.rtmp.youtube.com/live2',
+  kick: ''
 }
 
 export type HostPlatform = 'darwin' | 'win32' | 'linux' | 'other'
@@ -138,8 +129,6 @@ export interface ChatApi {
   removeSource(sourceId: string): Promise<void>
   reorderSources(orderedIds: string[]): Promise<void>
   sourceBacklog(sourceId: string): Promise<ChatMessage[]>
-  sendMessage(sourceId: string, text: string): Promise<void>
-  watchChannel(platform: Platform, identifier: string | null): Promise<void>
   openExternal(url: string): Promise<void>
   copyText(text: string): Promise<void>
 
@@ -156,9 +145,8 @@ export interface ChatApi {
 
   onSources(cb: (states: SourceState[]) => void): () => void
 
-  accounts(): Promise<AccountState[]>
-  accountSignIn(platform: Platform): Promise<void>
-  accountSignOut(platform: Platform): Promise<void>
+  platforms(): Promise<PlatformConfig[]>
+  savePlatform(platform: Platform, patch: PlatformPatch): Promise<void>
 
-  onAccounts(cb: (states: AccountState[]) => void): () => void
+  onPlatforms(cb: (configs: PlatformConfig[]) => void): () => void
 }

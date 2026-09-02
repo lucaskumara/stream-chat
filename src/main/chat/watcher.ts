@@ -206,8 +206,6 @@ export interface ChatWatcherContext {
   events: ChatWatcherEvents;
 }
 
-export class SendUnavailableError extends Error {}
-
 export interface ChatWatcher {
   readonly sourceId: string;
   readonly platform: Platform;
@@ -215,12 +213,6 @@ export interface ChatWatcher {
 
   connect(): Promise<void>;
   disconnect(): Promise<void>;
-
-  /** Absent on a platform that cannot send yet, which is how the renderer decides
-      whether to draw a composer at all. Present but throwing `SendUnavailableError`
-      means the platform can send and this session cannot — signed out, or a token
-      predating the write scope. */
-  send?(text: string): Promise<void>;
 }
 
 export abstract class PollingFeed implements ChatFeed {

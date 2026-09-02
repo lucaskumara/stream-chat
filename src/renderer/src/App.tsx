@@ -6,7 +6,7 @@ import { resolvedTheme, type ThemeMode } from './theme'
 import { mergeMessages } from './merge'
 import { useStore } from './store'
 import { ChatPane } from './components/ChatPane'
-import { SignInPrompt } from './components/SignInPrompt'
+import { NotConfigured } from './components/NotConfigured'
 import { TitleBar } from './components/TitleBar'
 import { Broadcast } from './views/Broadcast'
 import { Settings } from './views/Settings'
@@ -37,7 +37,6 @@ function Pane({
       showPlatform={sources.length > 1}
       messages={messages}
       deleted={s.deleted}
-      accounts={s.accounts}
       showDeleted={s.showDeleted}
       showTimestamps={s.showTimestamps}
       density={s.density}
@@ -82,7 +81,7 @@ function Column({
   )
 
   if (column.platform !== null && column.sources.length === 0) {
-    return <SignInPrompt platform={column.platform} />
+    return <NotConfigured platform={column.platform} />
   }
 
   return <Pane column={column} messages={messages} mode={mode} onDisconnect={onDisconnect} />
@@ -131,7 +130,7 @@ export default function App(): React.ReactElement {
     [visiblePlatforms, sources, merged]
   )
   const setSources = useStore((s) => s.setSources)
-  const setAccounts = useStore((s) => s.setAccounts)
+  const setPlatforms = useStore((s) => s.setPlatforms)
   const ingest = useStore((s) => s.ingest)
   const forgetSource = useStore((s) => s.forgetSource)
 
@@ -139,7 +138,7 @@ export default function App(): React.ReactElement {
     const { api } = bridge()
     const offBatch = api.onBatch(ingest)
     const offSources = api.onSources(setSources)
-    const offAccounts = api.onAccounts(setAccounts)
+    const offPlatforms = api.onPlatforms(setPlatforms)
 
     // A renderer reload — after a crash, or the watchdog recovering a blank window —
     // starts with an empty store, so the replay main already keeps for OBS docks is
@@ -158,16 +157,16 @@ export default function App(): React.ReactElement {
     })
 
     void api
-      .accounts()
-      .then(setAccounts)
-      .catch((error) => console.debug('[accounts] state unavailable:', error))
+      .platforms()
+      .then(setPlatforms)
+      .catch((error: unknown) => console.debug('[platforms] unavailable:', error))
 
     return () => {
       offBatch()
       offSources()
-      offAccounts()
+      offPlatforms()
     }
-  }, [ingest, setSources, setAccounts])
+  }, [ingest, setSources, setPlatforms])
 
   // The palette is stamped on the root rather than resolved in CSS, so 'system' has
   // one home and the OBS dock — a second entry that never stamps — stays dark.

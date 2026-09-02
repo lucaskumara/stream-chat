@@ -1,7 +1,5 @@
 import type { Platform } from '@shared/types'
 import { Channel, type ChannelLookup } from '../../channel'
-import type { TwitchAuth } from '../../../twitch/auth'
-import type { Helix } from '../../../twitch/helix'
 import type { EmoteBinding } from '../../../emotes'
 import { twitchGql } from './gql'
 
@@ -29,10 +27,11 @@ export class TwitchChannel extends Channel {
   }
 }
 
+/** Anonymous, always. GQL answers `{ data: { user: null } }` for a login nobody owns,
+    which is terminal; a request that never landed is not evidence about the channel, so
+    it falls back to the login and connects rather than reporting a deletion. */
 export async function resolveChannel(
-  identifier: string,
-  auth: TwitchAuth,
-  helix: Helix
+  identifier: string
 ): Promise<ChannelLookup<TwitchChannel>> {
   const login = identifier.trim().toLowerCase().replace(/^@/, '')
 
@@ -40,25 +39,7 @@ export async function resolveChannel(
     return { state: 'missing', reason: 'No Twitch channel name given.' }
   }
 
-  if (!auth.isSignedIn()) return anonymousLookup(login)
-
-  try {
-    const user = await helix.getUserByLogin(login)
-
-    if (!user) {
-      return { state: 'missing', reason: missingTwitch(login) }
-    }
-
-    return {
-      state: 'ok',
-      channel: new TwitchChannel(user.display_name || user.login, user.login, user.id)
-    }
-  } catch (error) {
-    return {
-      state: 'unreachable',
-      reason: error instanceof Error ? error.message : String(error)
-    }
-  }
+  return anonymousLookup(login)
 }
 
 function missingTwitch(login: string): string {
