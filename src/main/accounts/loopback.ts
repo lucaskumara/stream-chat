@@ -32,8 +32,25 @@ export class LoopbackReceiver {
     return `http://${host}:${this.port}${this.path}`
   }
 
+  /** The port is pinned because Kick exact-matches the registered `redirect_uri` and its
+      portal takes exactly one URL — Google would allow any port, but there is no use in
+      the two disagreeing. So a machine already using this port cannot sign in, and that
+      has to read as a diagnosis rather than as a bare EADDRINUSE. */
   async start(): Promise<void> {
-    await this.listen('127.0.0.1')
+    try {
+      await this.listen('127.0.0.1')
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+
+      if (code === 'EADDRINUSE') {
+        throw new Error(
+          `Something else on this machine is using port ${this.port}, which sign-in needs. ` +
+            'Close it and try again.'
+        )
+      }
+
+      throw error
+    }
 
     try {
       await this.listen('::1')
