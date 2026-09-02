@@ -33,6 +33,15 @@ export class AccountManager {
     return [twitchAccount(this.twitch), this.youtube.state(), this.kick.state()]
   }
 
+  /** The signed-in user's own channel per platform, which is the only chat this app
+      opens. Null means signed out, or signed in but not yet identified. */
+  ownChannel(platform: Platform): string | null {
+    if (platform === 'twitch') return this.twitch.ownChannel()
+    if (platform === 'youtube') return this.youtube.ownChannel()
+
+    return this.kick.ownChannel()
+  }
+
   async signIn(platform: Platform): Promise<void> {
     if (platform === 'twitch') {
       try {

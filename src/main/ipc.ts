@@ -18,6 +18,7 @@ export const IPC = {
   reorderSources: 'sources:reorder',
   sourceBacklog: 'sources:backlog',
   sendMessage: 'chat:send',
+  watchChannel: 'sources:watch',
   openExternal: 'shell:open-external',
   copyText: 'clipboard:write',
   obsLink: 'obs:link',
@@ -52,9 +53,15 @@ export function registerIpc(
   sources: SourceManager,
   accounts: AccountManager,
   obs: ObsServer,
-  bus: MessageBus
+  bus: MessageBus,
+  watch: (platform: Platform, identifier: string | null) => Promise<void>
 ): void {
   registerSourceHandlers(sources, bus)
+
+  handle(IPC.watchChannel, async (_e, platform: unknown, identifier: unknown) => {
+    await watch(parsePlatform(platform), parseWatchTarget(identifier))
+  })
+
   registerShellHandlers()
   registerWindowHandlers()
   registerAccountHandlers(sources, accounts)
@@ -83,6 +90,16 @@ function registerSourceHandlers(sources: SourceManager, bus: MessageBus): void {
   handle(IPC.sendMessage, async (_e, sourceId: unknown, text: unknown) => {
     await sources.send(requireString(sourceId, 'sourceId'), parseMessageText(text))
   })
+}
+
+/** Null means "go back to the account's own channel", which is the normal state — the
+    override exists so another channel's chat can be read and typed into while testing. */
+export function parseWatchTarget(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+
+  const identifier = requireString(value, 'identifier').trim()
+
+  return identifier ? identifier.slice(0, MAX_IDENTIFIER_LENGTH) : null
 }
 
 const MAX_MESSAGE_LENGTH = 500

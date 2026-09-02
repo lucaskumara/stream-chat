@@ -275,8 +275,9 @@ and Kick chat are readable while the channel is dark.
 
 **Adding a channel is checked twice, and the two checks fail differently.**
 `parseChannelInput` in `src/shared/channel.ts` decides whether the text is *shaped* like a
-channel — reached from the renderer through `parseForPlatform`, which also refuses input
-resolving to a platform other than the open tab's — `TWITCH_LOGIN` is 3-25 of `[a-z0-9_]`, `KICK_SLUG` 2-25, a YouTube handle 3-30
+channel — reached from the renderer through `parseForPlatform` in the "watch another channel"
+field, which also refuses input resolving to a platform other than that pane's — `TWITCH_LOGIN`
+is 3-25 of `[a-z0-9_]`, `KICK_SLUG` 2-25, a YouTube handle 3-30
 after the `@` — and rejects in the renderer without an IPC call. Resolve then decides whether
 the channel *exists*. A name that is too long and a name nobody owns therefore surface
 different messages from different processes, which is worth knowing when a fix to one appears
@@ -936,8 +937,8 @@ draw it. It is **absent** below two *connected* chats rather than disabled — m
 ever collapses connected chats, so with one or none the button could do nothing, and a dead
 control is not worth the space it holds on the window's centre line. Merging is
 a viewing mode over connected chats only — a visible platform with no channel keeps its own
-column either way, because its connect form has nowhere else to go, so
-[merged chat][connect form] is a normal state rather than a glitch.
+column either way, because its sign-in prompt has nowhere else to go, so
+[merged chat][sign-in prompt] is a normal state rather than a glitch.
 
 **`layout.ts` derives the column model once, and both the view and the icon read it.**
 `chatColumns(visiblePlatforms, sources, merged)` is the only place split-versus-merged is
@@ -976,8 +977,8 @@ only when more than one chat is actually in the column.
 **Toggling is uniform, and a tab with no channel is not a special case.** Switching one on
 puts its pane on screen whatever it holds: a chat if that platform is connected, the connect
 form if it is not. That is the only route to the form, so it cannot be reserved for connected
-platforms — and it means a split of a live chat beside a connect form is a normal state, not
-a glitch. `ConnectChannel` is `max-w-[380px]` inside its column for that reason.
+platforms — and it means a split of a live chat beside a sign-in prompt is a normal state, not
+a glitch. `SignInPrompt` is `max-w-[380px]` inside its column for that reason.
 
 **The greyed-out tab click was dead, and the cause was the drag region, not the styling.**
 `.titlebar-drag` fills the bar with `-webkit-app-region: drag`; Electron collects draggable
@@ -1002,17 +1003,36 @@ switcher and the window controls — those two are different widths, and on Wind
 width again when the window maximises. Verified in the running app: tab group centre 720 in a
 1440px window.
 
-**A platform with no channel shows the connect form in the pane, not a modal.** `ConnectChannel`
-replaced the old `AddChannel` dialog, and the tab supplies the platform, so `parseChannelInput`
-is always called with a hint and can never return `needsPlatform`. That is also why
-`parseForPlatform` exists: the parser happily resolves a pasted youtube.com link while the Kick
-tab is open, and connecting a chat on the tab next door is not what the click asked for — so
-input resolving to another platform is refused by name.
+**Signing in picks the channel — there is no channel field.** A platform with no account
+shows `SignInPrompt` in the pane, whose only control starts that platform's OAuth flow. On
+sign-in, main opens the account's *own* chat; on sign-out it closes it. `ConnectChannel`, the
+`AddChannel` dialog before it, and `store.connectDraft` are all gone.
 
-**The connect draft is in the store, keyed by platform.** Switching tabs unmounts the form, so
-a local `useState` would drop a half-typed channel name — the same reason pane state is keyed
-by source. The error and the busy flag stay local on purpose: both should clear when the tab
-changes.
+**`syncOwnChannels` in `main/index.ts` is the only route by which a source is created.** It
+runs on every account change and walks `PLATFORMS`, calling `SourceManager.ensureOnly` for a
+platform that has a channel and `removeByPlatform` for one that does not. `ensureOnly` is a
+no-op when the wanted channel is already the one open, so a status broadcast does not churn a
+live connection. The sync is single-flighted, because account changes arrive in bursts.
+
+**`AccountManager.ownChannel` reads `StoredTokens.channel`, not `login`.** They are the same
+string on Twitch and are not on YouTube, where the identifier is a `UC…` id and the display
+name is prose. `channel` therefore has to survive a token refresh — `renew()` dropping it
+would disconnect the chat an hour into a session, which is exactly the kind of fault that
+looks like a transport bug.
+
+**"Watch another channel" in the pane popover is the way out, and it exists because sending
+does not require owning the channel.** Twitch takes the target as `broadcaster_id` and the
+sender from the token, so any chat can be read *and* typed into with plain `user:write:chat` —
+no moderator status, no ownership. `watching` in `main/index.ts` holds the override per
+platform and `runSync` prefers it, so a status broadcast cannot yank the pane back. Clearing
+it returns to the account's own chat. `parseChannelInput`/`parseForPlatform` survive for this
+field, which is now their only caller.
+
+**Anonymous chat reading is unreachable from the app now.** A channel comes from an account,
+so there is always a token, so `TwitchChatWatcher.createFeed` always picks `TwitchEventSubFeed`.
+`TwitchIrcFeed` and the anonymous GQL resolve path are still correct and still tested — they
+are simply no longer entered. Do not delete them on the strength of that; the OBS dock and any
+future "watch without signing in" both land back on them.
 
 **The pane bar carries the channel name and nothing about the platform.** The dot and the
 platform name were both there and both were removed: the tab above the pane already names the
@@ -1020,14 +1040,14 @@ platform and colours its mark, and panes run in tab order, so repeating it in ev
 the same fact three times. The `offline` pill stays — that is state, not identity.
 
 **Disconnecting is in the pane's settings popover, and there is no confirm.** It leaves the
-pane on screen showing the connect form again, and it is `removeSource` plus `forgetSource` — the same pair
-the tab `×` used to run. Re-connecting costs typing the name again, which is why it sits below
-the OBS link rather than behind a dialog like clearing history.
+pane on screen showing the sign-in prompt again. It is now literally signing out of the
+account, because that is the only thing "disconnect" can mean once the account picks the
+channel — the button says so.
 
 **One chat per platform is a renderer rule, not a main-process one.** `SourceManager` still
 holds any number of sources and `removeByPlatform` exists for the Twitch sign-in swap, so the
 OBS link server and the backlog are untouched by this. Nothing in the UI can create a second
-source for a platform, because the connect form is only rendered when there is none.
+source for a platform, because a platform has one account and an account has one channel.
 
 **Split groups, tab dragging and per-channel tabs are all gone.** v1 remembered arrangements
 (`store.groups`) and reordered tabs with dnd-kit; v2 kept per-channel tabs with a separate
@@ -1390,7 +1410,7 @@ tests, so nothing bundles them. What is covered:
 | the split/merged column model | `renderer/layout.ts` |
 | the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
-| the outgoing message validator | `ipc.ts` |
+| the outgoing message validator and the watch override | `ipc.ts` |
 | the Twitch account state and scope staleness | `twitch/state.ts` |
 | authorize-URL building, scope and refresh-token handling | `accounts/oauth.ts` |
 | PKCE challenges and the redirect state check | `accounts/pkce.ts` |

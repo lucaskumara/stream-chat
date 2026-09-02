@@ -185,6 +185,7 @@ export function ChatPane({
       {gearOpen && (
         <ChatSettings
           sourceId={alone?.id ?? null}
+          platform={alone?.platform ?? null}
           fontSize={fontSize}
           onFontStep={onFontStep}
           onFontReset={onFontReset}

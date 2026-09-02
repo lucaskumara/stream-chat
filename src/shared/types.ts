@@ -139,6 +139,7 @@ export interface ChatApi {
   reorderSources(orderedIds: string[]): Promise<void>
   sourceBacklog(sourceId: string): Promise<ChatMessage[]>
   sendMessage(sourceId: string, text: string): Promise<void>
+  watchChannel(platform: Platform, identifier: string | null): Promise<void>
   openExternal(url: string): Promise<void>
   copyText(text: string): Promise<void>
 

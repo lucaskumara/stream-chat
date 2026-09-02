@@ -13,6 +13,11 @@ export interface StoredTokens {
   scopes: string[]
   userId: string
   login: string
+
+  /** The identifier the chat watcher resolves — a Twitch login, a Kick slug, a YouTube
+      channel id. Usually the same string as `login`, but not on every platform, and this
+      is the one the app connects with. */
+  channel?: string
 }
 
 interface PlatformSlot {

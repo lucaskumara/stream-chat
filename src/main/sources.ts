@@ -94,6 +94,26 @@ export class SourceManager {
     return { platform: entry.state.platform, identifier: entry.identifier }
   }
 
+  /** Brings a platform in line with the account signed into it: connect that channel, do
+      nothing if it is already the one open, and swap if the account changed. Sources are
+      no longer chosen by the user, so this is the only route by which one appears. */
+  async ensureOnly(platform: Platform, identifier: string): Promise<void> {
+    const wanted = normalizeIdentifier(platform, identifier)
+    if (!wanted) return
+
+    const existing = [...this.entries.values()].filter(
+      (entry) => entry.state.platform === platform
+    )
+
+    if (existing.length === 1 && existing[0]?.identifier === wanted) return
+
+    if (existing.length > 0) await this.removeByPlatform(platform)
+
+    await this.add({ platform, label: '', identifier: wanted }).catch((error) => {
+      console.warn(`[sources] could not open ${platform}/${wanted}:`, error)
+    })
+  }
+
   /** Which platforms can send at all, so the renderer draws a composer only where one
       could work. This is a capability of the code, not of the account — a signed-out
       Twitch still reports true and refuses with a reason when asked to send. */

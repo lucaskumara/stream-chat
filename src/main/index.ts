@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
-import type { SourceState } from '@shared/types'
+import type { Platform, SourceState } from '@shared/types'
+import { PLATFORMS } from '@shared/types'
 import { MessageBus } from './bus'
 import { SourceManager } from './sources'
 import { IPC, registerIpc, unregisterIpc } from './ipc'
@@ -28,6 +29,42 @@ function broadcastSources(states: SourceState[]): void {
 function broadcastAccounts(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC.accountState, accounts.list())
+  }
+
+  void syncOwnChannels()
+}
+
+/** The app opens one chat per platform and it is always the signed-in user's own, so
+    every account change is also a source change: a sign-in opens that channel, a sign-out
+    closes it. This is the only place a source is created. */
+let syncing: Promise<void> | null = null
+
+function syncOwnChannels(): Promise<void> {
+  syncing ??= runSync().finally(() => {
+    syncing = null
+  })
+
+  return syncing
+}
+
+/** A channel being watched instead of the account's own. Sending works into any channel —
+    `broadcaster_id` is the target and `sender_id` is you — so this is how another chat gets
+    read and typed into without weakening the rule that a sign-in picks the channel. */
+const watching = new Map<Platform, string>()
+
+async function watchChannel(platform: Platform, identifier: string | null): Promise<void> {
+  if (identifier) watching.set(platform, identifier)
+  else watching.delete(platform)
+
+  await syncOwnChannels()
+}
+
+async function runSync(): Promise<void> {
+  for (const platform of PLATFORMS) {
+    const wanted = watching.get(platform) ?? accounts.ownChannel(platform)
+
+    if (wanted) await sources.ensureOnly(platform, wanted)
+    else await sources.removeByPlatform(platform)
   }
 }
 
@@ -133,7 +170,7 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     app.setAppUserModelId('com.lucaskumara.streamchat')
 
-    registerIpc(sources, accounts, obs, bus)
+    registerIpc(sources, accounts, obs, bus, watchChannel)
 
     void obs.start()
 
@@ -143,7 +180,7 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow.webContents.once('did-finish-load', () => {
       broadcastAccounts()
 
-      void accounts.restore()
+      void accounts.restore().then(broadcastAccounts)
     })
 
     mainWindow.on('closed', () => {

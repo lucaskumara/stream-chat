@@ -6,7 +6,7 @@ import { resolvedTheme, type ThemeMode } from './theme'
 import { mergeMessages } from './merge'
 import { useStore } from './store'
 import { ChatPane } from './components/ChatPane'
-import { ConnectChannel } from './components/ConnectChannel'
+import { SignInPrompt } from './components/SignInPrompt'
 import { TitleBar } from './components/TitleBar'
 import { Broadcast } from './views/Broadcast'
 import { Settings } from './views/Settings'
@@ -82,7 +82,7 @@ function Column({
   )
 
   if (column.platform !== null && column.sources.length === 0) {
-    return <ConnectChannel platform={column.platform} />
+    return <SignInPrompt platform={column.platform} />
   }
 
   return <Pane column={column} messages={messages} mode={mode} onDisconnect={onDisconnect} />

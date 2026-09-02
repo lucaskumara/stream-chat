@@ -111,25 +111,6 @@ describe('togglePlatform', () => {
   })
 })
 
-describe('setConnectDraft', () => {
-  it('keeps a half-typed name per platform', () => {
-    state().setConnectDraft('twitch', 'theburntpea')
-    state().setConnectDraft('kick', 'xqc')
-
-    expect(state().connectDraft.twitch).toBe('theburntpea')
-    expect(state().connectDraft.kick).toBe('xqc')
-  })
-
-  it('does not churn the state when nothing changed', () => {
-    state().setConnectDraft('twitch', 'xqc')
-    const before = state().connectDraft
-
-    state().setConnectDraft('twitch', 'xqc')
-
-    expect(state().connectDraft).toBe(before)
-  })
-})
-
 describe('setCapacity', () => {
   it('trims what is already held down to the new capacity', () => {
     state().ingest({

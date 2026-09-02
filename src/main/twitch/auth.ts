@@ -90,6 +90,13 @@ export class TwitchAuth {
     return config().getTokens('twitch') !== null
   }
 
+  /** A Twitch login is both the display name and the identifier the watcher resolves. */
+  ownChannel(): string | null {
+    const tokens = config().getTokens('twitch')
+
+    return tokens?.channel || tokens?.login || null
+  }
+
   async startDeviceFlow(): Promise<DeviceCodePrompt> {
     const clientId = this.getClientId()
     if (!clientId) {
@@ -210,7 +217,8 @@ export class TwitchAuth {
       expiresAt: Date.now() + token.expires_in * 1000,
       scopes,
       userId: identity.user_id,
-      login: identity.login
+      login: identity.login,
+      channel: identity.login
     })
   }
 

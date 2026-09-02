@@ -13,6 +13,7 @@ vi.mock('electron', () => ({
 const {
   parseAddSource,
   parseMessageText,
+  parseWatchTarget,
   parsePlatform,
   parseSourceIds,
   parseWebUrl,
@@ -170,5 +171,32 @@ describe('parseMessageText', () => {
 
   it('leaves a message at the limit untouched', () => {
     expect(parseMessageText('x'.repeat(500))).toHaveLength(500)
+  })
+})
+
+describe('parseWatchTarget', () => {
+  // Null is the normal state: no override, so the pane shows the account's own channel.
+  it('treats null and undefined as "back to my own channel"', () => {
+    expect(parseWatchTarget(null)).toBeNull()
+    expect(parseWatchTarget(undefined)).toBeNull()
+  })
+
+  it('treats an empty or blank string the same way', () => {
+    expect(parseWatchTarget('')).toBeNull()
+    expect(parseWatchTarget('   ')).toBeNull()
+  })
+
+  it('trims a channel name', () => {
+    expect(parseWatchTarget('  lofigirl  ')).toBe('lofigirl')
+  })
+
+  it('refuses a non-string that is not null', () => {
+    for (const value of [7, {}, [], true]) {
+      expect(() => parseWatchTarget(value)).toThrow()
+    }
+  })
+
+  it('clamps an absurdly long identifier', () => {
+    expect(parseWatchTarget('x'.repeat(500))).toHaveLength(100)
   })
 })

@@ -43,9 +43,6 @@ interface ChatState {
       would have nowhere to go. */
   merged: boolean
 
-  /** Half-typed channel names survive a tab switch, which remounts the form. */
-  connectDraft: Record<string, string>
-
   filterOpen: Record<string, boolean>
 
   /** Only one pane's settings popover is open at a time, so this is a single id
@@ -81,7 +78,6 @@ interface ChatState {
   setAccounts: (accounts: AccountState[]) => void
   togglePlatform: (platform: Platform) => void
   toggleMerged: () => void
-  setConnectDraft: (platform: Platform, draft: string) => void
   ingest: (batch: ChatBatch) => void
   setView: (view: View) => void
   setSettingsPane: (pane: SettingsPane) => void
@@ -209,7 +205,6 @@ export const useStore = create<ChatState>()((set) => ({
 
   visiblePlatforms: ['twitch'],
   merged: false,
-  connectDraft: {},
 
   view: 'chats',
   settingsPane: 'general',
@@ -261,13 +256,6 @@ export const useStore = create<ChatState>()((set) => ({
       else next.add(platform)
 
       return { visiblePlatforms: PLATFORMS.filter((each) => next.has(each)), view: 'chats' }
-    }),
-
-  setConnectDraft: (platform, draft) =>
-    set((s) => {
-      if (s.connectDraft[platform] === draft) return s
-
-      return { connectDraft: { ...s.connectDraft, [platform]: draft } }
     }),
 
   toggleMerged: () => set((s) => ({ merged: !s.merged })),

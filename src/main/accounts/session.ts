@@ -20,6 +20,10 @@ const REFRESH_MARGIN_MS = 5 * 60 * 1000
 export interface AccountIdentity {
   userId?: string
   displayName?: string
+
+  /** What to connect chat to. Separate from displayName because a display name is not an
+      identifier on any platform, and on YouTube the two are nothing alike. */
+  channel?: string
 }
 
 /** The authorization-code half of an account: browser, redirect, exchange, refresh. What
@@ -43,6 +47,11 @@ export abstract class OAuthAccount {
 
   isSignedIn(): boolean {
     return this.tokens() !== null
+  }
+
+  /** The signed-in user's own channel, which is the only chat this app opens. */
+  ownChannel(): string | null {
+    return this.tokens()?.channel || null
   }
 
   async restore(): Promise<void> {
@@ -163,7 +172,8 @@ export abstract class OAuthAccount {
     config().setTokens(this.platform, {
       ...tokens,
       userId: known?.userId ?? '',
-      login: known?.displayName ?? ''
+      login: known?.displayName ?? '',
+      channel: known?.channel
     })
   }
 
@@ -174,7 +184,8 @@ export abstract class OAuthAccount {
       config().setTokens(this.platform, {
         ...fresh,
         userId: held.userId,
-        login: held.login
+        login: held.login,
+        channel: held.channel
       })
 
       this.onState()
@@ -202,7 +213,8 @@ export abstract class OAuthAccount {
       config().setTokens(this.platform, {
         ...held,
         userId: this.identity.userId ?? held.userId,
-        login: this.identity.displayName ?? held.login
+        login: this.identity.displayName ?? held.login,
+        channel: this.identity.channel ?? held.channel
       })
     } catch (err) {
       console.warn(`[accounts] ${this.platform} identity lookup failed:`, err)
