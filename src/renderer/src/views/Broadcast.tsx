@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Copy } from 'lucide-react'
-import type { BroadcastState, Platform } from '@shared/types'
+import type { BroadcastState, DestinationState, Platform } from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { bridge } from '../bridge'
 import { PlatformMark } from '../components/PlatformMark'
@@ -58,6 +58,8 @@ export function Broadcast(): React.ReactElement {
           </p>
         </div>
 
+        <Signal state={state} />
+
         <div className="section-label mt-[20px] mb-[8px]">Forward to</div>
 
         <div style={{ border: '1px solid var(--line)', borderRadius: 9 }}>
@@ -74,9 +76,12 @@ export function Broadcast(): React.ReactElement {
                 <PlatformMark platform={platform} height={13} />
               </span>
 
-              <span className="flex-1 text-[14px]" style={{ color: 'var(--heading)' }}>
-                {NAME[platform]}
-              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px]" style={{ color: 'var(--heading)' }}>
+                  {NAME[platform]}
+                </div>
+                <DestinationLine state={state} platform={platform} />
+              </div>
 
               {ready.includes(platform) ? (
                 <Toggle
@@ -100,10 +105,8 @@ export function Broadcast(): React.ReactElement {
           ))}
         </div>
 
-        <Status state={state} />
-
         {state?.error && (
-          <p className="mt-[8px] mb-0 text-[13px]" style={{ color: 'var(--error)' }}>
+          <p className="mt-[12px] mb-0 text-[13px]" style={{ color: 'var(--error)' }}>
             {state.error}
           </p>
         )}
@@ -112,31 +115,65 @@ export function Broadcast(): React.ReactElement {
   )
 }
 
-/** No start button: a switched-on platform means the relay is listening, and OBS pressing
-    Go Live is what begins the forwarding. */
-function Status({ state }: { state: BroadcastState | null }): React.ReactElement {
-  const status = state?.status ?? 'off'
-
-  const dot =
-    status === 'forwarding' ? '#3fb950' : status === 'waiting' ? 'var(--fg-4)' : 'var(--line-2)'
-
-  const text =
-    status === 'forwarding'
-      ? `Forwarding to ${state?.destinations.map((p) => NAME[p]).join(', ')}`
-      : status === 'waiting'
-        ? 'Listening — press Go Live in OBS'
-        : 'Switch on a platform above to start listening'
+/** Whether OBS is actually sending, reported separately from where it is going. The relay
+    listens from launch, so this answers "is my encoder set up right?" before any platform
+    is switched on. */
+function Signal({ state }: { state: BroadcastState | null }): React.ReactElement {
+  const receiving = state?.receiving === true
 
   return (
-    <div className="mt-[16px] flex items-center gap-[8px]">
+    <div
+      className="mt-[10px] flex items-center gap-[9px] px-[14px] py-[11px]"
+      style={{ border: '1px solid var(--line)', borderRadius: 9 }}
+    >
       <span
         aria-hidden
         className="h-[8px] w-[8px] flex-none rounded-full"
-        style={{ background: dot }}
+        style={{ background: receiving ? '#3fb950' : 'var(--line-2)' }}
       />
-      <span className="text-[13px]" style={{ color: 'var(--fg-3)' }}>
-        {text}
+
+      <span className="flex-1 text-[14px]" style={{ color: 'var(--heading)' }}>
+        {receiving ? 'Receiving from OBS' : 'No signal from OBS'}
       </span>
+
+      <span className="text-[12px]" style={{ color: 'var(--fg-4)' }}>
+        {receiving
+          ? 'switch a platform on to send it'
+          : state?.listening
+            ? 'press Go Live in OBS'
+            : 'not listening'}
+      </span>
+    </div>
+  )
+}
+
+const DESTINATION_LINE: Record<DestinationState, string> = {
+  off: '',
+  connecting: 'Connecting…',
+  sending: 'Sending',
+  error: ''
+}
+
+function DestinationLine({
+  state,
+  platform
+}: {
+  state: BroadcastState | null
+  platform: Platform
+}): React.ReactElement | null {
+  const found = state?.destinations.find((d) => d.platform === platform)
+  if (!found) return null
+
+  const text = found.state === 'error' ? (found.error ?? 'Failed') : DESTINATION_LINE[found.state]
+  if (!text) return null
+
+  return (
+    <div
+      className="truncate text-[12px]"
+      style={{ color: found.state === 'error' ? 'var(--error)' : 'var(--fg-4)' }}
+      title={text}
+    >
+      {text}
     </div>
   )
 }

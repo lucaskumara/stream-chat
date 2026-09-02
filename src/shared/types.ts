@@ -124,19 +124,28 @@ export const DEFAULT_INGEST: Record<Platform, string> = {
   kick: ''
 }
 
-/** What the Broadcast screen shows: where OBS should push, and what is being forwarded. */
-/** `off` means nothing is switched on to forward to. `waiting` means the relay is
-    listening and OBS has not connected. `forwarding` means video is flowing. */
-export type BroadcastStatus = 'off' | 'waiting' | 'forwarding'
+/** Per platform, independent of whether OBS is sending: `off` is switched off, `error` is
+    a platform that refused us or fell behind. */
+export type DestinationState = 'off' | 'connecting' | 'sending' | 'error'
+
+export interface Destination {
+  platform: Platform
+  state: DestinationState
+  error?: string
+}
 
 export interface BroadcastState {
-  status: BroadcastStatus
-
   /** The two values to paste into OBS -> Settings -> Stream -> Custom. */
   obsServer: string
   obsKey: string
 
-  destinations: Platform[]
+  /** Whether the app is accepting a push at all, and whether OBS is actually sending one.
+      The two are separate: the relay listens from launch, so a signal can be reported
+      before any platform has been switched on. */
+  listening: boolean
+  receiving: boolean
+
+  destinations: Destination[]
   error?: string
 }
 

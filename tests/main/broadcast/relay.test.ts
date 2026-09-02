@@ -1,22 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import type { Platform, PlatformSetup } from '@shared/types'
+import type { PlatformSetup } from '@shared/types'
 import {
-  destinationsFor,
+  destinationArgs,
   destinationUrl,
+  ingestArgs,
   ingestUrl,
   listenUrl,
-  normalizeIngest,
-  relayArgs
+  normalizeIngest
 } from '@main/broadcast/relay'
 
 function setup(partial: Partial<PlatformSetup>): PlatformSetup {
   return { channel: '', ingestUrl: '', streamKey: '', forward: false, ...partial }
-}
-
-const ALL: Record<Platform, PlatformSetup> = {
-  twitch: setup({ ingestUrl: 'rtmps://ingest.example/app/', streamKey: 'live_1_abc' }),
-  youtube: setup({ ingestUrl: 'rtmp://a.rtmp.youtube.com/live2', streamKey: 'yt-key' }),
-  kick: setup({ ingestUrl: 'rtmps://hash.contribute.example/app/', streamKey: 'sk_1' })
 }
 
 describe('normalizeIngest', () => {
@@ -47,8 +41,6 @@ describe('normalizeIngest', () => {
 })
 
 describe('destinationUrl', () => {
-  // Kick's dashboard gives a URL with a trailing slash and OBS accepts either shape, so
-  // the join must not depend on which the user pasted.
   it('joins with exactly one slash however the URL was pasted', () => {
     expect(destinationUrl(setup({ ingestUrl: 'rtmp://x/app', streamKey: 'k' }))).toBe(
       'rtmp://x/app/k'
@@ -67,6 +59,8 @@ describe('destinationUrl', () => {
     )
   })
 
+  // Without both halves there is nothing to push to, and an empty string is what the
+  // relay checks before starting a destination at all.
   it('is empty without both halves', () => {
     expect(destinationUrl(setup({ ingestUrl: 'rtmp://x/app' }))).toBe('')
     expect(destinationUrl(setup({ streamKey: 'k' }))).toBe('')
@@ -74,75 +68,54 @@ describe('destinationUrl', () => {
   })
 })
 
-describe('destinationsFor', () => {
-  it('takes only the platforms that were chosen', () => {
-    const chosen = destinationsFor(ALL, ['twitch', 'kick'])
-
-    expect(chosen.map((d) => d.platform)).toEqual(['twitch', 'kick'])
-  })
-
-  // A platform with no key would otherwise become an empty destination, and ffmpeg would
-  // push to a malformed URL rather than skipping it.
-  it('drops a chosen platform that has no key', () => {
-    const partial = { ...ALL, kick: setup({ ingestUrl: 'rtmps://hash.example/app/' }) }
-
-    expect(destinationsFor(partial, ['twitch', 'kick']).map((d) => d.platform)).toEqual([
-      'twitch'
-    ])
-  })
-
-  it('is empty when nothing is chosen', () => {
-    expect(destinationsFor(ALL, [])).toEqual([])
-  })
-
-  it('keeps platform order stable rather than following the chosen order', () => {
-    expect(destinationsFor(ALL, ['kick', 'twitch']).map((d) => d.platform)).toEqual([
-      'twitch',
-      'kick'
-    ])
-  })
-})
-
-describe('relayArgs', () => {
-  const destinations = destinationsFor(ALL, ['twitch', 'kick'])
-  const args = relayArgs(destinations, listenUrl('abc123'))
-
-  // Without -map 0 ffmpeg's default stream selection hands the tee muxer nothing and it
-  // dies with "Output file does not contain any stream". Learned the hard way.
-  it('maps every stream, which tee needs and default selection does not give it', () => {
-    expect(args).toContain('-map')
-    expect(args[args.indexOf('-map') + 1]).toBe('0')
-  })
-
-  it('copies rather than re-encoding, so the relay costs no CPU', () => {
-    expect(args[args.indexOf('-c') + 1]).toBe('copy')
-  })
+describe('ingestArgs', () => {
+  const args = ingestArgs(listenUrl('abc123'))
 
   it('listens rather than connecting', () => {
     expect(args[args.indexOf('-listen') + 1]).toBe('1')
+    expect(args[args.indexOf('-i') + 1]).toBe('rtmp://127.0.0.1:1935/live/abc123')
   })
 
-  // One platform refusing a key must not take the others down with it.
-  it('marks every destination onfail=ignore', () => {
-    const tee = args[args.length - 1]
-
-    expect(tee.split('|')).toHaveLength(2)
-    for (const part of tee.split('|')) expect(part).toContain('[f=flv:onfail=ignore]')
+  // Without -map 0 ffmpeg's default stream selection hands the muxer nothing and it dies
+  // with "Output file does not contain any stream". Learned the hard way.
+  it('maps every stream', () => {
+    expect(args[args.indexOf('-map') + 1]).toBe('0')
   })
 
-  it('sends the joined url for each destination', () => {
-    const tee = args[args.length - 1]
-
-    expect(tee).toContain('rtmps://ingest.example/app/live_1_abc')
-    expect(tee).toContain('rtmps://hash.contribute.example/app/sk_1')
+  it('copies rather than re-encoding, so the ingest costs no CPU', () => {
+    expect(args[args.indexOf('-c') + 1]).toBe('copy')
   })
 
-  it('builds a single-destination tee without a trailing separator', () => {
-    const one = relayArgs(destinationsFor(ALL, ['youtube']), listenUrl('k'))
+  // MPEG-TS, not FLV: a platform switched on mid-stream has to join a stream already in
+  // progress, and TS repeats its PAT/PMT so a late reader can find the stream.
+  it('hands the stream out as MPEG-TS on stdout', () => {
+    expect(args[args.indexOf('-f') + 1]).toBe('mpegts')
+    expect(args[args.length - 1]).toBe('pipe:1')
+  })
 
-    expect(one[one.length - 1]).toBe(
-      '[f=flv:onfail=ignore]rtmp://a.rtmp.youtube.com/live2/yt-key'
-    )
+  // The ingest must never push anywhere itself — that separation is what lets a platform
+  // be toggled without OBS seeing a disconnect.
+  it('names no destination at all', () => {
+    expect(args.join(' ')).not.toMatch(/rtmps?:\/\/(?!127\.0\.0\.1)/)
+  })
+})
+
+describe('destinationArgs', () => {
+  const args = destinationArgs('rtmps://ingest.example/app/live_1_abc')
+
+  it('reads the ingest from stdin', () => {
+    expect(args[args.indexOf('-i') + 1]).toBe('pipe:0')
+    expect(args[args.indexOf('-f') + 1]).toBe('mpegts')
+  })
+
+  it('pushes FLV to the platform, still without re-encoding', () => {
+    expect(args[args.length - 2]).toBe('flv')
+    expect(args[args.length - 1]).toBe('rtmps://ingest.example/app/live_1_abc')
+    expect(args[args.indexOf('-c') + 1]).toBe('copy')
+  })
+
+  it('maps every stream here too', () => {
+    expect(args[args.indexOf('-map') + 1]).toBe('0')
   })
 })
 

@@ -1,10 +1,17 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import type { BroadcastState, Platform } from '@shared/types'
+import type { BroadcastState, DestinationState, Platform } from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { config } from '../config'
-import type { Destination } from './relay'
-import { destinationsFor, ingestUrl, listenUrl, relayArgs, RELAY_APP, RELAY_PORT } from './relay'
+import {
+  destinationArgs,
+  destinationUrl,
+  ingestArgs,
+  ingestUrl,
+  listenUrl,
+  RELAY_APP,
+  RELAY_PORT
+} from './relay'
 
 /** electron-builder cannot execute a binary from inside app.asar, so the packed path
     points at the unpacked copy beside it. In dev the module resolves normally. */
@@ -15,151 +22,234 @@ function ffmpegPath(): string {
 }
 
 /** OBS pushes to this, and nothing else can: a push carrying a different key lands on a
-    path ffmpeg is not listening on. Kept for the life of the app so the value copied into
-    OBS stays valid, and regenerated on restart because a listener that is gone has no key
-    worth honouring. */
+    path ffmpeg is not listening on. Regenerated per launch, since a listener that is gone
+    has no key worth honouring. */
 const relayKey = randomBytes(8).toString('hex')
 
 /** ffmpeg reports a clean teardown on stderr in the same shape as a real fault — "Error
-    retrieving a packet from demuxer: I/O error" is what a *finished* stream looks like
-    when OBS disconnects. Only a destination refusing us is worth surfacing. */
+    retrieving a packet from demuxer: I/O error" is what a *finished* stream prints when
+    the encoder disconnects. Only a destination refusing us is worth surfacing. */
 const REAL_FAILURE =
   /connection refused|no route|unauthor|forbidden|invalid.*key|error opening|server error/i
 
 const RESPAWN_MS = 800
-
-/** Long enough that a listener which dies instantly, over and over, backs off instead of
-    spinning — a wrong port or a busy 1935 would otherwise respawn forever. */
 const MIN_HEALTHY_MS = 3_000
 const MAX_BACKOFF_MS = 15_000
 
-/** Listens whenever anything is switched on, rather than waiting to be started. OBS
-    pressing Go Live is the trigger; there is no button on our side to forget. */
+/** A destination that stops draining would otherwise back the ingest up and stall every
+    other platform. Past this much unwritten, that one is dropped instead. */
+const MAX_PENDING_BYTES = 8 * 1024 * 1024
+
+interface Outbound {
+  process: ChildProcess
+  state: DestinationState
+  error?: string
+}
+
+/** Ingest and fan-out are separate processes on purpose. One ffmpeg holds OBS's connection
+    and hands the stream to us as MPEG-TS; one more per platform pushes it onward. Toggling
+    a platform starts or kills only its own process, so OBS never sees a disconnect — which
+    is the whole reason this is not a single `tee`. */
 export class Relay {
-  private process: ChildProcess | null = null
-  private forwarding = false
-  private live: Platform[] = []
+  private ingest: ChildProcess | null = null
+  private receiving = false
+  private outbound = new Map<Platform, Outbound>()
   private failure: string | null = null
   private timer: NodeJS.Timeout | null = null
   private startedAt = 0
   private backoff = RESPAWN_MS
+  private stopped = false
 
   constructor(private readonly onChange: () => void) {}
 
   state(): BroadcastState {
     return {
-      status: this.process === null ? 'off' : this.forwarding ? 'forwarding' : 'waiting',
       obsServer: `rtmp://localhost:${RELAY_PORT}/${RELAY_APP}`,
       obsKey: relayKey,
-      destinations: this.live,
+      listening: this.ingest !== null,
+      receiving: this.receiving,
+      destinations: PLATFORMS.map((platform) => ({
+        platform,
+        state: this.outbound.get(platform)?.state ?? 'off',
+        error: this.outbound.get(platform)?.error
+      })),
       error: this.failure ?? undefined
     }
   }
 
-  /** Called whenever the settings change. Brings the listener in line with them: running
-      with the right destinations, or not running at all. */
-  sync(): void {
-    const wanted = this.wantedDestinations()
-
-    if (wanted.length === 0) {
-      this.shutdown()
-      return
-    }
-
-    const same =
-      this.live.length === wanted.length &&
-      wanted.every((destination, at) => this.live[at] === destination.platform)
-
-    if (this.process && same) return
-
-    this.shutdown()
-    this.backoff = RESPAWN_MS
-    this.spawn(wanted)
+  /** Listens from launch, whether or not anything is switched on, so the page can report
+      a signal from OBS before the user has chosen where to send it. */
+  start(): void {
+    this.stopped = false
+    this.openIngest()
   }
 
-  shutdown(): void {
-    if (this.timer) clearTimeout(this.timer)
-    this.timer = null
+  /** Called on every settings save. Only touches the per-platform processes; the ingest,
+      and therefore OBS, is left alone. */
+  sync(): void {
+    const setup = config().all()
 
-    const child = this.process
-    this.process = null
-    this.forwarding = false
-    this.live = []
+    for (const platform of PLATFORMS) {
+      const wanted = setup[platform].forward && this.receiving
+      const url = destinationUrl(setup[platform])
+      const running = this.outbound.get(platform)
 
-    child?.kill()
+      if (wanted && url && !running) this.openDestination(platform, url)
+      if (!wanted && running) this.closeDestination(platform)
+    }
+
     this.onChange()
   }
 
-  private wantedDestinations(): Destination[] {
-    const setup = config().all()
-    const on = PLATFORMS.filter((platform) => setup[platform].forward)
+  shutdown(): void {
+    this.stopped = true
 
-    return destinationsFor(setup, on)
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = null
+
+    for (const platform of [...this.outbound.keys()]) this.closeDestination(platform)
+
+    const child = this.ingest
+    this.ingest = null
+    this.receiving = false
+    child?.kill()
   }
 
-  private spawn(destinations: Destination[]): void {
-    this.failure = null
-    this.live = destinations.map((destination) => destination.platform)
+  private openIngest(): void {
+    if (this.stopped || this.ingest) return
+
     this.startedAt = Date.now()
 
-    const child = spawn(ffmpegPath(), relayArgs(destinations, listenUrl(relayKey)), {
-      windowsHide: true
+    const child = spawn(ffmpegPath(), ingestArgs(listenUrl(relayKey)), { windowsHide: true })
+
+    this.ingest = child
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      /** The first bytes are the only honest signal that an encoder connected — the
+          process starts in order to wait, so its existence says nothing. */
+      if (!this.receiving) {
+        this.receiving = true
+        this.failure = null
+        this.sync()
+      }
+
+      this.fanOut(chunk)
     })
 
-    this.process = child
-    this.forwarding = false
-
-    /** ffmpeg says everything on stderr, warnings included, so this is the only place a
-        rejected destination shows up — a bad key is a message here, not an exit code. */
     child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk: string) => {
-      const line = chunk.trim()
-      if (!line) return
-
-      console.warn('[relay]', line)
-
-      /** ffmpeg prints its stats line only once packets are moving, which is the earliest
-          honest signal that OBS connected. */
-      if (!this.forwarding && /frame=|size=/.test(line)) {
-        this.forwarding = true
-        this.onChange()
-      }
-
-      if (this.process === child && REAL_FAILURE.test(line)) {
-        this.failure = line.slice(0, 300)
-        this.onChange()
-      }
+    child.stderr.on('data', (line: string) => {
+      const text = line.trim()
+      if (text) console.warn('[ingest]', text)
     })
 
     child.on('error', (err) => {
       this.failure = err.message
-      this.restart(child)
+      this.reopenIngest(child)
     })
 
-    child.on('exit', () => this.restart(child))
+    child.on('exit', () => this.reopenIngest(child))
 
     this.onChange()
   }
 
-  /** OBS disconnecting ends the ffmpeg process, so the listener is rebuilt to wait for the
-      next Go Live. A process that dies immediately backs off instead of spinning. */
-  private restart(child: ChildProcess): void {
-    if (this.process !== child) return
+  /** OBS disconnecting ends this process, so it is rebuilt to wait for the next Go Live.
+      A process that dies immediately backs off rather than spinning on a busy port. */
+  private reopenIngest(child: ChildProcess): void {
+    if (this.ingest !== child) return
 
     const healthy = Date.now() - this.startedAt > MIN_HEALTHY_MS
     this.backoff = healthy ? RESPAWN_MS : Math.min(this.backoff * 2, MAX_BACKOFF_MS)
 
-    this.process = null
-    this.forwarding = false
+    this.ingest = null
+    this.receiving = false
+
+    for (const platform of [...this.outbound.keys()]) this.closeDestination(platform)
+
     this.onChange()
 
-    const wanted = this.wantedDestinations()
-    if (wanted.length === 0) return
+    if (this.stopped) return
 
     this.timer = setTimeout(() => {
       this.timer = null
-      if (!this.process) this.spawn(wanted)
+      this.openIngest()
     }, this.backoff)
+  }
+
+  private fanOut(chunk: Buffer): void {
+    for (const [platform, out] of this.outbound) {
+      const stdin = out.process.stdin
+      if (!stdin || stdin.destroyed) continue
+
+      /** Never let one slow platform hold up the others: past the cap this destination is
+          dropped rather than allowed to back pressure onto the ingest. */
+      if (stdin.writableLength > MAX_PENDING_BYTES) {
+        out.error = 'fell too far behind and was dropped'
+        out.state = 'error'
+        this.closeDestination(platform, true)
+        this.onChange()
+        continue
+      }
+
+      stdin.write(chunk, (err) => {
+        if (err && out.state !== 'error') {
+          out.error = err.message
+          out.state = 'error'
+          this.onChange()
+        }
+      })
+    }
+  }
+
+  private openDestination(platform: Platform, url: string): void {
+    const child = spawn(ffmpegPath(), destinationArgs(url), { windowsHide: true })
+
+    const out: Outbound = { process: child, state: 'connecting' }
+    this.outbound.set(platform, out)
+
+    /** A broken pipe here is this destination ending, not a fault worth reporting — the
+        unhandled 'error' would otherwise take the whole main process down. */
+    child.stdin?.on('error', () => {})
+
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (line: string) => {
+      const text = line.trim()
+      if (!text) return
+
+      console.warn(`[relay:${platform}]`, text)
+
+      if (out.state === 'connecting' && /frame=|size=/.test(text)) {
+        out.state = 'sending'
+        this.onChange()
+      }
+
+      if (REAL_FAILURE.test(text)) {
+        out.state = 'error'
+        out.error = text.slice(0, 200)
+        this.onChange()
+      }
+    })
+
+    child.on('exit', () => {
+      if (this.outbound.get(platform) !== out) return
+
+      /** Exiting while it was meant to be sending is a failure the user should see; a kill
+          on the way out of a toggle is not. */
+      if (out.state !== 'error') this.outbound.delete(platform)
+
+      this.onChange()
+    })
+
+    this.onChange()
+  }
+
+  private closeDestination(platform: Platform, keepError = false): void {
+    const out = this.outbound.get(platform)
+    if (!out) return
+
+    if (!keepError) this.outbound.delete(platform)
+
+    out.process.stdin?.end()
+    out.process.kill()
   }
 }
 

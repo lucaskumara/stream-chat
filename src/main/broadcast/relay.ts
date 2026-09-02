@@ -1,5 +1,4 @@
 import type { Platform, PlatformSetup } from '@shared/types'
-import { PLATFORMS } from '@shared/types'
 
 /** OBS pushes here. 1935 is RTMP's registered port, which is what OBS offers by default
     and what anyone copying a server address expects to see. */
@@ -9,18 +8,6 @@ export const RELAY_APP = 'live'
 export interface Destination {
   platform: Platform
   url: string
-}
-
-/** A platform is a destination once it has somewhere to push and something to push with.
-    Kick supplies both; Twitch and YouTube carry a fixed ingest, so in practice this turns
-    on the moment a stream key is pasted. */
-export function destinationsFor(
-  setup: Record<Platform, PlatformSetup>,
-  enabled: readonly Platform[]
-): Destination[] {
-  return PLATFORMS.filter((platform) => enabled.includes(platform))
-    .map((platform) => ({ platform, url: destinationUrl(setup[platform]) }))
-    .filter((destination): destination is Destination => destination.url.length > 0)
 }
 
 /** Kick's dashboard hands out a host with no path — `rtmps://<hash>.global-contribute.
@@ -53,21 +40,24 @@ export function ingestUrl(relayKey: string): string {
   return `rtmp://localhost:${RELAY_PORT}/${RELAY_APP}/${relayKey}`
 }
 
-/** `-map 0` is not optional: without it ffmpeg's default stream selection hands the tee
-    muxer nothing and it dies with "Output file does not contain any stream".
+/** What ffmpeg listens on. The relay key is a path segment, so a push carrying the wrong
+    one never reaches us — RTMP matches the whole application path. Bound to loopback so
+    nothing on the network can push in. */
+export function listenUrl(relayKey: string): string {
+  return `rtmp://127.0.0.1:${RELAY_PORT}/${RELAY_APP}/${relayKey}`
+}
 
-    `onfail=ignore` keeps one platform's failure from taking the others down. Measured:
-    killing a destination mid-stream leaves the rest running to full length either way on
-    ffmpeg 6.1, but the documented default is to abort, so it is set rather than assumed.
+/** Accepts OBS and hands the stream to us as MPEG-TS on stdout, rather than pushing it
+    anywhere itself. That separation is the whole design: this process — and therefore
+    OBS's connection — is untouched when a platform is switched on or off.
 
-    Everything is `-c copy` — one encode, no transcode — so the relay costs almost no CPU
-    and every platform receives byte-identical video. The price is that OBS's single
-    encode has to satisfy the strictest destination. */
-export function relayArgs(destinations: Destination[], listenUrl: string): string[] {
-  const tee = destinations
-    .map((destination) => `[f=flv:onfail=ignore]${destination.url}`)
-    .join('|')
+    `-map 0` is not optional; without it ffmpeg's default stream selection hands the muxer
+    nothing. `-c copy` means no transcode, so the ingest costs almost no CPU.
 
+    MPEG-TS rather than FLV because a destination that starts late has to be able to join
+    a stream already in progress: TS repeats its PAT/PMT tables, so a new reader can find
+    the stream without having seen its header. */
+export function ingestArgs(listen: string): string[] {
   return [
     '-hide_banner',
     '-loglevel',
@@ -75,20 +65,41 @@ export function relayArgs(destinations: Destination[], listenUrl: string): strin
     '-listen',
     '1',
     '-i',
-    listenUrl,
+    listen,
     '-map',
     '0',
     '-c',
     'copy',
     '-f',
-    'tee',
-    tee
+    'mpegts',
+    'pipe:1'
   ]
 }
 
-/** What ffmpeg listens on. The relay key is a path segment, so a push carrying the wrong
-    one never reaches us — RTMP matches the whole application path. Bound to loopback so
-    nothing on the network can push into it. */
-export function listenUrl(relayKey: string): string {
-  return `rtmp://127.0.0.1:${RELAY_PORT}/${RELAY_APP}/${relayKey}`
+/** One of these per platform, fed the ingest's bytes on stdin. Killing it stops that
+    platform and nothing else.
+
+    A platform switched on mid-stream begins reading part way through a GOP, so its first
+    fraction of a second is an incomplete access unit — measured at 5 bad frames out of
+    834, all at the head, before the next keyframe two seconds in. `-fflags +discardcorrupt`
+    does *not* help: these packets are not flagged corrupt, merely truncated. Fixing it
+    properly means parsing the transport stream to start a new destination on a keyframe,
+    which is not worth it for a blip at the very start of that platform's own stream. */
+export function destinationArgs(url: string): string[] {
+  return [
+    '-hide_banner',
+    '-loglevel',
+    'warning',
+    '-f',
+    'mpegts',
+    '-i',
+    'pipe:0',
+    '-map',
+    '0',
+    '-c',
+    'copy',
+    '-f',
+    'flv',
+    url
+  ]
 }

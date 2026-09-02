@@ -743,25 +743,44 @@ silently snapped every dock to the smallest font in `CHAT_FONT_SIZES`.
 
 ### Broadcast (the relay)
 
-**OBS pushes into the app, and the app fans it out.** `Relay` in `main/broadcast/` runs one
-ffmpeg: an RTMP listener on 1935 that tees every enabled destination. OBS is configured once
-— server `rtmp://localhost:1935/live`, key the session's relay key — and never learns which
-platforms are downstream.
+**Ingest and fan-out are separate processes, and that separation is the whole design.** One
+ffmpeg holds OBS's RTMP connection and hands the stream to us as MPEG-TS on stdout; one more
+ffmpeg per platform takes those bytes on stdin and pushes them onward. Switching a platform
+on or off starts or kills only its own process, so **OBS never sees a disconnect**. A single
+`tee` cannot do this — its outputs are fixed at spawn, so changing the set meant killing the
+process OBS was connected to, dropping every platform and forcing OBS to reconnect. Measured
+before and after: with the tee a toggle ended the stream everywhere; now the producer stays
+connected across on, on-again and off.
 
-**There is no start button, and that is the design.** A platform's `forward` switch is
-persisted, and `Relay.sync()` brings the listener in line with it: switched on means
-listening, switched off means not. Pressing Go Live in OBS is what begins forwarding, which
-is the only moment the user was going to act on anyway. `status` is therefore `off` (nothing
-switched on), `waiting` (listening, no encoder yet) or `forwarding`.
+**The ingest listens from launch, not from a switch.** That is what lets the Broadcast page
+report "Receiving from OBS" before any platform is chosen, which is the question a user
+actually has when setting an encoder up. `listening` and `receiving` are separate fields for
+the same reason.
 
-**OBS disconnecting ends the ffmpeg process, so the listener is rebuilt.** `-listen 1`
-serves exactly one session and exits, which would otherwise mean one stream per app launch.
-`restart` respawns it, with a doubling backoff for a process that dies inside
-`MIN_HEALTHY_MS` so a busy 1935 cannot spin.
+**MPEG-TS between the two, not FLV.** A platform switched on mid-stream has to join a stream
+already in progress, and TS repeats its PAT/PMT so a late reader can find the streams without
+having seen a header. Still `-c copy` throughout — no transcode anywhere in the chain.
 
-**"Is it forwarding?" is read off ffmpeg's stats line.** It prints `frame=`/`size=` only
-once packets are moving, which is the earliest honest signal that an encoder connected —
-the process starting says nothing, since it starts in order to wait.
+**A late joiner's first fraction of a second is incomplete, and that is inherent.** It begins
+reading part way through a GOP, so the access unit before the next keyframe is truncated —
+measured at 5 bad frames out of 834, all at the head. `-fflags +discardcorrupt` does *not*
+fix it (the packets are truncated, not flagged corrupt); a real fix means parsing the
+transport stream to start on a keyframe, which is not worth it for a blip at the very start
+of that platform's own stream.
+
+**One slow platform must not stall the others.** The ingest's bytes are written to every
+active destination's stdin, so a destination that stops draining would back-pressure onto the
+ingest and hold up everyone. Past `MAX_PENDING_BYTES` that one is dropped with an error
+instead. Its stdin also needs an `error` listener — an unhandled EPIPE on a killed child
+takes the whole main process down.
+
+**`-map 0` is not optional in either process.** Without it ffmpeg's default stream selection
+hands the muxer nothing and it dies with "Output file does not contain any stream", which
+reads like a broken pipeline rather than a missing flag.
+
+**"Is it receiving?" is the ingest's first stdout bytes.** The process starting says nothing,
+since it starts in order to wait. Per destination, `frame=`/`size=` on stderr is the
+equivalent signal that it is actually sending.
 
 **Kick's ingest URL needs `/app` appended and their dashboard does not include it.** The
 value they hand out is a bare host, and the encoder is expected to add the path — OBS users
@@ -769,37 +788,35 @@ hit the same thing. Without it ffmpeg reports `error opening: I/O error`, which 
 neither the cause nor the platform. `normalizeIngest` appends `/app` to any ingest with no
 path of its own, so it fires on Kick and never on Twitch (`/app`) or YouTube (`/live2`).
 
-**`-map 0` is not optional.** Without it ffmpeg's default stream selection hands the tee
-muxer nothing and it dies with "Output file does not contain any stream", which reads like a
-broken pipeline rather than a missing flag.
-
-**Everything is `-c copy`.** No transcode, so the relay costs almost no CPU and every
-platform gets byte-identical video — measured at three destinations with matching MD5s. The
-price is that OBS's single encode must satisfy the strictest platform: 2s keyframes and
-6000 kbps, which is Twitch's ceiling.
-
-**`onfail=ignore` on every destination.** Measured on ffmpeg 6.1 a dying destination leaves
-the others running either way, but the documented default is to abort, so it is set rather
-than assumed.
-
 **A clean teardown looks exactly like a fault on ffmpeg's stderr.** "Error retrieving a
-packet from demuxer: I/O error" is what a *finished* stream prints. Matching on the word
-error therefore reports a failure every time the user presses stop — `REAL_FAILURE` narrows
-it to a destination actually refusing us, and `stopping` suppresses it during teardown.
+packet from demuxer: I/O error" is what a *finished* stream prints when the encoder
+disconnects. Matching on the word error therefore reports a failure every time a stream ends
+— `REAL_FAILURE` narrows it to a destination actually refusing us.
+
+**OBS disconnecting ends the ingest process, so it is rebuilt.** `-listen 1` serves exactly
+one session and exits, which would otherwise mean one stream per app launch. Respawn carries
+a doubling backoff for a process that dies inside `MIN_HEALTHY_MS`, so a busy 1935 cannot
+spin.
 
 **The relay key is a path segment, and that is what protects the port.** RTMP matches the
 whole application path, so a push carrying the wrong key never reaches us. It is generated
-per session rather than stored: a relay that is not running has no key worth keeping.
-ffmpeg listens on `127.0.0.1` while OBS is told `localhost`, so nothing on the network can
-push in.
+per launch rather than stored — which does mean the value has to be re-copied into OBS after
+a restart. ffmpeg listens on `127.0.0.1` while OBS is told `localhost`, so nothing on the
+network can push in.
 
 **ffmpeg cannot be run from inside `app.asar`.** `asarUnpack` puts `ffmpeg-static` beside
 the archive and `ffmpegPath()` swaps `app.asar` for `app.asar.unpacked`. It adds ~79MB, so
 the installer goes from 113MB to roughly 190MB.
 
+**`node-media-server` was the obvious alternative and was rejected on weight.** v4 pulls in
+express, cors, jsonwebtoken and express-rate-limit — a whole HTTP stack shipping in a desktop
+app to accept one loopback connection. The pipe fan-out needs nothing ffmpeg does not already
+provide.
+
 **A local relay saves no upload bandwidth.** Three destinations is 3x upstream whether the
 fan-out happens here or in an OBS multi-output plugin — only a cloud relay changes that,
-which is what Restream sells. What this buys is one place to configure and one button.
+which is what Restream sells. What this buys is one place to configure and switches that work
+mid-stream.
 
 **No account is needed for any of it.** Stream keys are paste-once values; Twitch and Kick
 go live on RTMP connect, and YouTube does too as long as Auto-start is on in Studio.
@@ -1408,7 +1425,7 @@ tests, so nothing bundles them. What is covered:
 | the per-platform channel parse | `renderer/connect.ts` |
 | the merged-column k-way merge | `renderer/merge.ts` |
 | the split/merged column model | `renderer/layout.ts` |
-| relay destinations and ffmpeg arguments | `broadcast/relay.ts` |
+| ingest and per-destination ffmpeg arguments | `broadcast/relay.ts` |
 | the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |

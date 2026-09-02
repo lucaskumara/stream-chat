@@ -69,6 +69,8 @@ async function platformsChanged(): Promise<void> {
   await syncChannels()
 }
 
+
+
 const irc = new IrcHub()
 
 const sources = new SourceManager(bus, broadcastSources, {
@@ -171,7 +173,7 @@ if (!app.requestSingleInstanceLock()) {
 
     mainWindow.webContents.once('did-finish-load', () => {
       broadcastPlatforms()
-      relay.sync()
+      relay.start()
 
       void syncChannels()
     })
