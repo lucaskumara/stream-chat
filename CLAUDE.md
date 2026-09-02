@@ -1035,9 +1035,9 @@ without having to send back a key it was never given.
 this app deliberately never used to keep — see the persistence invariant below — so now
 that it must be stored, it is stored the way the secret is.
 
-**The stream URL is only a field where it varies per user, which is Kick alone.** Twitch
-and YouTube publish one ingest for every channel, so theirs is shown as static text and
-`fixIngest` in `config.ts` overwrites whatever is stored — it is a constant, not user data,
+**The stream URL appears only where it varies per user, which is Kick alone.** Twitch and
+YouTube publish one ingest for every channel, so theirs is not shown at all — the card is a
+channel and a key — and `fixIngest` in `config.ts` overwrites whatever is stored — it is a constant, not user data,
 and a value saved by an older build must not outrank it. Twitch's dashboard shows no URL at
 all (the encoder picks an ingest server), so offering a box invited a hunt for something
 that does not exist.

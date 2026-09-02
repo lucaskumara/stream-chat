@@ -22,7 +22,7 @@ const HELP: Record<Platform, { label: string; url: string }> = {
     label: 'Get your stream key',
     url: 'https://studio.youtube.com/channel/UC/livestreaming'
   },
-  kick: { label: 'Get your URL and key', url: 'https://kick.com/dashboard/settings/stream' }
+  kick: { label: 'Get your URL and key', url: 'https://dashboard.kick.com/channel/stream' }
 }
 
 const CHANNEL_HINT: Record<Platform, string> = {
@@ -31,14 +31,13 @@ const CHANNEL_HINT: Record<Platform, string> = {
   kick: 'kick.com/<name>'
 }
 
-const EXTRA: Record<Platform, string> = {
-  twitch: 'Twitch has no URL to copy — every channel uses the one above.',
-
+/** Only where there is something the user must actually do. Twitch needs no note: its
+    ingest is a constant main already holds, so the card is just a channel and a key. */
+const EXTRA: Partial<Record<Platform, string>> = {
   /** YouTube will not start a broadcast just because video arrives unless this is on. */
-  youtube:
-    'Every channel uses the URL above. Turn on Auto-start in Studio, or pushing video will not go live.',
+  youtube: 'Turn on Auto-start in Studio, or pushing video will not go live.',
 
-  kick: 'Kick gives every channel its own stream URL, so both come from your dashboard.'
+  kick: 'Kick gives every channel its own stream URL, so it needs both.'
 }
 
 export function Platforms(): React.ReactElement {
@@ -107,9 +106,7 @@ function PlatformCard({
           value={config?.channel ?? ''}
         />
 
-        {DEFAULT_INGEST[platform] ? (
-          <Fixed label="Stream URL" value={DEFAULT_INGEST[platform]} />
-        ) : (
+        {!DEFAULT_INGEST[platform] && (
           <Field
             platform={platform}
             field="ingestUrl"
@@ -129,33 +126,13 @@ function PlatformCard({
           alreadySet={config?.hasStreamKey === true}
         />
 
-        <p className="mt-[10px] mb-0 text-[12px]" style={{ color: 'var(--fg-4)' }}>
-          {EXTRA[platform]}
-        </p>
+        {EXTRA[platform] && (
+          <p className="mt-[10px] mb-0 text-[12px]" style={{ color: 'var(--fg-4)' }}>
+            {EXTRA[platform]}
+          </p>
+        )}
       </div>
     </section>
-  )
-}
-
-/** The same ingest for every user of the platform, so it is shown rather than asked for.
-    Only Kick's varies per channel. */
-function Fixed({ label, value }: { label: string; value: string }): React.ReactElement {
-  return (
-    <div className="mt-[10px] flex items-center gap-[10px] first:mt-0">
-      <span className="w-[92px] flex-none text-[13px]" style={{ color: 'var(--fg-3)' }}>
-        {label}
-      </span>
-
-      <span
-        className="min-w-0 flex-1 truncate text-[13px]"
-        style={{ color: 'var(--fg-4)', height: 30, lineHeight: '30px' }}
-        title={value}
-      >
-        {value}
-      </span>
-
-      <span className="w-[42px] flex-none" />
-    </div>
   )
 }
 
