@@ -1,17 +1,8 @@
 import { useState } from 'react'
 import { SendHorizontal } from 'lucide-react'
-import type { AccountState, Platform } from '@shared/types'
+import type { AccountState, Platform, SourceStatus } from '@shared/types'
+import { blockedReason, CAN_SEND } from '../composer'
 import { bridge, remoteMessage } from '../bridge'
-
-/** Which platforms this build can send on at all. YouTube comes next; until it does, its
-    pane gets no composer rather than a box that only ever refuses. */
-export const CAN_SEND: readonly Platform[] = ['twitch', 'kick']
-
-const NAME: Record<Platform, string> = {
-  twitch: 'Twitch',
-  youtube: 'YouTube',
-  kick: 'Kick'
-}
 
 const MAX_LENGTH = 500
 
@@ -23,6 +14,13 @@ export interface ComposerProps {
   platform: Platform
   label: string
   account: AccountState | undefined
+
+  /** A chat that is not connected has nothing to send to. On YouTube that is the normal
+      state — its live chat exists only while a broadcast is running — so the box explains
+      it rather than failing at the moment of sending. */
+  status: SourceStatus
+  statusReason: string | undefined
+
   fontSize: number
 }
 
@@ -31,6 +29,8 @@ export function Composer({
   platform,
   label,
   account,
+  status,
+  statusReason,
   fontSize
 }: ComposerProps): React.ReactElement | null {
   const [text, setText] = useState('')
@@ -39,7 +39,7 @@ export function Composer({
 
   if (!CAN_SEND.includes(platform)) return null
 
-  const blocked = blockedReason(account, platform)
+  const blocked = blockedReason(account, platform, status, statusReason)
 
   const send = async (): Promise<void> => {
     const body = text.trim()
@@ -122,27 +122,4 @@ export function Composer({
       )}
     </div>
   )
-}
-
-/** Null means the box is usable. Everything else is a reason phrased as the placeholder,
-    so the input itself explains why it will not take a message. The `send chat` grant is
-    read off the token the account actually holds, so a sign-in predating the write scope
-    reads as "sign in again" rather than failing at the moment of sending. */
-function blockedReason(
-  account: AccountState | undefined,
-  platform: Platform
-): string | null {
-  const name = NAME[platform]
-
-  if (account?.status === 'not-configured') {
-    return `This build cannot sign in to ${name}`
-  }
-
-  if (!account || account.status !== 'signed-in') return `Sign in to ${name} to chat`
-
-  if (!account.grants?.includes('send chat')) {
-    return `Sign in to ${name} again to allow sending`
-  }
-
-  return null
 }

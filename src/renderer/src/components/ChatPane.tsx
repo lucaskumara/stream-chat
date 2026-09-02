@@ -273,6 +273,8 @@ export function ChatPane({
           platform={alone.platform}
           label={label}
           account={accounts.find((account) => account.platform === alone.platform)}
+          status={alone.status}
+          statusReason={alone.error}
           fontSize={fontSize}
         />
       )}

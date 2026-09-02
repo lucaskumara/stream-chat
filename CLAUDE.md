@@ -907,6 +907,21 @@ the settings row's button becomes "Reconnect".
 slices to 500 — Twitch's cap and Kick's. The renderer is not trusted to have done it, and an
 empty message is refused before a request is spent being told so.
 
+**A chat that is not connected cannot be sent to, and the box says which.**
+`blockedReason` in `renderer/composer.ts` checks the account first — a missing scope is the
+user's to fix — then the source's own status. On YouTube `offline` is the *normal* state
+rather than a fault: its live chat exists only while a broadcast runs, so the placeholder
+reads "You are not live" plus YouTube's own reason ("not streaming right now", "live chat is
+turned off for this stream"). Twitch and Kick chatrooms exist whether or not the channel is
+live, so they only reach that branch on a real disconnect. Main refuses these anyway —
+`BaseChatWatcher.detach` clears the channel, so `send` throws — this is about saying so
+before a message is typed rather than after it is sent.
+
+**`CAN_SEND` and `blockedReason` live in `renderer/composer.ts`, not in the component.**
+`tsconfig.test.json` sets no `jsx`, so a test importing a `.tsx` fails the typecheck even
+though vitest runs it. Pure renderer logic belongs in a `.ts` beside the components, which
+is what `search.ts`, `contrast.ts`, `layout.ts` and `merge.ts` already do.
+
 **Enter sends, Shift+Enter breaks the line.** The composer is a `textarea` rather than an
 `input` so the second half of that is possible.
 
