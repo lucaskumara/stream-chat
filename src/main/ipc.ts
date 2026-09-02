@@ -17,6 +17,7 @@ export const IPC = {
   removeSource: 'sources:remove',
   reorderSources: 'sources:reorder',
   sourceBacklog: 'sources:backlog',
+  sendMessage: 'chat:send',
   openExternal: 'shell:open-external',
   copyText: 'clipboard:write',
   obsLink: 'obs:link',
@@ -78,6 +79,23 @@ function registerSourceHandlers(sources: SourceManager, bus: MessageBus): void {
   handle(IPC.reorderSources, (_e, orderedIds: unknown) => {
     sources.reorder(parseSourceIds(orderedIds))
   })
+
+  handle(IPC.sendMessage, async (_e, sourceId: unknown, text: unknown) => {
+    await sources.send(requireString(sourceId, 'sourceId'), parseMessageText(text))
+  })
+}
+
+const MAX_MESSAGE_LENGTH = 500
+
+/** Twitch caps a message at 500 characters and Kick at 500 grapheme clusters, so the
+    renderer is not trusted to have enforced either. An empty message is refused here
+    rather than spending a request to be told so. */
+export function parseMessageText(value: unknown): string {
+  const text = requireString(value, 'text').trim()
+
+  if (!text) throw new Error('message is empty')
+
+  return text.slice(0, MAX_MESSAGE_LENGTH)
 }
 
 function registerShellHandlers(): void {

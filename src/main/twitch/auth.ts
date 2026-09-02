@@ -2,10 +2,15 @@ import { config, type StoredTokens } from '../config'
 
 const ID_BASE = 'https://id.twitch.tv/oauth2'
 
-/** Read-only. Sending and going live need write scopes, and asking for them before
-    those features exist would be requesting authority we cannot use — at the cost of
-    one more sign-in when they land. */
-export const SCOPES = ['user:read:chat', 'channel:read:stream_key'] as const
+/** `user:write:chat` is what the message composer sends with. Going live still needs
+    `channel:manage:broadcast`, which is deliberately absent until something can use it —
+    a token minted before a scope is added keeps working without it, so the cost of
+    waiting is one more sign-in, not a broken account. */
+export const SCOPES = [
+  'user:read:chat',
+  'user:write:chat',
+  'channel:read:stream_key'
+] as const
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
 

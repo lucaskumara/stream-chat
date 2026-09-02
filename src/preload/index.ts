@@ -16,6 +16,7 @@ const IPC = {
   removeSource: 'sources:remove',
   reorderSources: 'sources:reorder',
   sourceBacklog: 'sources:backlog',
+  sendMessage: 'chat:send',
   openExternal: 'shell:open-external',
   copyText: 'clipboard:write',
   obsLink: 'obs:link',
@@ -52,6 +53,9 @@ const api: ChatApi = {
 
   sourceBacklog: (sourceId: string): Promise<ChatMessage[]> =>
     ipcRenderer.invoke(IPC.sourceBacklog, sourceId),
+
+  sendMessage: (sourceId: string, text: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.sendMessage, sourceId, text),
 
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke(IPC.openExternal, url),

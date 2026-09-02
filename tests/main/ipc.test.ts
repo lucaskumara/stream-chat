@@ -10,8 +10,14 @@ vi.mock('electron', () => ({
   shell: { openExternal: async () => {} }
 }))
 
-const { parseAddSource, parsePlatform, parseSourceIds, parseWebUrl, requireString } =
-  await import('@main/ipc')
+const {
+  parseAddSource,
+  parseMessageText,
+  parsePlatform,
+  parseSourceIds,
+  parseWebUrl,
+  requireString
+} = await import('@main/ipc')
 
 describe('requireString', () => {
   it('passes a string through', () => {
@@ -136,5 +142,33 @@ describe('parseAddSource', () => {
     expect(() => parseAddSource({ platform: 'discord', identifier: 'x' })).toThrow(
       /unknown platform/
     )
+  })
+})
+
+describe('parseMessageText', () => {
+  it('trims surrounding whitespace', () => {
+    expect(parseMessageText('  hello  ')).toBe('hello')
+  })
+
+  it('refuses a message that is empty or only whitespace', () => {
+    for (const value of ['', '   ', '\n\t']) {
+      expect(() => parseMessageText(value)).toThrow(/empty/)
+    }
+  })
+
+  it('refuses a non-string', () => {
+    for (const value of [null, undefined, 7, {}, []]) {
+      expect(() => parseMessageText(value)).toThrow()
+    }
+  })
+
+  // Twitch caps a message at 500 characters, so main clamps rather than trusting the
+  // renderer to have done it and spending a request to be told no.
+  it('clamps to the platform limit', () => {
+    expect(parseMessageText('x'.repeat(600))).toHaveLength(500)
+  })
+
+  it('leaves a message at the limit untouched', () => {
+    expect(parseMessageText('x'.repeat(500))).toHaveLength(500)
   })
 })

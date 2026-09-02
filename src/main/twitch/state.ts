@@ -7,6 +7,7 @@ import { SCOPES } from './auth'
     rather than assuming SCOPES was what the user approved. */
 const GRANTS: Record<string, string> = {
   'user:read:chat': 'read chat',
+  'user:write:chat': 'send chat',
   'channel:read:stream_key': 'stream key'
 }
 
@@ -20,7 +21,8 @@ export function twitchAccount(auth: TwitchAuth): AccountState {
       status: 'signed-in',
       userId: tokens.userId,
       displayName: tokens.login,
-      grants: grantsFor(tokens.scopes)
+      grants: grantsFor(tokens.scopes),
+      needsReauth: twitchScopesStale(auth) || undefined
     }
   }
 

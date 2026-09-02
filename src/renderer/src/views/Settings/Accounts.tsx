@@ -91,7 +91,7 @@ function Row({
           className="ghost-button h-[26px] flex-none px-[12px] text-[13px]"
           onClick={act}
         >
-          {on ? 'Sign out' : busy ? 'Waiting…' : 'Sign in'}
+          {on ? (account.needsReauth ? 'Reconnect' : 'Sign out') : busy ? 'Waiting…' : 'Sign in'}
         </button>
       )}
     </div>
@@ -99,7 +99,8 @@ function Row({
 }
 
 function Detail({ account }: { account: AccountState }): React.ReactElement {
-  const tone = account.status === 'error' ? 'var(--error)' : 'var(--fg-4)'
+  const stale = account.status === 'signed-in' && account.needsReauth
+  const tone = account.status === 'error' || stale ? 'var(--error)' : 'var(--fg-4)'
 
   return (
     <div className="truncate text-[13px]" style={{ color: tone }}>
@@ -123,6 +124,11 @@ function detailText(account: AccountState): string {
 
     case 'signed-in': {
       const who = account.displayName ?? 'Signed in'
+
+      if (account.needsReauth) {
+        return `${who} · sign in again to allow sending`
+      }
+
       const grants = account.grants?.join(', ')
 
       return grants ? `${who} · ${grants}` : who

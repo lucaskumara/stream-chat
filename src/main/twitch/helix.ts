@@ -9,6 +9,12 @@ export interface HelixUser {
   profile_image_url: string
 }
 
+interface SendChatMessageResult {
+  message_id?: string
+  is_sent?: boolean
+  drop_reason?: { code?: string; message?: string }
+}
+
 export class HelixError extends Error {
   constructor(
     message: string,
@@ -84,6 +90,33 @@ export class Helix {
     const id = data.data[0]?.id
     if (!id) throw new HelixError(`subscription ${type} returned no id`, 0)
     return id
+  }
+
+  /** `sender_id` has to be the token's own user, which is the whole reason a user access
+      token with `user:write:chat` needs nothing else — the "verified bot or moderator"
+      requirement people quote applies to app access tokens, not this path. Twitch answers
+      200 with `is_sent: false` when it drops a message (a channel in followers-only mode,
+      say), so a 200 is not on its own proof that anything was said. */
+  async sendChatMessage(
+    broadcasterId: string,
+    senderId: string,
+    message: string,
+    replyParentMessageId?: string
+  ): Promise<void> {
+    const data = await this.request<{ data: SendChatMessageResult[] }>('/chat/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        broadcaster_id: broadcasterId,
+        sender_id: senderId,
+        message,
+        ...(replyParentMessageId ? { reply_parent_message_id: replyParentMessageId } : {})
+      })
+    })
+
+    const result = data.data[0]
+    if (result && result.is_sent === false) {
+      throw new HelixError(result.drop_reason?.message || 'Twitch dropped the message', 0)
+    }
   }
 
   async deleteEventSubSubscription(id: string): Promise<void> {

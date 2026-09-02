@@ -1,6 +1,7 @@
 import type { Platform } from "@shared/types";
 import {
   BaseChatWatcher,
+  SendUnavailableError,
   type ChatFeed,
   type ChatWatcherContext,
   type FeedSink,
@@ -48,5 +49,30 @@ export class TwitchChatWatcher extends BaseChatWatcher<TwitchChannel> {
     return auth.isSignedIn()
       ? new TwitchEventSubFeed(this.sourceId, channel, sink, eventsub, auth)
       : new TwitchIrcFeed(this.sourceId, channel, sink, irc);
+  }
+
+  /** Sending is a Helix call, not a transport concern, so it does not care which of the
+      two feeds is running — only that a token exists. The sent message comes back through
+      the normal read path like anyone else's, so nothing is echoed locally. */
+  async send(text: string): Promise<void> {
+    const { auth, helix } = this.services;
+
+    const tokens = auth.getTokens();
+    if (!tokens) {
+      throw new SendUnavailableError("Sign in to Twitch to send messages.");
+    }
+
+    if (!tokens.scopes.includes("user:write:chat")) {
+      throw new SendUnavailableError(
+        "This Twitch sign-in predates message sending. Sign in again to allow it.",
+      );
+    }
+
+    const channel = this.channel;
+    if (!channel?.broadcasterId) {
+      throw new SendUnavailableError("This channel is not connected.");
+    }
+
+    await helix.sendChatMessage(channel.broadcasterId, tokens.userId, text);
   }
 }

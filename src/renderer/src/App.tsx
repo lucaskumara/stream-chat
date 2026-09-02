@@ -37,6 +37,7 @@ function Pane({
       showPlatform={sources.length > 1}
       messages={messages}
       deleted={s.deleted}
+      accounts={s.accounts}
       showDeleted={s.showDeleted}
       showTimestamps={s.showTimestamps}
       density={s.density}

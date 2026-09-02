@@ -72,7 +72,24 @@ describe('twitchAccount', () => {
     expect(state.grants).not.toContain('stream key')
   })
 
-  it('names both grants once the stream key scope is present', () => {
+  it('names every grant the token carries, in the order the token lists them', () => {
+    const state = twitchAccount(
+      auth({
+        clientId: 'id',
+        tokens: {
+          userId: '1',
+          login: 'a',
+          scopes: ['user:read:chat', 'user:write:chat', 'channel:read:stream_key']
+        }
+      })
+    )
+
+    expect(state.grants).toEqual(['read chat', 'send chat', 'stream key'])
+  })
+
+  // The composer keys off this exact grant, so a token predating the write scope has to
+  // read as lacking it rather than inheriting it from SCOPES.
+  it('withholds the send grant from a token minted before the write scope', () => {
     const state = twitchAccount(
       auth({
         clientId: 'id',
@@ -84,7 +101,23 @@ describe('twitchAccount', () => {
       })
     )
 
-    expect(state.grants).toEqual(['read chat', 'stream key'])
+    expect(state.grants).not.toContain('send chat')
+    expect(state.needsReauth).toBe(true)
+  })
+
+  it('does not flag a fully-scoped token for re-auth', () => {
+    const state = twitchAccount(
+      auth({
+        clientId: 'id',
+        tokens: {
+          userId: '1',
+          login: 'a',
+          scopes: ['user:read:chat', 'user:write:chat', 'channel:read:stream_key']
+        }
+      })
+    )
+
+    expect(state.needsReauth).toBeUndefined()
   })
 
   it('drops a scope it has no wording for rather than printing the raw scope', () => {
@@ -151,7 +184,7 @@ describe('twitchScopesStale', () => {
         tokens: {
           userId: '1',
           login: 'a',
-          scopes: ['user:read:chat', 'channel:read:stream_key']
+          scopes: ['user:read:chat', 'user:write:chat', 'channel:read:stream_key']
         }
       })
     )

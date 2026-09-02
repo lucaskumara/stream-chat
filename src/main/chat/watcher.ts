@@ -28,6 +28,7 @@ export abstract class BaseChatWatcher<
   private feed: ChatFeed | null = null;
   private running = false;
   private currentLabel: string;
+  private connected: TChannel | null = null;
 
   constructor({ sourceId, identifier, events }: ChatWatcherContext) {
     this.sourceId = sourceId;
@@ -105,7 +106,15 @@ export abstract class BaseChatWatcher<
     }
   }
 
+  /** The resolved channel, or null while disconnected or between re-resolves. Sending
+      needs the channel's own id, and every platform's id lives here rather than being
+      re-resolved per message. */
+  protected get channel(): TChannel | null {
+    return this.connected;
+  }
+
   private open(channel: TChannel): void {
+    this.connected = channel;
     this.rename(channel.displayName);
 
     const binding = channel.emotes;
@@ -120,6 +129,7 @@ export abstract class BaseChatWatcher<
   private detach(): void {
     this.feed?.stop();
     this.feed = null;
+    this.connected = null;
   }
 
   private readonly sink: FeedSink = {
@@ -196,6 +206,8 @@ export interface ChatWatcherContext {
   events: ChatWatcherEvents;
 }
 
+export class SendUnavailableError extends Error {}
+
 export interface ChatWatcher {
   readonly sourceId: string;
   readonly platform: Platform;
@@ -203,6 +215,12 @@ export interface ChatWatcher {
 
   connect(): Promise<void>;
   disconnect(): Promise<void>;
+
+  /** Absent on a platform that cannot send yet, which is how the renderer decides
+      whether to draw a composer at all. Present but throwing `SendUnavailableError`
+      means the platform can send and this session cannot — signed out, or a token
+      predating the write scope. */
+  send?(text: string): Promise<void>;
 }
 
 export abstract class PollingFeed implements ChatFeed {

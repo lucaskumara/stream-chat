@@ -119,8 +119,12 @@ export interface AccountState {
 
   error?: string
 
+  /** A working sign-in that predates a scope this build now asks for. The account still
+      functions; what it cannot do is whatever the new scope was for. */
+  needsReauth?: boolean
+
   /** Twitch is the only platform with a public-client OAuth flow, so it is the only
-      one that shows a code. The other two open a login window instead. */
+      one that shows a code. The other two redirect back to a loopback listener. */
   prompt?: DeviceCodePrompt
 }
 
@@ -134,6 +138,7 @@ export interface ChatApi {
   removeSource(sourceId: string): Promise<void>
   reorderSources(orderedIds: string[]): Promise<void>
   sourceBacklog(sourceId: string): Promise<ChatMessage[]>
+  sendMessage(sourceId: string, text: string): Promise<void>
   openExternal(url: string): Promise<void>
   copyText(text: string): Promise<void>
 

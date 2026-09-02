@@ -1,13 +1,14 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, MessageSquare } from 'lucide-react'
-import type { ChatMessage, SourceState } from '@shared/types'
+import type { AccountState, ChatMessage, SourceState } from '@shared/types'
 import type { ThemeMode } from '../theme'
 import { bridge } from '../bridge'
 import { authorTerm, matchesSearch, parseSearch } from '../search'
 import type { Density } from '../store'
 import { ChatPaneBar } from './ChatPaneBar'
 import { ChatSettings } from './ChatSettings'
+import { Composer } from './Composer'
 import { EmptyBlock } from './controls'
 import { MessageRow } from './MessageRow'
 
@@ -34,6 +35,7 @@ export interface ChatPaneProps {
   onSearchTerms: (terms: string[]) => void
   onSearchDraft: (draft: string) => void
   onAddSearchTerm: (term: string) => void
+  accounts: AccountState[]
   fontSize: number
   onFontStep: (steps: number) => void
   onFontReset: () => void
@@ -61,6 +63,7 @@ export function ChatPane({
   onSearchDraft,
   onAddSearchTerm,
   fontSize,
+  accounts,
   onFontStep,
   onFontReset,
   onClear,
@@ -260,6 +263,18 @@ export function ChatPane({
           </button>
         )}
       </div>
+
+      {/* Exactly one chat in the column, which is what a split pane is. A merged column
+          has no single target to send to, so it gets no box. */}
+      {alone && (
+        <Composer
+          sourceId={alone.id}
+          platform={alone.platform}
+          label={label}
+          account={accounts.find((account) => account.platform === alone.platform)}
+          fontSize={fontSize}
+        />
+      )}
     </div>
   )
 }

@@ -856,6 +856,52 @@ unclickable*, its confirm button landing outside the viewport (measured x 1172-1
 1440px window). Clearing a pane is no longer behind a confirm: it is a plain button in that
 popover, and the popover closes on clear.
 
+### Sending messages
+
+**Sending is a watcher capability, not a feed one.** `ChatWatcher.send?` is optional: absent
+means the platform cannot send in this build at all, which is how the renderer decides
+whether to draw a composer. Present but throwing `SendUnavailableError` means the platform
+can send and this session cannot — signed out, or holding a token minted before the write
+scope. Twitch is the only implementation today; Kick and YouTube panes get no box rather
+than one that only ever refuses.
+
+**Twitch sends over Helix regardless of which feed is running.** `POST /chat/messages` needs
+`broadcaster_id` and `sender_id`, so it does not care whether the anonymous IRC feed or the
+EventSub feed is reading — only that a token exists. That is why `send` lives on
+`TwitchChatWatcher` rather than on either feed.
+
+**`BaseChatWatcher` now retains the resolved channel.** `open()` used to consume it and drop
+it; `this.channel` is what sending reads `broadcasterId` off, and `detach()` clears it so a
+send between re-resolves fails cleanly instead of addressing a stale channel.
+
+**A 200 from Twitch is not proof the message was said.** The response carries
+`is_sent: false` with a `drop_reason` when Twitch accepts the call and drops the message —
+followers-only mode, a duplicate, AutoMod. `sendChatMessage` turns that into an error, or
+the composer would clear itself and look successful.
+
+**No local echo, on any platform.** We read Twitch as an anonymous `justinfan`, Kick over a
+broadcast Pusher channel, and YouTube by polling the public continuation, so our own message
+arrives back through the normal pipeline exactly like anyone else's — badges, colour and
+all. Adding an optimistic echo would double-print every message.
+
+**The composer is drawn only where a column holds exactly one chat.** That is what a split
+pane is; a merged column has no single target. `ChatPane` already computed `alone` for the
+dock link and disconnect, and the composer keys off the same value rather than being told
+whether it is the merged pane.
+
+**Whether sending is *allowed* is read off the account's grants, not off `SCOPES`.** The
+composer disables itself when the Twitch account lacks the `send chat` grant, which is
+derived from the scopes the stored token actually carries. Adding `user:write:chat` to
+`SCOPES` does not retroactively grant it, so `AccountState.needsReauth` exists to say so and
+the settings row's button becomes "Reconnect".
+
+**Main clamps and refuses message text itself.** `parseMessageText` trims, rejects empty, and
+slices to 500 — Twitch's cap and Kick's. The renderer is not trusted to have done it, and an
+empty message is refused before a request is spent being told so.
+
+**Enter sends, Shift+Enter breaks the line.** The composer is a `textarea` rather than an
+`input` so the second half of that is possible.
+
 ### Navigation (v2)
 
 The title bar owns navigation. There is no sidebar and no tab strip below it.
@@ -1044,7 +1090,8 @@ which renders as `not-configured` and offers no sign-in — the correct state fo
 nobody has provisioned. Kick's is refused unless *both* id and secret are present, since an
 id alone would offer a sign-in that cannot complete.
 
-**All three scope sets are read-only.** `user:read:chat channel:read:stream_key` on Twitch,
+**Only Twitch asks for a write scope, and only because the composer uses it.**
+`user:read:chat user:write:chat channel:read:stream_key` on Twitch,
 `youtube.readonly` on Google, `user:read channel:read streamkey:read` on Kick. Requesting
 write authority before anything can use it buys nothing but a scarier consent screen; the
 cost is one further sign-in when sending lands. Twitch grants are read off the *stored*
@@ -1343,6 +1390,7 @@ tests, so nothing bundles them. What is covered:
 | the split/merged column model | `renderer/layout.ts` |
 | the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
+| the outgoing message validator | `ipc.ts` |
 | the Twitch account state and scope staleness | `twitch/state.ts` |
 | authorize-URL building, scope and refresh-token handling | `accounts/oauth.ts` |
 | PKCE challenges and the redirect state check | `accounts/pkce.ts` |
