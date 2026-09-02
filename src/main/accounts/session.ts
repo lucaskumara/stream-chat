@@ -13,7 +13,11 @@ import { challengeFor, createState, createVerifier, readRedirect } from './pkce'
 const PORT = 4569
 const PATH = '/callback'
 
-const CONSENT_TIMEOUT_MS = 5 * 60 * 1000
+/** Generous on purpose: this covers logging in, two-factor, and reading a consent
+    screen. When it expires the listener closes, so a later "allow" lands on a dead port
+    and the browser just hangs — which reads as the app being broken rather than as a
+    window having closed. */
+const CONSENT_TIMEOUT_MS = 10 * 60 * 1000
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
 

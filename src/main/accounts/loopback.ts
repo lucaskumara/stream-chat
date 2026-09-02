@@ -79,19 +79,44 @@ export class LoopbackReceiver {
 
   private listen(host: string): Promise<void> {
     const server = createServer((req, res) => {
-      const url = new URL(req.url ?? '/', `http://${host}:${this.port}`)
+      /** The base is thrown away — only the path and query are read — so it is a fixed
+          literal rather than being built from `host`. Building it from the host produced
+          `http://::1:4569` on the IPv6 listener, which is not a valid URL: an IPv6
+          literal has to be bracketed. That threw on every request arriving over `::1`,
+          and since Windows resolves `localhost` to `::1` first, it was *the* path the
+          redirect took. Uncaught in a main-process handler, it also put the whole app
+          behind Electron's error dialog, which stops every other server in the process. */
+      try {
+        const url = new URL(req.url ?? '/', 'http://localhost')
 
-      if (url.pathname !== this.path) {
-        res.writeHead(404).end()
-        return
+        if (url.pathname !== this.path) {
+          res.writeHead(404).end()
+          return
+        }
+
+        /** Only a redirect actually carrying the grant ends the wait. A bare hit on
+            this path — a browser prefetch, a port scanner, a curl — used to settle it
+            and fail the sign-in with "no authorization code" while the user was still
+            reading the consent screen. */
+        const carriesGrant =
+          url.searchParams.has('code') || url.searchParams.has('error')
+
+        if (!carriesGrant) {
+          res.writeHead(400).end()
+          return
+        }
+
+        const failed = url.searchParams.has('error')
+
+        res.writeHead(failed ? 400 : 200, { 'Content-Type': 'text/html; charset=utf-8' })
+        res.end(failed ? BAD : OK)
+
+        this.settle?.(url)
+      } catch (err) {
+        /** Nothing a stranger sends to this port may take down the app. */
+        console.warn('[accounts] bad request on the sign-in callback:', err)
+        res.writeHead(400).end()
       }
-
-      const failed = url.searchParams.has('error') || !url.searchParams.has('code')
-
-      res.writeHead(failed ? 400 : 200, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end(failed ? BAD : OK)
-
-      this.settle?.(url)
     })
 
     this.servers.push(server)

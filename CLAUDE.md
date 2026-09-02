@@ -1120,6 +1120,23 @@ on port 4569, so `LoopbackReceiver` binds **both** families — Windows resolves
 to `::1` first, so an IPv4-only listener would simply never see Kick's callback. Same
 reasoning as `ObsServer`, and the same trap.
 
+**An IPv6 literal must be bracketed in a URL, and getting that wrong took down the whole
+app.** `LoopbackReceiver`'s request handler built its `new URL` base from the bound host,
+so on the `::1` listener it produced `http://::1:4569` — not a valid URL — and threw on
+every request arriving over IPv6. Windows resolves `localhost` to `::1` first and Kick's
+`redirect_uri` *must* be `localhost`, so this was the exact path every Kick sign-in took:
+the browser hung forever with no response. Worse, an uncaught throw in a main-process
+request handler raises Electron's "A JavaScript error occurred in the main process" dialog,
+which blocks the event loop — so the OBS server on 4568 and every IPC handler stopped
+answering too, and the app looked hung rather than broken. The base is now a fixed literal
+(only the path and query are ever read) and the handler cannot throw out of itself.
+`obs/server.ts` was never affected because it hardcodes a `127.0.0.1` base.
+
+**Only a redirect carrying `code` or `error` ends the wait.** Anything on the machine can
+hit 4569 while a sign-in is open — a browser prefetch, a scanner, a stray curl — and a bare
+hit on `/callback` used to settle the promise and fail the sign-in with "no authorization
+code" while the user was still reading the consent screen.
+
 **The `state` check is the point of the loopback, not decoration.** Anything on the machine
 can hit 4569 while a sign-in is open. `readRedirect` refuses a redirect whose `state` is not
 the one just issued, before any code is exchanged.
