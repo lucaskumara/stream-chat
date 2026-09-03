@@ -100,6 +100,10 @@ export class Relay {
   private pmtPid: number | null = null
   private videoPid: number | null = null
 
+  /** Measured from the stream itself. Kick will not go live above 2s. */
+  private lastKeyframeAt = 0
+  private keyframeGapMs = 0
+
   /** Wanted, but waiting for a keyframe before its process is started at all. Nothing is
       buffered for these — that is the point. */
   private waiting = new Map<Platform, string>()
@@ -112,6 +116,7 @@ export class Relay {
       obsKey: relayKeyValue(),
       listening: this.ingest !== null,
       receiving: this.receiving,
+      keyframeSeconds: this.keyframeGapMs > 0 ? this.keyframeGapMs / 1000 : undefined,
       destinations: PLATFORMS.map((platform) => ({
         platform,
         state:
@@ -176,6 +181,8 @@ export class Relay {
     this.primerBytes = 0
     this.pmtPid = null
     this.videoPid = null
+    this.lastKeyframeAt = 0
+    this.keyframeGapMs = 0
   }
 
   /** Splits the ingest's output into whole TS packets, keeps the tables-and-keyframe run
@@ -218,13 +225,15 @@ export class Relay {
         this.primerBytes = 0
       }
 
-      if (
-        keyframeAt < 0 &&
-        this.waiting.size > 0 &&
-        pid === this.videoPid &&
-        hasRandomAccess(packet)
-      ) {
-        keyframeAt = at
+      if (pid === this.videoPid && hasRandomAccess(packet)) {
+        const now = Date.now()
+
+        /** Measured rather than assumed: the encoder's setting is not something the app
+            can read, and it decides whether Kick will go live at all. */
+        if (this.lastKeyframeAt > 0) this.keyframeGapMs = now - this.lastKeyframeAt
+        this.lastKeyframeAt = now
+
+        if (keyframeAt < 0 && this.waiting.size > 0) keyframeAt = at
       }
     }
 
@@ -271,7 +280,13 @@ export class Relay {
         this.sync()
       }
 
+      /** The measurement changes rarely, so the renderer is only told when it moves
+          enough to matter — otherwise this would fire on every keyframe. */
+      const before = Math.round(this.keyframeGapMs / 500)
+
       this.feed(chunk)
+
+      if (Math.round(this.keyframeGapMs / 500) !== before) this.onChange()
     })
 
     child.stderr.setEncoding('utf8')

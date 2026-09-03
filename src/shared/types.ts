@@ -145,9 +145,18 @@ export interface BroadcastState {
   listening: boolean
   receiving: boolean
 
+  /** Seconds between keyframes in the incoming stream, measured as it arrives. Kick runs
+      on Amazon IVS, which requires 2s and will accept a push without ever going live if
+      the interval is longer — so this is the difference between a baffling silent failure
+      and a sentence telling the user what to change. */
+  keyframeSeconds?: number
+
   destinations: Destination[]
   error?: string
 }
+
+/** What IVS requires. Twitch and YouTube are looser but recommend the same. */
+export const REQUIRED_KEYFRAME_SECONDS = 2
 
 export type HostPlatform = 'darwin' | 'win32' | 'linux' | 'other'
 

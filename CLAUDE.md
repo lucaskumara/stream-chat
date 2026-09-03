@@ -798,6 +798,15 @@ reads like a broken pipeline rather than a missing flag.
 since it starts in order to wait. Per destination, `frame=`/`size=` on stderr is the
 equivalent signal that it is actually sending.
 
+**Kick runs on Amazon IVS, which *requires* a 2s keyframe interval — and fails silently
+without one.** IVS accepts the push, reads the bytes, and never goes live, because it cannot
+cut HLS segments without regular keyframes. From the outside this is indistinguishable from
+the relay being broken: measured on a real stream, Kick's destination reported
+`size=30088kB time=00:01:07 bitrate=3675kbits/s speed=1.05x` with no errors at all while the
+channel stayed dark. Twitch tolerates a long interval, which is what makes it look like Kick
+is at fault rather than the encoder. `Relay` measures the interval from the transport stream
+it is already parsing and the Broadcast page says so outright, because nobody would guess it.
+
 **Kick's ingest URL needs `/app` appended and their dashboard does not include it.** The
 value they hand out is a bare host, and the encoder is expected to add the path — OBS users
 hit the same thing. Without it ffmpeg reports `error opening: I/O error`, which names

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Copy } from 'lucide-react'
 import type { BroadcastState, DestinationState, Platform } from '@shared/types'
-import { PLATFORMS } from '@shared/types'
+import { PLATFORMS, REQUIRED_KEYFRAME_SECONDS } from '@shared/types'
 import { bridge } from '../bridge'
 import { PlatformMark } from '../components/PlatformMark'
 import { Toggle } from '../components/controls'
@@ -53,12 +53,14 @@ export function Broadcast(): React.ReactElement {
           <CopyRow label="Stream Key" value={state?.obsKey ?? ''} />
 
           <p className="mt-[10px] mb-0 text-[12px]" style={{ color: 'var(--fg-4)' }}>
-            Set the keyframe interval to 2s and keep the bitrate at or below 6000 kbps —
-            every platform receives the one encode OBS makes.
+            Set the keyframe interval to {REQUIRED_KEYFRAME_SECONDS}s and keep the bitrate at
+            or below 6000 kbps — every platform receives the one encode OBS makes.
           </p>
         </div>
 
         <Signal state={state} />
+
+        <KeyframeWarning state={state} />
 
         <div className="section-label mt-[20px] mb-[8px]">Forward to</div>
 
@@ -111,6 +113,32 @@ export function Broadcast(): React.ReactElement {
           </p>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Kick runs on Amazon IVS, which requires a 2s keyframe interval and simply never goes
+    live above it — the push is accepted, the bytes are read, and nothing happens. That is
+    unguessable from the outside, so the interval is measured from the stream and said
+    plainly. Twitch tolerates a long interval, which is what makes it look like Kick is
+    broken rather than the encoder being misconfigured. */
+function KeyframeWarning({ state }: { state: BroadcastState | null }): React.ReactElement | null {
+  const seconds = state?.keyframeSeconds
+  if (!seconds || seconds <= REQUIRED_KEYFRAME_SECONDS + 0.5) return null
+
+  return (
+    <div
+      className="mt-[10px] px-[14px] py-[11px] text-[13px]"
+      style={{
+        border: '1px solid var(--error)',
+        borderRadius: 9,
+        color: 'var(--error)'
+      }}
+    >
+      OBS is sending a keyframe every {seconds.toFixed(1)}s. Kick needs{' '}
+      {REQUIRED_KEYFRAME_SECONDS}s and will accept the stream without ever going live above
+      that. Set Output → Streaming → Keyframe Interval to {REQUIRED_KEYFRAME_SECONDS} and
+      restart the stream.
     </div>
   )
 }
