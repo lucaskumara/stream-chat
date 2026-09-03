@@ -17,7 +17,7 @@ export interface NotConfiguredProps {
     settings screen is the one place a platform is configured, so this points at it
     rather than growing a second way in. */
 export function NotConfigured({ platform }: NotConfiguredProps): React.ReactElement {
-  const setView = useStore((s) => s.setView)
+  const openSettings = useStore((s) => s.openSettings)
   const setPane = useStore((s) => s.setSettingsPane)
 
   const name = NAME[platform]
@@ -43,7 +43,7 @@ export function NotConfigured({ platform }: NotConfiguredProps): React.ReactElem
           className="primary-button h-[34px] px-[16px] text-[14px]"
           onClick={() => {
             setPane('platforms')
-            setView('settings')
+            openSettings()
           }}
         >
           Open settings

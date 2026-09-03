@@ -895,8 +895,8 @@ were devDependencies, so the installer never carried them either way.
 chrome is one of `--ink-900/800/700/600`, `--line`, `--line-2`, `--hover-row`,
 `--segment-on`, `--fg`/`--fg-2`/`--fg-3`/`--fg-4`, `--heading`, plus the ones the light
 theme forced out of the components: `--button-solid`/`-hover`/`-fg`, `--toggle-on`/`-off`/
-`-knob`, `--pill`, `--ghost-icon`, `--scroll-thumb`, `--shadow`, `--error`, `--mention-bg`,
-`--link`, `--chip-bg`/`--chip-fg`. Nothing computes a shade of its own. `theme.ts` briefly carried an `INK` object mirroring all of them for TS; twelve of
+`-knob`, `--pill`, `--ghost-icon`, `--scroll-thumb`, `--shadow`, `--overlay`, `--error`,
+`--mention-bg`, `--link`, `--chip-bg`/`--chip-fg`. Nothing computes a shade of its own. `theme.ts` briefly carried an `INK` object mirroring all of them for TS; twelve of
 its fourteen keys were never read, because an inline `style` takes `var(--fg-4)` perfectly
 well, so the mirror is gone. What is left there genuinely cannot be a CSS variable:
 `PLATFORM_COLOR`, which is indexed by a message's platform, and `EVENT_ACCENT`, whose hexes
@@ -1015,9 +1015,13 @@ The title bar owns navigation. There is no sidebar and no tab strip below it.
 by request — the bar and the view below it are both `--ink-900`, so the line read as a seam
 rather than a division. Do not restore it from the spec.
 
-**Three views, one switcher.** `store.view` is `'chats' | 'broadcast' | 'settings'`, driven
-by a segmented control at the far left of the title bar. `Broadcast` is a named placeholder
-reserved for the next slice of work — it is deliberately empty, not unfinished.
+**Two views, plus Settings as a modal over either.** `store.view` is `'chats' | 'broadcast'`,
+driven by a segmented control at the far left of the title bar. `Broadcast` is a named
+placeholder reserved for the next slice of work — it is deliberately empty, not unfinished.
+Settings is not a third `View`: `store.settingsOpen` is its own flag, so opening it layers
+`SettingsModal` over whichever of the two is underneath rather than replacing it. The third
+button in the same segmented control toggles that flag instead of `view` — see "The settings
+screen is a modal, not a third view" below.
 
 **Three platform tabs live in the title bar, centred, and only in the Chat view.** Twitch,
 YouTube and Kick are the whole strip — one chat per platform, no channel tabs, no dragging.
@@ -1111,6 +1115,24 @@ width again when the window maximises. Verified in the running app: tab group ce
 with no channel set shows `NotConfigured`, whose only control opens Settings -> Platforms.
 `SignInPrompt`, `ConnectChannel`, the `AddChannel` dialog before it, and `store.connectDraft`
 are all gone.
+
+**The settings screen is a modal, not a third view.** `SettingsModal` renders a dimmed
+backdrop (`--overlay`) plus a centred card over whichever of `chats`/`broadcast` is
+underneath, inside the same `position: relative` wrapper `App` gives the content area below
+the title bar — so the title bar itself (window controls, the mode switcher, the platform
+tabs) is never dimmed or covered, only the chat/broadcast content is. The card reuses the
+same `Settings` component the old full-page view rendered — same nav, same panes — so
+nothing about *what* settings shows changed, only how it's framed. Opening it never unmounts
+the view behind it, so closing costs nothing to redraw. Three ways close it: the backdrop
+`onClick` (the card itself calls `stopPropagation`), an `Escape` keydown listener installed
+for the modal's lifetime, and the `X` button absolutely positioned in the card's corner —
+which sits in the padding gutter to the right of the nav's `max-w-[560px]` content column, so
+it never overlaps a pane's own heading. `openSettings()`/`closeSettings()` flip
+`settingsOpen`; `setView()` also closes it, so switching to Chat or Broadcast from the title
+bar while the modal is open dismisses it rather than leaving it stranded over the new view —
+`togglePlatform` does the same, since it already forced `view: 'chats'` for the same reason.
+Both `NotConfigured`'s "Open settings" button and Broadcast's "Add a stream key" button call
+`openSettings()` (after `setSettingsPane('platforms')`) rather than the old `setView('settings')`.
 
 **`syncChannels` in `main/index.ts` is the only route by which a source is created.** It runs
 on every settings save and walks `PLATFORMS`, calling `SourceManager.ensureOnly` for a

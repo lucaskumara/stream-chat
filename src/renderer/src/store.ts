@@ -19,7 +19,7 @@ const DELETED_LIMIT = 4000
 export const CHAT_FONT_SIZES = [12, 14, 15, 16, 18, 20, 24]
 export const CHAT_FONT_DEFAULT = 15
 
-export type View = 'chats' | 'broadcast' | 'settings'
+export type View = 'chats' | 'broadcast'
 
 export type SettingsPane = 'general' | 'appearance' | 'platforms'
 
@@ -31,6 +31,10 @@ interface ChatState {
   bySource: Messages
 
   view: View
+
+  /** Settings renders as a modal over whichever view is underneath, not a third
+      view of its own — so it is a flag, not a member of `View`. */
+  settingsOpen: boolean
   settingsPane: SettingsPane
 
   /** One chat per platform, so the tab strip is the platform list and a pane is
@@ -74,6 +78,8 @@ interface ChatState {
   toggleMerged: () => void
   ingest: (batch: ChatBatch) => void
   setView: (view: View) => void
+  openSettings: () => void
+  closeSettings: () => void
   setSettingsPane: (pane: SettingsPane) => void
   toggleFilter: (sourceId: string) => void
   setShowDeleted: (showDeleted: boolean) => void
@@ -187,6 +193,7 @@ export const useStore = create<ChatState>()((set) => ({
   merged: false,
 
   view: 'chats',
+  settingsOpen: false,
   settingsPane: 'general',
   filterOpen: {},
 
@@ -225,13 +232,17 @@ export const useStore = create<ChatState>()((set) => ({
   togglePlatform: (platform) =>
     set((s) => {
       const held = s.visiblePlatforms.includes(platform)
-      if (held && s.visiblePlatforms.length === 1) return { view: 'chats' }
+      if (held && s.visiblePlatforms.length === 1) return { view: 'chats', settingsOpen: false }
 
       const next = new Set(s.visiblePlatforms)
       if (held) next.delete(platform)
       else next.add(platform)
 
-      return { visiblePlatforms: PLATFORMS.filter((each) => next.has(each)), view: 'chats' }
+      return {
+        visiblePlatforms: PLATFORMS.filter((each) => next.has(each)),
+        view: 'chats',
+        settingsOpen: false
+      }
     }),
 
   toggleMerged: () => set((s) => ({ merged: !s.merged })),
@@ -246,7 +257,11 @@ export const useStore = create<ChatState>()((set) => ({
       return { bySource: messages, deleted: sweptDeleted(deleted, messages) }
     }),
 
-  setView: (view) => set({ view }),
+  setView: (view) => set({ view, settingsOpen: false }),
+
+  openSettings: () => set({ settingsOpen: true }),
+
+  closeSettings: () => set({ settingsOpen: false }),
 
   setSettingsPane: (settingsPane) => set({ settingsPane }),
 

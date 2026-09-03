@@ -8,8 +8,8 @@ import { useStore } from './store'
 import { ChatPane } from './components/ChatPane'
 import { NotConfigured } from './components/NotConfigured'
 import { TitleBar } from './components/TitleBar'
+import { SettingsModal } from './components/SettingsModal'
 import { Broadcast } from './views/Broadcast'
-import { Settings } from './views/Settings'
 
 const EMPTY_TERMS: string[] = []
 const EMPTY_MESSAGES: ChatMessage[] = []
@@ -115,6 +115,8 @@ function Chats({ columns, mode }: { columns: ChatColumn[]; mode: ThemeMode }): R
 export default function App(): React.ReactElement {
   const view = useStore((s) => s.view)
   const setView = useStore((s) => s.setView)
+  const settingsOpen = useStore((s) => s.settingsOpen)
+  const openSettings = useStore((s) => s.openSettings)
   const sources = useStore((s) => s.sources)
   const visiblePlatforms = useStore((s) => s.visiblePlatforms)
   const togglePlatform = useStore((s) => s.togglePlatform)
@@ -191,6 +193,8 @@ export default function App(): React.ReactElement {
       <TitleBar
         view={view}
         onView={setView}
+        settingsOpen={settingsOpen}
+        onOpenSettings={openSettings}
         sources={sources}
         visiblePlatforms={visiblePlatforms}
         merged={merged}
@@ -198,9 +202,11 @@ export default function App(): React.ReactElement {
         onMerged={toggleMerged}
       />
 
-      {view === 'chats' && <Chats columns={columns} mode={mode} />}
-      {view === 'broadcast' && <Broadcast />}
-      {view === 'settings' && <Settings />}
+      <div className="relative flex min-h-0 flex-1">
+        {view === 'chats' && <Chats columns={columns} mode={mode} />}
+        {view === 'broadcast' && <Broadcast />}
+        {settingsOpen && <SettingsModal />}
+      </div>
     </div>
   )
 }

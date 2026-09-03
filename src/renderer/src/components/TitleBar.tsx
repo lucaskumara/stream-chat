@@ -21,6 +21,8 @@ const CLOSE = 'M0.5 0.5 L9.5 9.5 M9.5 0.5 L0.5 9.5'
 export interface TitleBarProps {
   view: View
   onView: (view: View) => void
+  settingsOpen: boolean
+  onOpenSettings: () => void
   sources: SourceState[]
   visiblePlatforms: Platform[]
   merged: boolean
@@ -31,6 +33,8 @@ export interface TitleBarProps {
 export function TitleBar({
   view,
   onView,
+  settingsOpen,
+  onOpenSettings,
   sources,
   visiblePlatforms,
   merged,
@@ -52,7 +56,12 @@ export function TitleBar({
 
   return (
     <div className="titlebar">
-      <ModeSwitcher view={view} onSelect={onView} />
+      <ModeSwitcher
+        view={view}
+        settingsOpen={settingsOpen}
+        onSelectView={onView}
+        onOpenSettings={onOpenSettings}
+      />
 
       <div className="titlebar-drag" />
 

@@ -92,22 +92,57 @@ describe('togglePlatform', () => {
     expect(state().visiblePlatforms).toEqual(['twitch', 'youtube'])
   })
 
-  // Picking a platform implies the Chat view, from Broadcast or Settings alike.
-  it('returns to the chat view', () => {
-    state().setView('settings')
+  // Picking a platform implies the Chat view, from Broadcast or the Settings modal alike.
+  it('returns to the chat view and closes Settings', () => {
+    state().setView('broadcast')
+    state().openSettings()
 
     state().togglePlatform('youtube')
 
     expect(state().view).toBe('chats')
+    expect(state().settingsOpen).toBe(false)
   })
 
   it('returns to the chat view even when the toggle is refused', () => {
-    state().setView('settings')
+    state().setView('broadcast')
+    state().openSettings()
 
     state().togglePlatform('twitch')
 
     expect(state().view).toBe('chats')
+    expect(state().settingsOpen).toBe(false)
     expect(state().visiblePlatforms).toEqual(['twitch'])
+  })
+})
+
+describe('settings modal', () => {
+  // Settings overlays whichever view is underneath rather than replacing it, so
+  // opening it must not disturb that view.
+  it('opens without changing the underlying view', () => {
+    state().setView('broadcast')
+
+    state().openSettings()
+
+    expect(state().settingsOpen).toBe(true)
+    expect(state().view).toBe('broadcast')
+  })
+
+  it('closes independently of the view', () => {
+    state().openSettings()
+
+    state().closeSettings()
+
+    expect(state().settingsOpen).toBe(false)
+  })
+
+  // Switching the underlying view (from the title bar's Chat/Broadcast buttons)
+  // dismisses the modal on top of it rather than leaving it stranded open.
+  it('is closed by switching views', () => {
+    state().openSettings()
+
+    state().setView('broadcast')
+
+    expect(state().settingsOpen).toBe(false)
   })
 })
 
