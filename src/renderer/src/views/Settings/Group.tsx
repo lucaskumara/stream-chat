@@ -13,7 +13,7 @@ export function Group({
 
       <div className="section-label mb-[8px]">{label}</div>
 
-      {children}
+      <div className="flex flex-col gap-[10px]">{children}</div>
     </section>
   )
 }
