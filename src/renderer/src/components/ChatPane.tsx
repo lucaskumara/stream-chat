@@ -7,7 +7,6 @@ import { bridge } from '../bridge'
 import { authorTerm, matchesSearch, parseSearch } from '../search'
 import type { Density } from '../store'
 import { ChatPaneBar } from './ChatPaneBar'
-import { ChatSettings } from './ChatSettings'
 import { EmptyBlock } from './controls'
 import { MessageRow } from './MessageRow'
 
@@ -26,19 +25,13 @@ export interface ChatPaneProps {
   density: Density
   mode: ThemeMode
   filterOpen: boolean
-  gearOpen: boolean
   onToggleFilter: () => void
-  onToggleGear: () => void
   searchTerms: string[]
   searchDraft: string
   onSearchTerms: (terms: string[]) => void
   onSearchDraft: (draft: string) => void
   onAddSearchTerm: (term: string) => void
   fontSize: number
-  onFontStep: (steps: number) => void
-  onFontReset: () => void
-  onClear: () => void
-  onDisconnect: () => void
 }
 
 export function ChatPane({
@@ -52,24 +45,18 @@ export function ChatPane({
   density,
   mode,
   filterOpen,
-  gearOpen,
   onToggleFilter,
-  onToggleGear,
   searchTerms,
   searchDraft,
   onSearchTerms,
   onSearchDraft,
   onAddSearchTerm,
-  fontSize,
-  onFontStep,
-  onFontReset,
-  onClear,
-  onDisconnect
+  fontSize
 }: ChatPaneProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState(true)
 
-  // Only a pane holding a single chat can offer that chat's dock link or disconnect it.
+  // Only a pane holding a single chat can show that chat's offline state.
   const alone = sources.length === 1 ? sources[0] : null
 
   const [frozen, setFrozen] = useState<ChatMessage[] | null>(null)
@@ -168,27 +155,14 @@ export function ChatPane({
         label={label}
         offline={alone !== null && (alone.status === 'offline' || alone.status === 'error')}
         filterOpen={filterOpen}
-        gearOpen={gearOpen}
         terms={searchTerms}
         draft={searchDraft}
         matches={visible.length}
         total={list.length}
         onToggleFilter={onToggleFilter}
-        onToggleGear={onToggleGear}
         onTerms={onSearchTerms}
         onDraft={onSearchDraft}
       />
-
-      {gearOpen && (
-        <ChatSettings
-          sourceId={alone?.id ?? null}
-          fontSize={fontSize}
-          onFontStep={onFontStep}
-          onFontReset={onFontReset}
-          onClear={onClear}
-          onDisconnect={onDisconnect}
-        />
-      )}
 
       <div className="relative min-h-0 flex-1">
         <div

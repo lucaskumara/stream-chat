@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
-import type { ChatMessage, SourceState } from '@shared/types'
+import type { ChatMessage } from '@shared/types'
 import { bridge } from './bridge'
 import { chatColumns, columnLabel, columnPaneId, type ChatColumn } from './layout'
 import { resolvedTheme, type ThemeMode } from './theme'
@@ -26,13 +26,11 @@ const actions = useStore.getState()
 function Pane({
   column,
   messages,
-  mode,
-  onDisconnect
+  mode
 }: {
   column: ChatColumn
   messages: ChatMessage[]
   mode: ThemeMode
-  onDisconnect: (source: SourceState) => void
 }): React.ReactElement {
   const paneId = columnPaneId(column)
   const { sources } = column
@@ -42,13 +40,11 @@ function Pane({
   const showTimestamps = useStore((s) => s.showTimestamps)
   const density = useStore((s) => s.density)
   const filterOpen = useStore((s) => s.filterOpen[paneId] === true)
-  const gearOpen = useStore((s) => s.gearOpenFor === paneId)
   const searchTerms = useStore((s) => s.search[paneId]) ?? EMPTY_TERMS
   const searchDraft = useStore((s) => s.searchDraft[paneId]) ?? ''
-  const fontSize = useStore((s) => s.fontSize[paneId] ?? s.defaultFontSize)
+  const fontSize = useStore((s) => s.fontSize)
 
   const onToggleFilter = useCallback(() => actions.toggleFilter(paneId), [paneId])
-  const onToggleGear = useCallback(() => actions.toggleGear(paneId), [paneId])
   const onSearchTerms = useCallback(
     (terms: string[]) => actions.setSearch(paneId, terms),
     [paneId]
@@ -61,20 +57,6 @@ function Pane({
     (term: string) => actions.addSearchTerm(paneId, term),
     [paneId]
   )
-  const onFontStep = useCallback(
-    (steps: number) => actions.stepFontSize(paneId, steps),
-    [paneId]
-  )
-  const onFontReset = useCallback(() => actions.resetFontSize(paneId), [paneId])
-
-  const onClear = useCallback(() => {
-    for (const source of sources) actions.clearSource(source.id)
-    actions.closeGear()
-  }, [sources])
-
-  const disconnect = useCallback(() => {
-    if (sources.length === 1) onDisconnect(sources[0])
-  }, [sources, onDisconnect])
 
   return (
     <ChatPane
@@ -88,32 +70,18 @@ function Pane({
       density={density}
       mode={mode}
       filterOpen={filterOpen}
-      gearOpen={gearOpen}
       onToggleFilter={onToggleFilter}
-      onToggleGear={onToggleGear}
       searchTerms={searchTerms}
       searchDraft={searchDraft}
       onSearchTerms={onSearchTerms}
       onSearchDraft={onSearchDraft}
       onAddSearchTerm={onAddSearchTerm}
       fontSize={fontSize}
-      onFontStep={onFontStep}
-      onFontReset={onFontReset}
-      onClear={onClear}
-      onDisconnect={disconnect}
     />
   )
 }
 
-function Column({
-  column,
-  mode,
-  onDisconnect
-}: {
-  column: ChatColumn
-  mode: ThemeMode
-  onDisconnect: (source: SourceState) => void
-}): React.ReactElement {
+function Column({ column, mode }: { column: ChatColumn; mode: ThemeMode }): React.ReactElement {
   const bySource = useStore((s) => s.bySource)
 
   const messages = useMemo(
@@ -125,18 +93,10 @@ function Column({
     return <NotConfigured platform={column.platform} />
   }
 
-  return <Pane column={column} messages={messages} mode={mode} onDisconnect={onDisconnect} />
+  return <Pane column={column} messages={messages} mode={mode} />
 }
 
-function Chats({
-  columns,
-  mode,
-  onDisconnect
-}: {
-  columns: ChatColumn[]
-  mode: ThemeMode
-  onDisconnect: (source: SourceState) => void
-}): React.ReactElement {
+function Chats({ columns, mode }: { columns: ChatColumn[]; mode: ThemeMode }): React.ReactElement {
   return (
     <div className="flex min-h-0 flex-1">
       {columns.map((column, at) => (
@@ -145,7 +105,7 @@ function Chats({
           className="flex min-w-0 flex-1"
           style={{ borderLeft: at === 0 ? undefined : '1px solid var(--line)' }}
         >
-          <Column column={column} mode={mode} onDisconnect={onDisconnect} />
+          <Column column={column} mode={mode} />
         </div>
       ))}
     </div>
@@ -173,7 +133,6 @@ export default function App(): React.ReactElement {
   const setSources = useStore((s) => s.setSources)
   const setPlatforms = useStore((s) => s.setPlatforms)
   const ingest = useStore((s) => s.ingest)
-  const forgetSource = useStore((s) => s.forgetSource)
 
   useEffect(() => {
     const { api } = bridge()
@@ -227,14 +186,6 @@ export default function App(): React.ReactElement {
     document.documentElement.dataset.theme = mode
   }, [mode])
 
-  const disconnect = useCallback(
-    (source: SourceState) => {
-      void bridge().api.removeSource(source.id)
-      forgetSource(source.id)
-    },
-    [forgetSource]
-  )
-
   return (
     <div className="flex h-full flex-col">
       <TitleBar
@@ -247,7 +198,7 @@ export default function App(): React.ReactElement {
         onMerged={toggleMerged}
       />
 
-      {view === 'chats' && <Chats columns={columns} mode={mode} onDisconnect={disconnect} />}
+      {view === 'chats' && <Chats columns={columns} mode={mode} />}
       {view === 'broadcast' && <Broadcast />}
       {view === 'settings' && <Settings />}
     </div>

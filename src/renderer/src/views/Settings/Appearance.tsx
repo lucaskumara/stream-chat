@@ -75,12 +75,8 @@ export function Appearance(): React.ReactElement {
       </Group>
 
       <Group label="Text size">
-        <ControlRow label="Default for new chats">
-          <Stepper
-            label="default chat text"
-            size={s.defaultFontSize}
-            onStep={s.stepDefaultFontSize}
-          />
+        <ControlRow label="Chat text">
+          <Stepper label="chat text" size={s.fontSize} onStep={s.stepFontSize} />
         </ControlRow>
       </Group>
     </div>

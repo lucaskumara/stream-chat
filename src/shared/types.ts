@@ -186,7 +186,7 @@ export interface ChatApi {
       file this session — the directory could not be created. */
   openLogs(): Promise<boolean>
 
-  obsLink(sourceId: string): Promise<string | null>
+  obsLink(platform: Platform, channel: string): Promise<string | null>
 
   windowMinimize(): Promise<void>
   windowToggleMaximize(): Promise<void>

@@ -45,10 +45,6 @@ interface ChatState {
 
   filterOpen: Record<string, boolean>
 
-  /** Only one pane's settings popover is open at a time, so this is a single id
-      rather than a record: opening one closes any other. */
-  gearOpenFor: string | null
-
   deleted: Deleted
 
   search: Record<string, string[]>
@@ -61,14 +57,14 @@ interface ChatState {
   density: Density
   themeChoice: ThemeChoice
   colorByPlatform: boolean
-  defaultFontSize: number
+
+  /** Every chat renders at this size, in px from CHAT_FONT_SIZES — one setting for
+      the whole app, not per source. */
+  fontSize: number
 
   /** What the OS asks for, kept here so resolvedTheme can answer 'system' from the
       store rather than from a media query every component would have to repeat. */
   systemDark: boolean
-
-  /** Chat row size per source, in px from CHAT_FONT_SIZES. Missing means the default. */
-  fontSize: Record<string, number>
 
   platforms: PlatformConfig[]
 
@@ -80,8 +76,6 @@ interface ChatState {
   setView: (view: View) => void
   setSettingsPane: (pane: SettingsPane) => void
   toggleFilter: (sourceId: string) => void
-  toggleGear: (sourceId: string) => void
-  closeGear: () => void
   setShowDeleted: (showDeleted: boolean) => void
   setShowTimestamps: (showTimestamps: boolean) => void
   setCapacity: (capacity: number) => void
@@ -89,14 +83,10 @@ interface ChatState {
   setThemeChoice: (theme: ThemeChoice) => void
   setSystemDark: (systemDark: boolean) => void
   setColorByPlatform: (on: boolean) => void
-  stepDefaultFontSize: (steps: number) => void
+  stepFontSize: (steps: number) => void
   setSearch: (sourceId: string, terms: string[]) => void
   setSearchDraft: (sourceId: string, draft: string) => void
   addSearchTerm: (sourceId: string, term: string) => void
-  stepFontSize: (sourceId: string, steps: number) => void
-  resetFontSize: (sourceId: string) => void
-  clearSource: (sourceId: string) => void
-  forgetSource: (sourceId: string) => void
 }
 
 type Messages = Record<string, ChatMessage[]>
@@ -112,13 +102,6 @@ function steppedSize(current: number, steps: number): number {
 
 function capped(arr: ChatMessage[], capacity: number): ChatMessage[] {
   return arr.length > capacity ? arr.slice(arr.length - capacity) : arr
-}
-
-function omit<T>(record: Record<string, T>, key: string): Record<string, T> {
-  const next = { ...record }
-  delete next[key]
-
-  return next
 }
 
 function appended(held: Messages, incoming: ChatMessage[], capacity: number): Messages {
@@ -206,17 +189,15 @@ export const useStore = create<ChatState>()((set) => ({
   view: 'chats',
   settingsPane: 'general',
   filterOpen: {},
-  gearOpenFor: null,
 
   showDeleted: true,
   showTimestamps: true,
   capacity: DEFAULT_CAPACITY,
-  fontSize: {},
 
   density: 'comfortable',
   themeChoice: 'dark',
   colorByPlatform: true,
-  defaultFontSize: CHAT_FONT_DEFAULT,
+  fontSize: CHAT_FONT_DEFAULT,
 
   systemDark: true,
 
@@ -274,11 +255,6 @@ export const useStore = create<ChatState>()((set) => ({
       filterOpen: { ...s.filterOpen, [sourceId]: !s.filterOpen[sourceId] }
     })),
 
-  toggleGear: (sourceId) =>
-    set((s) => ({ gearOpenFor: s.gearOpenFor === sourceId ? null : sourceId })),
-
-  closeGear: () => set({ gearOpenFor: null }),
-
   setShowDeleted: (showDeleted) => set({ showDeleted }),
 
   setShowTimestamps: (showTimestamps) => set({ showTimestamps }),
@@ -299,8 +275,7 @@ export const useStore = create<ChatState>()((set) => ({
 
   setColorByPlatform: (colorByPlatform) => set({ colorByPlatform }),
 
-  stepDefaultFontSize: (steps) =>
-    set((s) => ({ defaultFontSize: steppedSize(s.defaultFontSize, steps) })),
+  stepFontSize: (steps) => set((s) => ({ fontSize: steppedSize(s.fontSize, steps) })),
 
   setSearch: (sourceId, terms) =>
     set((s) => ({ search: { ...s.search, [sourceId]: terms } })),
@@ -318,38 +293,5 @@ export const useStore = create<ChatState>()((set) => ({
       if (existing.some((held) => held.toLowerCase() === term.toLowerCase())) return s
 
       return { search: { ...s.search, [sourceId]: [...existing, term] } }
-    }),
-
-  stepFontSize: (sourceId, steps) =>
-    set((s) => {
-      const current = s.fontSize[sourceId] ?? s.defaultFontSize
-      const next = steppedSize(current, steps)
-      if (next === current) return s
-
-      return { fontSize: { ...s.fontSize, [sourceId]: next } }
-    }),
-
-  resetFontSize: (sourceId) =>
-    set((s) => {
-      if (s.fontSize[sourceId] === undefined) return s
-
-      return { fontSize: omit(s.fontSize, sourceId) }
-    }),
-
-  clearSource: (sourceId) =>
-    set((s) => {
-      if (!s.bySource[sourceId]?.length) return s
-
-      return { bySource: { ...s.bySource, [sourceId]: [] } }
-    }),
-
-  forgetSource: (sourceId) =>
-    set((s) => ({
-      bySource: omit(s.bySource, sourceId),
-      search: omit(s.search, sourceId),
-      searchDraft: omit(s.searchDraft, sourceId),
-      fontSize: omit(s.fontSize, sourceId),
-      filterOpen: omit(s.filterOpen, sourceId),
-      gearOpenFor: s.gearOpenFor === sourceId ? null : s.gearOpenFor
-    }))
+    })
 }))

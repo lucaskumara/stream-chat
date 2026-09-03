@@ -276,98 +276,26 @@ describe('search', () => {
 })
 
 describe('font size', () => {
-  it('starts unset, which reads as the default', () => {
-    expect(state().fontSize['src-1']).toBeUndefined()
+  it('starts at the default, one setting for every chat', () => {
+    expect(state().fontSize).toBe(CHAT_FONT_DEFAULT)
   })
 
   it('steps up and down the scale by index', () => {
     const at = CHAT_FONT_SIZES.indexOf(CHAT_FONT_DEFAULT)
 
-    state().stepFontSize('src-1', 1)
-    expect(state().fontSize['src-1']).toBe(CHAT_FONT_SIZES[at + 1])
+    state().stepFontSize(1)
+    expect(state().fontSize).toBe(CHAT_FONT_SIZES[at + 1])
 
-    state().stepFontSize('src-1', -1)
-    expect(state().fontSize['src-1']).toBe(CHAT_FONT_DEFAULT)
+    state().stepFontSize(-1)
+    expect(state().fontSize).toBe(CHAT_FONT_DEFAULT)
   })
 
   it('stops at each end of the scale', () => {
-    state().stepFontSize('src-1', 100)
-    expect(state().fontSize['src-1']).toBe(CHAT_FONT_SIZES[CHAT_FONT_SIZES.length - 1])
+    state().stepFontSize(100)
+    expect(state().fontSize).toBe(CHAT_FONT_SIZES[CHAT_FONT_SIZES.length - 1])
 
-    state().stepFontSize('src-1', -100)
-    expect(state().fontSize['src-1']).toBe(CHAT_FONT_SIZES[0])
-  })
-
-  it('sizes each pane on its own', () => {
-    state().stepFontSize('src-1', 1)
-
-    expect(state().fontSize['src-2']).toBeUndefined()
-  })
-
-  // Unset and explicitly-default have to stay the same state, so reset deletes the
-  // entry rather than writing the default back.
-  it('forgets the entry on reset rather than storing the default', () => {
-    state().stepFontSize('src-1', 1)
-    state().resetFontSize('src-1')
-
-    expect('src-1' in state().fontSize).toBe(false)
-  })
-})
-
-describe('clearSource', () => {
-  it('empties one pane and leaves the rest', () => {
-    state().ingest({
-      messages: [message('a', 'src-1'), message('b', 'src-2')],
-      moderation: []
-    })
-
-    state().clearSource('src-1')
-
-    expect(state().bySource['src-1']).toEqual([])
-    expect(state().bySource['src-2']).toHaveLength(1)
-  })
-
-  it('changes nothing for a pane that is already empty', () => {
-    const before = state().bySource
-
-    state().clearSource('src-1')
-
-    expect(state().bySource).toBe(before)
-  })
-})
-
-describe('forgetSource', () => {
-  it('drops the messages, the search, the draft and the font size together', () => {
-    state().ingest({ messages: [message('a')], moderation: [] })
-    state().setSearch('src-1', ['a'])
-    state().setSearchDraft('src-1', 'part')
-    state().stepFontSize('src-1', 1)
-
-    state().forgetSource('src-1')
-
-    expect('src-1' in state().bySource).toBe(false)
-    expect('src-1' in state().search).toBe(false)
-    expect('src-1' in state().searchDraft).toBe(false)
-    expect('src-1' in state().fontSize).toBe(false)
-  })
-
-  it('closes the filter and settings for that pane', () => {
-    state().setSources([source('src-1'), source('src-2')])
-    state().toggleFilter('src-2')
-    state().toggleGear('src-2')
-
-    state().forgetSource('src-2')
-
-    expect('src-2' in state().filterOpen).toBe(false)
-    expect(state().gearOpenFor).toBeNull()
-  })
-
-  it('leaves other sources alone', () => {
-    state().ingest({ messages: [message('b', 'src-2')], moderation: [] })
-
-    state().forgetSource('src-1')
-
-    expect(state().bySource['src-2']).toHaveLength(1)
+    state().stepFontSize(-100)
+    expect(state().fontSize).toBe(CHAT_FONT_SIZES[0])
   })
 })
 

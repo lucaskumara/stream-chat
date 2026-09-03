@@ -8,6 +8,7 @@ import type {
 } from '@shared/types'
 import { DEFAULT_INGEST, PLATFORMS } from '@shared/types'
 import { bridge } from '../../bridge'
+import { ChatLink } from '../../components/ChatLink'
 import { PlatformMark } from '../../components/PlatformMark'
 import { ControlRow, Toggle } from '../../components/controls'
 import { PLATFORM_COLOR, PLATFORM_NAME } from '../../theme'
@@ -107,6 +108,8 @@ function PlatformCard({
         className="px-[14px] py-[12px]"
         style={{ border: '1px solid var(--line)', borderRadius: 9 }}
       >
+        <div className="section-label mb-[8px]">Chat</div>
+
         <Field
           platform={platform}
           field="channel"
@@ -114,6 +117,19 @@ function PlatformCard({
           placeholder={CHANNEL_HINT[platform]}
           value={config?.channel ?? ''}
         />
+
+        {config?.channel && (
+          <div className="mt-[10px] flex items-center gap-[10px]">
+            <span className="w-[92px] flex-none text-[13px]" style={{ color: 'var(--fg-3)' }}>
+              OBS dock
+            </span>
+            <ChatLink platform={platform} channel={config.channel} />
+          </div>
+        )}
+
+        <div className="mt-[14px] mb-[10px] h-px" style={{ background: 'var(--line)' }} />
+
+        <div className="section-label mb-[8px]">Broadcast</div>
 
         {!DEFAULT_INGEST[platform] && (
           <Field

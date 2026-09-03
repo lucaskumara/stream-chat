@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
+import type { Platform } from '@shared/types'
 import { bridge } from '../bridge'
 
 const COPIED_FOR_MS = 1600
 
-export function ChatLink({ sourceId }: { sourceId: string }): React.ReactElement {
+export function ChatLink({
+  platform,
+  channel
+}: {
+  platform: Platform
+  channel: string
+}): React.ReactElement {
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -12,7 +19,7 @@ export function ChatLink({ sourceId }: { sourceId: string }): React.ReactElement
     let live = true
 
     void bridge()
-      .api.obsLink(sourceId)
+      .api.obsLink(platform, channel)
       .then((url) => {
         if (live) setLink(url)
       })
@@ -23,7 +30,7 @@ export function ChatLink({ sourceId }: { sourceId: string }): React.ReactElement
     return () => {
       live = false
     }
-  }, [sourceId])
+  }, [platform, channel])
 
   useEffect(() => {
     if (!copied) return

@@ -1,18 +1,16 @@
 import { memo, useCallback } from 'react'
-import { Search, Settings, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { termLabel } from '../search'
 
 export interface ChatPaneBarProps {
   label: string
   offline: boolean
   filterOpen: boolean
-  gearOpen: boolean
   terms: string[]
   draft: string
   matches: number
   total: number
   onToggleFilter: () => void
-  onToggleGear: () => void
   onTerms: (terms: string[]) => void
   onDraft: (draft: string) => void
 }
@@ -21,13 +19,11 @@ function ChatPaneBarImpl({
   label,
   offline,
   filterOpen,
-  gearOpen,
   terms,
   draft,
   matches,
   total,
   onToggleFilter,
-  onToggleGear,
   onTerms,
   onDraft
 }: ChatPaneBarProps): React.ReactElement {
@@ -89,16 +85,6 @@ function ChatPaneBarImpl({
           onClick={onToggleFilter}
         >
           <Search size={15} strokeWidth={1.8} />
-        </button>
-
-        <button
-          type="button"
-          className="icon-button chat-pane-settings"
-          data-on={gearOpen}
-          aria-label={`Settings for ${label}`}
-          onClick={onToggleGear}
-        >
-          <Settings size={15} strokeWidth={1.8} />
         </button>
       </div>
 

@@ -88,13 +88,6 @@ export class SourceManager {
     return null
   }
 
-  targetOf(sourceId: string): { platform: Platform; identifier: string } | null {
-    const entry = this.entries.get(sourceId)
-    if (!entry) return null
-
-    return { platform: entry.state.platform, identifier: entry.identifier }
-  }
-
   /** Brings a platform in line with the account signed into it: connect that channel, do
       nothing if it is already the one open, and swap if the account changed. Sources are
       no longer chosen by the user, so this is the only route by which one appears. */

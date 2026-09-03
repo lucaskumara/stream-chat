@@ -71,7 +71,7 @@ export function registerIpc(
 
   registerShellHandlers()
   registerWindowHandlers()
-  registerObsHandlers(sources, obs)
+  registerObsHandlers(obs)
 }
 
 /** The stream key is write-only from the renderer's side: it can set one and be told
@@ -146,16 +146,19 @@ function registerShellHandlers(): void {
 }
 
 /** Main owns the port and the key spelling, so the renderer asks for a finished
-    link rather than assembling one. Null means the link server never bound. */
-function registerObsHandlers(sources: SourceManager, obs: ObsServer): void {
-  handle(IPC.obsLink, (_e, sourceId: unknown) => {
+    link rather than assembling one. Null means the link server never bound. The
+    link is built from platform + channel alone, not a live source: Settings ->
+    Platforms asks for it straight from the saved config, whether or not that
+    channel is currently connected. */
+function registerObsHandlers(obs: ObsServer): void {
+  handle(IPC.obsLink, (_e, platform: unknown, channel: unknown) => {
     const base = obs.baseUrl()
     if (!base) return null
 
-    const target = sources.targetOf(requireString(sourceId, 'sourceId'))
-    if (!target) return null
+    const identifier = requireString(channel, 'channel').trim()
+    if (!identifier) return null
 
-    return `${base}${obsChatPath(target.platform, target.identifier)}`
+    return `${base}${obsChatPath(parsePlatform(platform), identifier)}`
   })
 }
 

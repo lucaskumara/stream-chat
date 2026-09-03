@@ -64,8 +64,8 @@ const api: ChatApi = {
 
   openLogs: (): Promise<boolean> => ipcRenderer.invoke(IPC.openLogs),
 
-  obsLink: (sourceId: string): Promise<string | null> =>
-    ipcRenderer.invoke(IPC.obsLink, sourceId),
+  obsLink: (platform: Platform, channel: string): Promise<string | null> =>
+    ipcRenderer.invoke(IPC.obsLink, platform, channel),
 
   windowMinimize: (): Promise<void> => ipcRenderer.invoke(IPC.windowMinimize),
 
