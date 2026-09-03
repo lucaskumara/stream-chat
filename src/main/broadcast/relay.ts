@@ -90,6 +90,17 @@ export function destinationArgs(url: string): string[] {
     '-hide_banner',
     '-loglevel',
     'warning',
+
+    /** ffmpeg gives up probing long before a keyframe arrives on a stream joined part way
+        through, and then has no SPS to read dimensions from: "Could not find codec
+        parameters ... unspecified size", followed by the FLV muxer refusing with
+        "dimensions not set". The default is 5s/5MB; a 6 Mbps stream with a keyframe every
+        10s needs to be able to wait longer than that. */
+    '-analyzeduration',
+    '30000000',
+    '-probesize',
+    '50000000',
+
     '-f',
     'mpegts',
     '-i',

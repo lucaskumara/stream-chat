@@ -22,9 +22,16 @@ function ffmpegPath(): string {
 }
 
 /** OBS pushes to this, and nothing else can: a push carrying a different key lands on a
-    path ffmpeg is not listening on. Regenerated per launch, since a listener that is gone
-    has no key worth honouring. */
-const relayKey = randomBytes(8).toString('hex')
+    path ffmpeg is not listening on. Persisted, because it lives in OBS's settings — a key
+    that changed each launch meant every restart silently refused the encoder with
+    "Unexpected stream", which reads as the relay being broken. */
+let cachedKey: string | null = null
+
+function relayKeyValue(): string {
+  cachedKey ??= config().relayKey(() => randomBytes(8).toString('hex'))
+
+  return cachedKey
+}
 
 /** ffmpeg reports a clean teardown on stderr in the same shape as a real fault — "Error
     retrieving a packet from demuxer: I/O error" is what a *finished* stream prints when
@@ -65,7 +72,7 @@ export class Relay {
   state(): BroadcastState {
     return {
       obsServer: `rtmp://localhost:${RELAY_PORT}/${RELAY_APP}`,
-      obsKey: relayKey,
+      obsKey: relayKeyValue(),
       listening: this.ingest !== null,
       receiving: this.receiving,
       destinations: PLATFORMS.map((platform) => ({
@@ -120,7 +127,7 @@ export class Relay {
 
     this.startedAt = Date.now()
 
-    const child = spawn(ffmpegPath(), ingestArgs(listenUrl(relayKey)), { windowsHide: true })
+    const child = spawn(ffmpegPath(), ingestArgs(listenUrl(relayKeyValue())), { windowsHide: true })
 
     this.ingest = child
 

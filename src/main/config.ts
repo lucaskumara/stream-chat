@@ -16,6 +16,11 @@ interface PersistedShape {
   twitch?: PlatformSlot
   youtube?: PlatformSlot
   kick?: PlatformSlot
+
+  /** The key OBS pushes with. Persisted because it lives in OBS's settings, and a value
+      that changed on every launch meant a silent "Unexpected stream" refusal every time
+      the app restarted — which looks like the relay being broken. */
+  relayKeyEnc?: string
 }
 
 const EMPTY: PersistedShape = { version: 3 }
@@ -46,6 +51,7 @@ class Config {
         twitch?: PlatformSlot
         youtube?: PlatformSlot
         kick?: PlatformSlot
+        relayKeyEnc?: string
       }
 
       if (parsed?.version !== 3) return { ...EMPTY }
@@ -54,7 +60,8 @@ class Config {
         version: 3,
         twitch: parsed.twitch,
         youtube: parsed.youtube,
-        kick: parsed.kick
+        kick: parsed.kick,
+        relayKeyEnc: parsed.relayKeyEnc
       }
     } catch (err) {
       console.warn('[config] unreadable, starting fresh:', err)
@@ -101,6 +108,29 @@ class Config {
       Platform,
       PlatformSetup
     >
+  }
+
+  /** Stable across restarts so the value pasted into OBS keeps working. Generated on
+      first use. */
+  relayKey(make: () => string): string {
+    const enc = this.data.relayKeyEnc
+
+    if (enc) {
+      try {
+        return safeStorage.decryptString(Buffer.from(enc, 'base64'))
+      } catch {
+        // Fall through and mint a new one.
+      }
+    }
+
+    const key = make()
+
+    if (safeStorage.isEncryptionAvailable()) {
+      this.data.relayKeyEnc = safeStorage.encryptString(key).toString('base64')
+      this.write()
+    }
+
+    return key
   }
 
   /** A patch, so the renderer can save a channel without having to send back a stream

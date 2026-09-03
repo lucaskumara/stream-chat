@@ -761,6 +761,13 @@ the same reason.
 already in progress, and TS repeats its PAT/PMT so a late reader can find the streams without
 having seen a header. Still `-c copy` throughout — no transcode anywhere in the chain.
 
+**A destination switched on mid-GOP must be allowed to probe until the next keyframe.**
+ffmpeg's default is 5s/5MB, and with a long keyframe interval it gives up first: "Could not
+find codec parameters ... unspecified size", then the FLV muxer refuses with "dimensions not
+set" and *nothing is forwarded at all*. Reproduced with a 30s interval — 10s still passes on
+the defaults — and fixed with `-analyzeduration 30000000 -probesize 50000000`. OBS set to a
+2s keyframe interval avoids the wait entirely, which is why the Broadcast page asks for it.
+
 **A late joiner's first fraction of a second is incomplete, and that is inherent.** It begins
 reading part way through a GOP, so the access unit before the next keyframe is truncated —
 measured at 5 bad frames out of 834, all at the head. `-fflags +discardcorrupt` does *not*
@@ -799,10 +806,11 @@ a doubling backoff for a process that dies inside `MIN_HEALTHY_MS`, so a busy 19
 spin.
 
 **The relay key is a path segment, and that is what protects the port.** RTMP matches the
-whole application path, so a push carrying the wrong key never reaches us. It is generated
-per launch rather than stored — which does mean the value has to be re-copied into OBS after
-a restart. ffmpeg listens on `127.0.0.1` while OBS is told `localhost`, so nothing on the
-network can push in.
+whole application path, so a push carrying the wrong key never reaches us. It is **persisted**
+for exactly that reason: the value lives in OBS's settings, and a key regenerated each launch
+meant every restart silently refused the encoder with `Unexpected stream <old>, expecting
+<new>` — which reads as the relay being broken rather than as a stale paste. ffmpeg listens
+on `127.0.0.1` while OBS is told `localhost`, so nothing on the network can push in.
 
 **ffmpeg cannot be run from inside `app.asar`.** `asarUnpack` puts `ffmpeg-static` beside
 the archive and `ffmpegPath()` swaps `app.asar` for `app.asar.unpacked`. It adds ~79MB, so

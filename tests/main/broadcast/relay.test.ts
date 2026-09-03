@@ -103,6 +103,15 @@ describe('ingestArgs', () => {
 describe('destinationArgs', () => {
   const args = destinationArgs('rtmps://ingest.example/app/live_1_abc')
 
+  // A destination switched on mid-GOP sees no keyframe until the next one, and with
+  // ffmpeg's default 5s probe it gives up first: "Could not find codec parameters ...
+  // unspecified size", then the FLV muxer refuses with "dimensions not set" and nothing
+  // is forwarded at all. Reproduced with a 30s keyframe interval, fixed by these.
+  it('probes long enough to wait for a keyframe on a stream joined mid-GOP', () => {
+    expect(Number(args[args.indexOf('-analyzeduration') + 1])).toBeGreaterThanOrEqual(30_000_000)
+    expect(Number(args[args.indexOf('-probesize') + 1])).toBeGreaterThanOrEqual(50_000_000)
+  })
+
   it('reads the ingest from stdin', () => {
     expect(args[args.indexOf('-i') + 1]).toBe('pipe:0')
     expect(args[args.indexOf('-f') + 1]).toBe('mpegts')
