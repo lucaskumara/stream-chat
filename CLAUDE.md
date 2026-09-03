@@ -14,7 +14,7 @@ lives — read it before touching the message pipeline, emotes, or either Twitch
 ```bash
 npm run dev        # electron-vite dev — launches the app and the renderer dev server
 npm run typecheck  # all three tsconfig projects; the fastest correctness gate
-npm run test       # vitest, the pure-logic suite — 359 cases in ~1.5s
+npm run test       # vitest, the pure-logic suite — a few hundred cases in ~1.5s
 npm run test:watch # the same suite, re-running as files change
 npm run build      # typecheck, then build main + preload + renderer
 ```
@@ -75,9 +75,8 @@ under the **same filenames**. If you know one folder you know all three:
 session is shared across channels (Kick's Pusher socket, YouTube's `Innertube`), and
 `badges.ts` wherever the platform's badge art has to be resolved rather than read off the
 message — which is now all three. Twitch
-carries two transports, so each gets its own file — `irc.ts` and `eventsub.ts` — holding
-that transport's hub, feed and mapping together, plus `badges.ts` and `emotes.ts`, which
-both transports share. Mapping is **not** a separate file: it
+keeps its transport in `irc.ts` — hub, feed and mapping together — plus `badges.ts` and
+`emotes.ts`. Mapping is **not** a separate file: it
 lives beside the feed that produces it, as module-level `toChatMessage` / `toFragments`
 functions under the exported class.
 
@@ -98,7 +97,7 @@ src/main/chat/       the framework:
 src/main/             bus.ts (MessageBus), backlog.ts, sources.ts (SourceManager), ipc.ts,
                       config.ts, lifecycle.ts, index.ts (app bootstrap + service construction)
 src/main/obs/         server.ts — the loopback link server OBS docks connect to
-src/main/twitch/      auth.ts, helix.ts, state.ts, clientId.ts — account only, no wire code
+src/main/broadcast/   relay.ts (ffmpeg arguments, TS inspection) + index.ts (the Relay)
 src/main/emotes/      7TV + BTTV, reached through Channel.emotes — see "Emotes" below
 src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the platform colour, name and
                       event-accent tokens no CSS variable can carry), search.ts (the pane
@@ -108,21 +107,19 @@ src/renderer/src/     App.tsx, zustand store.ts, theme.ts (the platform colour, 
 src/renderer/src/obs/ the OBS dock page — a second renderer entry, no antd
 ```
 
-The rule that keeps this from drifting: **wire code lives in the platform folder, account
-code does not.** Twitch auth is IPC-driven token management, not a chat transport.
+The rule that keeps this from drifting: **wire code lives in the platform folder, and
+nothing else does.** The relay, the OBS link server and the settings store are subsystems of
+their own — they are about video, docks and configuration, not about a chat transport.
 
 **`RoomSocket` is the shared multiplexing socket.** `chat/socket.ts` owns the whole pattern:
 `join(room, handler)` returns a leave function, the first join opens the socket, the last
 leave closes it, and reconnect/backoff/keepalive are handled once. Subclasses fill in five
 hooks — `onOpen`, `onFrame`, `sendJoin`, `sendLeave`, `sendKeepalive`. Both Kick's Pusher
 socket and Twitch's `IrcHub` extend it, which is why the two "retain the negotiated silence
-timeout" invariants below are really one code path (`negotiateSilence`). `EventSubHub` does
-*not* extend it — EventSub subscriptions are bound to a session id and must be recreated on
-reconnect, which does not fit the room model.
+timeout" invariants below are really one code path (`negotiateSilence`).
 
-**`PlatformServices` is the injection seam.** `main/index.ts` constructs `TwitchAuth`,
-`Helix`, `EventSubHub` and `IrcHub`, and hands them to `SourceManager` as
-`{ twitch: { auth, helix, eventsub, irc } }`. `createWatcher` in `chat/index.ts` passes them
+**`PlatformServices` is the injection seam.** `main/index.ts` constructs `IrcHub` and hands
+it to `SourceManager` as `{ twitch: { irc } }`. `createWatcher` in `chat/index.ts` passes it
 to the Twitch factory only; YouTube and Kick take nothing and reach their shared connection
 through a module singleton. That asymmetry is why `TwitchChatWatcher` is the one watcher
 with a second constructor argument.
@@ -144,10 +141,10 @@ file) alongside the feed, and keep the renderer dumb.
 slicing. Indexing with `.indexOf`/`.slice` cuts an astral emoji (e.g. a ZWJ family emoji)
 mid-surrogate and corrupts both the emote and the surrounding text.
 
-**Both Twitch transports must compose message ids identically.** `irc.ts` and `eventsub.ts`
-each call the shared `messageId('twitch', sourceId, nativeId)` from `chat/watcher.ts`. This
-is convention, not construction — there is no `twitchMessageId` wrapper forcing it, so a new
-transport can drift. Never inline the template literal.
+**Every feed composes message ids through the same function.** `messageId(platform,
+sourceId, nativeId)` in `chat/watcher.ts`. This is convention, not construction — there is
+no per-platform wrapper forcing it, so a new transport can drift. Never inline the template
+literal.
 
 **Links are split out of text fragments only, after the platform's own emotes are carved
 out.** Running the URL regex over the whole message is exactly what the fragment design
@@ -366,9 +363,9 @@ dead on arrival — no caller ever used them, because filtering happened at draw
 
 ### Twitch
 
-**The anonymous path still needs the properly-cased display name, and GQL is where it comes
-from.** Signed out there is no Helix token, so `resolveChannel` used to build
-`new TwitchChannel(login, login, '')` and the tab read `theburntpeanut` instead of
+**Twitch chat is read anonymously, and GQL is what supplies the properly-cased display
+name.** There is no token anywhere, so `resolveChannel` would otherwise build
+`new TwitchChannel(login, login, '')` and the tab would read `theburntpeanut` instead of
 `TheBurntPeanut`. `anonymousLookup` asks `gql.twitch.tv` for `user(login:){id displayName}`
 over the same anonymous client id the badges use — hence `platforms/twitch/gql.ts`, which
 owns the endpoint, the web client id and the `data` unwrapping for both callers.
@@ -387,29 +384,26 @@ therefore still costs casing, not the connection.
 — a YouTube channel that only resolves when it goes live — was invisible until the status
 handler in `eventsFor` started re-reading `watcher.label` on every status event.
 
-**Two transports, chosen at runtime.** `TwitchChatWatcher.createFeed` picks `TwitchIrcFeed`
-(anonymous, no account) when signed out and `TwitchEventSubFeed` when a token exists. One
-watcher, two feeds in two files (`irc.ts`, `eventsub.ts`), each with its own mapping.
-Anonymous is the default and the normal path. **The two produce identical output** — badges
-and colours included, since both resolve through the same `badges.ts` and IRC's `color` tag
-carries the same value as EventSub's `color` field. If nothing ever needs EventSub again,
-the whole auth subsystem is deletable.
+**One transport: anonymous IRC.** `TwitchChatWatcher.createFeed` always builds
+`TwitchIrcFeed`. There was a second, EventSub, reached when a token existed; it was deleted
+with the accounts subsystem, along with `auth.ts`, `state.ts`, `helix.ts` and `eventsub.ts`.
+Nothing was lost — the two produced identical output, badges and colours included, because
+both resolved through the same `badges.ts` and IRC's `color` tag carries what EventSub's
+`color` field did. Restoring it means writing a new feed, not rewiring an old one.
 
 **`badges.twitch.tv` is dead — it does not even resolve (`ENOTFOUND`).** Every old chat
 client used `badges.twitch.tv/v1/badges/global/display`; it is gone, so do not reach for it.
-Helix `/chat/badges` still works but needs a token, which the anonymous IRC path (the
-default) does not have. `badges.ts` therefore goes to **`gql.twitch.tv/gql` with the public
+Helix `/chat/badges` still works but needs a token, which this app no longer has at all. `badges.ts` therefore goes to **`gql.twitch.tv/gql` with the public
 web Client ID** `kimne78kx3ncx6brgo4mv6wki5h1ko` — anonymous, no token, and one raw query
 returns global badges *and* `user(login:).broadcastBadges` together. Raw queries work there;
 persisted-query hashes do not (`PersistedQueryNotFound`), so do not "optimise" it into one.
 
 **Badges are keyed `setID/version`, and the channel set wins over the global set.** IRC sends
-`badges=subscriber/12,moderator/1`; EventSub sends `[{ set_id, id }]`. Both compose the same
-key. A channel's `broadcastBadges` only ever contains `subscriber` and `bits` — every other
+`badges=subscriber/12,moderator/1`, which composes that key. A channel's `broadcastBadges` only ever contains `subscriber` and `bits` — every other
 set is global — but subscriber tiers and cheer tiers are exactly the ones that differ per
 channel, so checking the channel map first is not optional.
 
-**Both Twitch feeds `await twitchBadges.ready()` before they join, and the deadline is the
+**The Twitch feed `await`s `twitchBadges.ready()` before joining, and the deadline is the
 whole point.** `lookup()` is synchronous and resolution happens once, at map time, into an
 immutable `ChatMessage` — so a message mapped before the badge fetch lands keeps
 `{ label: setId, id: setId }` **forever**. It does not fill in later; an earlier version of
@@ -417,32 +411,9 @@ this note claimed it did. That window is not theoretical: `IrcHub` is shared, so
 Twitch channel added joins an already-open socket in ~50ms while the GQL badge query takes
 200-400ms, and the first second of a busy chat rendered as chips. `ready()` races `load()`
 against `READY_DEADLINE_MS` (1.5s), so a dead or slow gql.twitch.tv costs a bounded delay
-before joining rather than a permanently unbadged first second. Both feeds also need a
-`stopped` guard, because `stop()` can now land during that await. Verified live on a 50k-viewer
+before joining rather than a permanently unbadged first second. The feed also needs a
+`stopped` guard, because `stop()` can land during that await. Verified live on a 50k-viewer
 channel: 26 badge images including channel subscriber tiers, zero fallbacks in the first frame.
-
-**`user:read:chat` alone is enough to read *any* channel's chat.** Moderator status is only
-required for app access tokens. This is what makes "add a channel by name" work after a
-single sign-in.
-
-**EventSub subscriptions are bound to a session id.** A reconnect invalidates all of them and
-they must be recreated; that is why one hub owns the socket for every channel.
-
-**`keepalive_timeout_seconds` only appears in `session_welcome`.** Re-arming the watchdog from
-later messages reverts to the default and can terminate a healthy socket. Retain the
-negotiated value.
-
-**A superseded socket must not drive reconnect logic.** After `session_reconnect`, closing the
-old socket fires its close handler; without an identity check (`this.ws !== socket`) it
-schedules a duplicate connection.
-
-**Concurrent token refreshes must share one in-flight promise.** Several subscriptions starting
-at once would each spend the refresh token and invalidate each other.
-
-**The Client ID is a build constant, not user input.** A public OAuth client has no secret; the
-id identifies the application and authorises nothing. It lives in `src/main/twitch/clientId.ts`,
-overridable by `TWITCH_CLIENT_ID`. Asking a user to register an app is developer setup
-masquerading as a feature. If this repo ever goes public, move the value to an untracked `.env`.
 
 ### YouTube
 
@@ -1011,8 +982,8 @@ draw it. It is **absent** below two *connected* chats rather than disabled — m
 ever collapses connected chats, so with one or none the button could do nothing, and a dead
 control is not worth the space it holds on the window's centre line. Merging is
 a viewing mode over connected chats only — a visible platform with no channel keeps its own
-column either way, because its sign-in prompt has nowhere else to go, so
-[merged chat][sign-in prompt] is a normal state rather than a glitch.
+column either way, because its "not configured" prompt has nowhere else to go, so
+[merged chat][prompt] is a normal state rather than a glitch.
 
 **`layout.ts` derives the column model once, and both the view and the icon read it.**
 `chatColumns(visiblePlatforms, sources, merged)` is the only place split-versus-merged is
@@ -1051,8 +1022,8 @@ only when more than one chat is actually in the column.
 **Toggling is uniform, and a tab with no channel is not a special case.** Switching one on
 puts its pane on screen whatever it holds: a chat if that platform is connected, the connect
 form if it is not. That is the only route to the form, so it cannot be reserved for connected
-platforms — and it means a split of a live chat beside a sign-in prompt is a normal state, not
-a glitch. `SignInPrompt` is `max-w-[380px]` inside its column for that reason.
+platforms — and it means a split of a live chat beside a "not configured" prompt is normal, not
+a glitch. `NotConfigured` is `max-w-[380px]` inside its column for that reason.
 
 **The greyed-out tab click was dead, and the cause was the drag region, not the styling.**
 `.titlebar-drag` fills the bar with `-webkit-app-region: drag`; Electron collects draggable
@@ -1077,50 +1048,33 @@ switcher and the window controls — those two are different widths, and on Wind
 width again when the window maximises. Verified in the running app: tab group centre 720 in a
 1440px window.
 
-**Signing in picks the channel — there is no channel field.** A platform with no account
-shows `SignInPrompt` in the pane, whose only control starts that platform's OAuth flow. On
-sign-in, main opens the account's *own* chat; on sign-out it closes it. `ConnectChannel`, the
-`AddChannel` dialog before it, and `store.connectDraft` are all gone.
+**The settings screen picks the channel — there is no channel field in the pane.** A platform
+with no channel set shows `NotConfigured`, whose only control opens Settings -> Platforms.
+`SignInPrompt`, `ConnectChannel`, the `AddChannel` dialog before it, and `store.connectDraft`
+are all gone.
 
-**`syncOwnChannels` in `main/index.ts` is the only route by which a source is created.** It
-runs on every account change and walks `PLATFORMS`, calling `SourceManager.ensureOnly` for a
+**`syncChannels` in `main/index.ts` is the only route by which a source is created.** It runs
+on every settings save and walks `PLATFORMS`, calling `SourceManager.ensureOnly` for a
 platform that has a channel and `removeByPlatform` for one that does not. `ensureOnly` is a
-no-op when the wanted channel is already the one open, so a status broadcast does not churn a
-live connection. The sync is single-flighted, because account changes arrive in bursts.
+no-op when the wanted channel is already the one open, so a save does not churn a live
+connection. The sync is single-flighted, because saves arrive in bursts as fields are edited.
 
-**`AccountManager.ownChannel` reads `StoredTokens.channel`, not `login`.** They are the same
-string on Twitch and are not on YouTube, where the identifier is a `UC…` id and the display
-name is prose. `channel` therefore has to survive a token refresh — `renew()` dropping it
-would disconnect the chat an hour into a session, which is exactly the kind of fault that
-looks like a transport bug.
-
-**"Watch another channel" in the pane popover is the way out, and it exists because sending
-does not require owning the channel.** Twitch takes the target as `broadcaster_id` and the
-sender from the token, so any chat can be read *and* typed into with plain `user:write:chat` —
-no moderator status, no ownership. `watching` in `main/index.ts` holds the override per
-platform and `runSync` prefers it, so a status broadcast cannot yank the pane back. Clearing
-it returns to the account's own chat. `parseChannelInput`/`parseForPlatform` survive for this
-field, which is now their only caller.
-
-**Anonymous chat reading is unreachable from the app now.** A channel comes from an account,
-so there is always a token, so `TwitchChatWatcher.createFeed` always picks `TwitchEventSubFeed`.
-`TwitchIrcFeed` and the anonymous GQL resolve path are still correct and still tested — they
-are simply no longer entered. Do not delete them on the strength of that; the OBS dock and any
-future "watch without signing in" both land back on them.
+**Chat reading is anonymous on all three platforms and needs no account at all.** The channel
+name is the only thing a chat needs; the stream URL and key on the same settings card are for
+the relay and are never used by chat.
 
 **The pane bar carries the channel name and nothing about the platform.** The dot and the
 platform name were both there and both were removed: the tab above the pane already names the
 platform and colours its mark, and panes run in tab order, so repeating it in every bar was
 the same fact three times. The `offline` pill stays — that is state, not identity.
 
-**Disconnecting is in the pane's settings popover, and there is no confirm.** It leaves the
-pane on screen showing the sign-in prompt again. It is now literally signing out of the
-account, because that is the only thing "disconnect" can mean once the account picks the
-channel — the button says so.
+**Disconnecting is in the pane's settings popover, and there is no confirm.** It removes the
+source; the pane stays on screen showing the "not configured" prompt. Clearing the channel in
+Settings -> Platforms is the durable version of the same thing.
 
 **One chat per platform is a renderer rule, not a main-process one.** `SourceManager` still
-holds any number of sources and `removeByPlatform` exists for the Twitch sign-in swap, so the
-OBS link server and the backlog are untouched by this. Nothing in the UI can create a second
+holds any number of sources and `removeByPlatform` exists for the settings swap, so the OBS
+link server and the backlog are untouched by this. Nothing in the UI can create a second
 source for a platform, because a platform has one account and an account has one channel.
 
 **Split groups, tab dragging and per-channel tabs are all gone.** v1 remembered arrangements
@@ -1334,7 +1288,7 @@ baked into the build, or nothing at all.
 
 | Platform | User sign-in? | Build credential | Why |
 |---|---|---|---|
-| Twitch | **Optional**, device flow | Client ID | EventSub is never anonymous — every `channel.chat.message` subscription carries the reading user's `user_id`. Anonymous IRC is the signed-out fallback and loses nothing — badges resolve over anonymous GQL, not Helix. |
+| Twitch | **No** | none | Anonymous IRC reads any channel, and badges resolve over anonymous GQL rather than Helix. |
 | YouTube | **Optional**, site session | none | Sign-in is a login window, not OAuth — a Cloud project's sensitive scopes expire refresh tokens weekly until the app leaves Testing. Reading chat goes through the innertube endpoint the web player uses — no key, no quota. A Google API key would only be needed for account-scoped calls, or to *send* messages (`liveChatMessages.insert` is OAuth-only). |
 | Kick | **Optional**, site session | none | Sign-in is a login window: the public API's token exchange needs a `client_secret` a desktop build cannot hold. The internal socket is anonymous. Kick's *official* API is OAuth + webhook, useless to a desktop app with no public URL. |
 
@@ -1418,21 +1372,23 @@ clears it, hands out its OBS link and disconnects the channel.
 Every chat is also readable outside the app, at a loopback URL OBS can dock — see "OBS
 links".
 
-Next: polish — settings persistence, sending messages back, auto-update. `fontSize`,
-`showDeleted` and `showTimestamps` are all driven from the pane bar now; nothing in the store
-is unbound.
+Restreaming works: OBS pushes to the relay and it forwards to Twitch and Kick, verified on a
+real 30-minute stream. See "Broadcast (the relay)" for the traps, of which the two that cost
+most were Kick's missing `/app` path and IVS's 2s keyframe requirement.
 
-Nothing survives a restart. The app opens with no channels every time, by design — see
-"Nothing is persisted but the Twitch token".
+The platform setup — channel, ingest URL, stream key — persists, encrypted. Chat scrollback
+does not: the app opens with empty panes every launch and refills from live chat.
 
-Deliberately not done yet: no persistence of any kind beyond the Twitch token, no
-message sending, and no auto-update. OBS links are read-only mirrors: a dock shows a channel
-only while that channel is open in the app, and hitting a URL never adds one. Packaging now works — see "Packaging" — but the build
+Deliberately not done: **no message sending on any platform** (the composer, and every
+account that authorised it, were removed — a chat client that only reads is the decision, not
+an omission), no moderation, and no auto-update. YouTube is configured like the others but is
+the least exercised of the three. OBS links are read-only mirrors: a dock shows a channel only
+while that channel is open in the app, and hitting a URL never adds one. Packaging now works — see "Packaging" — but the build
 is unsigned and has no icon of its own.
 YouTube super-chats and memberships are **not** mapped at all — see the YouTube invariant on
 `LiveChatTextMessage`. **Twitch is the only platform that emits a `MessageKind` other than
 `chat`** — `subscription`, `raid`, `announcement` and `system` come from IRC `USERNOTICE`
-(and the EventSub equivalent), `donation` from the `bits` tag. Kick and YouTube hard-code
+`donation` from the `bits` tag. Kick and YouTube hard-code
 `kind: 'chat'`, so any UI keyed on message kind is Twitch-only in practice.
 
 ## Verifying changes
@@ -1451,8 +1407,8 @@ tests, so nothing bundles them. What is covered:
 | the "add a channel" parser | `shared/channel.ts` |
 | the dock URL grammar | `shared/obs.ts` |
 | link splitting, plain text, backoff, replay guard, id composition | `chat/links.ts`, `chat/fragments.ts`, `chat/backoff.ts`, `chat/recent-ids.ts`, `chat/watcher.ts` |
-| IRC parsing and both message mappings | `platforms/twitch/irc.ts` |
-| the emote URL builder both transports share | `platforms/twitch/emotes.ts` |
+| IRC parsing and its message mapping | `platforms/twitch/irc.ts` |
+| the Twitch emote URL builder | `platforms/twitch/emotes.ts` |
 | Kick's inline emote tokens, badge ids and reply excerpts | `platforms/kick/index.ts` |
 | YouTube's poll clamp | `platforms/youtube/index.ts` |
 | third-party emote substitution | `emotes/index.ts` |
@@ -1465,7 +1421,7 @@ tests, so nothing bundles them. What is covered:
 | the per-platform channel parse | `renderer/connect.ts` |
 | the merged-column k-way merge | `renderer/merge.ts` |
 | the split/merged column model | `renderer/layout.ts` |
-| ingest and per-destination ffmpeg arguments | `broadcast/relay.ts` |
+| ingest and per-destination ffmpeg arguments, and the transport-stream inspection | `broadcast/relay.ts` |
 | the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |

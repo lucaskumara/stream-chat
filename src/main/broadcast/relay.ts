@@ -83,14 +83,8 @@ export function ingestArgs(listen: string): string[] {
 }
 
 /** One of these per platform, fed the ingest's bytes on stdin. Killing it stops that
-    platform and nothing else.
-
-    A platform switched on mid-stream begins reading part way through a GOP, so its first
-    fraction of a second is an incomplete access unit — measured at 5 bad frames out of
-    834, all at the head, before the next keyframe two seconds in. `-fflags +discardcorrupt`
-    does *not* help: these packets are not flagged corrupt, merely truncated. Fixing it
-    properly means parsing the transport stream to start a new destination on a keyframe,
-    which is not worth it for a blip at the very start of that platform's own stream. */
+    platform and nothing else. It is only ever handed a stream that begins on a keyframe —
+    see `hasRandomAccess` and the relay's `feed`. */
 export function destinationArgs(url: string): string[] {
   return [
     '-hide_banner',
@@ -101,9 +95,8 @@ export function destinationArgs(url: string): string[] {
         sending, and its row sits on "Connecting" for the whole stream. */
     '-stats',
 
-    /** Small on purpose. A destination is only ever started at a keyframe (see
-        `keyframeStart`), so the parameter sets are in the first bytes it reads and there
-        is nothing to wait for. A long probe here was actively harmful: ffmpeg sat reading
+    /** Small on purpose. A destination is only ever started at a keyframe, so the
+        parameter sets are in the first bytes it reads and there is nothing to wait for. A long probe here was actively harmful: ffmpeg sat reading
         while the pipe filled, then drained the backlog at 1.23x — permanently behind by
         however long it had waited, which is what a huge stream delay looks like. */
     '-analyzeduration',
