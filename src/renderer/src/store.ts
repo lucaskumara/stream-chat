@@ -67,8 +67,6 @@ interface ChatState {
       store rather than from a media query every component would have to repeat. */
   systemDark: boolean
 
-  reopenChannels: boolean
-
   /** Chat row size per source, in px from CHAT_FONT_SIZES. Missing means the default. */
   fontSize: Record<string, number>
 
@@ -92,7 +90,6 @@ interface ChatState {
   setSystemDark: (systemDark: boolean) => void
   setColorByPlatform: (on: boolean) => void
   stepDefaultFontSize: (steps: number) => void
-  setReopenChannels: (on: boolean) => void
   setSearch: (sourceId: string, terms: string[]) => void
   setSearchDraft: (sourceId: string, draft: string) => void
   addSearchTerm: (sourceId: string, term: string) => void
@@ -223,8 +220,6 @@ export const useStore = create<ChatState>()((set) => ({
 
   systemDark: true,
 
-  reopenChannels: true,
-
   platforms: [],
 
   /** A cold start adopts whatever main already has — the backlog replay after a
@@ -306,8 +301,6 @@ export const useStore = create<ChatState>()((set) => ({
 
   stepDefaultFontSize: (steps) =>
     set((s) => ({ defaultFontSize: steppedSize(s.defaultFontSize, steps) })),
-
-  setReopenChannels: (reopenChannels) => set({ reopenChannels }),
 
   setSearch: (sourceId, terms) =>
     set((s) => ({ search: { ...s.search, [sourceId]: terms } })),

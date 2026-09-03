@@ -1,27 +1,13 @@
 import { useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { bridge } from '../../bridge'
-import { ControlRow, Toggle } from '../../components/controls'
-import { useStore } from '../../store'
+import { ControlRow } from '../../components/controls'
 import { Group } from './Group'
 
 export function General(): React.ReactElement {
-  const reopenChannels = useStore((s) => s.reopenChannels)
-  const setReopenChannels = useStore((s) => s.setReopenChannels)
-
   return (
     <div>
-      <Group label="Startup" first>
-        <ControlRow label="Reopen the channels I had open">
-          <Toggle
-            label="Reopen the channels I had open"
-            on={reopenChannels}
-            onChange={setReopenChannels}
-          />
-        </ControlRow>
-      </Group>
-
-      <Group label="Diagnostics">
+      <Group label="Diagnostics" first>
         <ControlRow label="Open the log folder">
           <OpenLogs />
         </ControlRow>
