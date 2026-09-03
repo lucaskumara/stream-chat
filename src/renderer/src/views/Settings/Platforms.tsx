@@ -8,7 +8,6 @@ import { PlatformMark } from '../../components/PlatformMark'
 import { ControlRow, Toggle } from '../../components/controls'
 import { PLATFORM_COLOR, PLATFORM_NAME } from '../../theme'
 import type { PlatformDraft } from './platformDraft'
-import { PlatformsSaveBar } from './PlatformsSaveBar'
 import type { PlatformDraftsApi } from './usePlatformDrafts'
 
 /** Where each platform actually shows these values, and which of them it shows. Twitch
@@ -64,8 +63,6 @@ export function Platforms(props: PlatformDraftsApi): React.ReactElement {
         Chat is read anonymously — the channel is all it needs. The stream URL and key are
         only used to forward your OBS stream to that platform.
       </p>
-
-      <PlatformsSaveBar {...props} />
     </div>
   )
 }

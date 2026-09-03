@@ -6,8 +6,6 @@ import { PLATFORM_NAME } from '../../theme'
 import { useStore } from '../../store'
 import { dirtyPatch, draftFrom, type PlatformDraft } from './platformDraft'
 
-const SAVED_FLASH_MS = 1500
-
 function emptyDraft(): PlatformDraft {
   return { channel: '', ingestUrl: '', streamKey: '', emoteProviders: { sevenTv: true, bttv: true } }
 }
@@ -28,22 +26,20 @@ export interface PlatformDraftsApi {
   updateDraft: (platform: Platform, patch: Partial<PlatformDraft>) => void
   dirty: boolean
   saving: boolean
-  savedFlash: boolean
   save: () => Promise<void>
 }
 
-/** Lifted out of the Platforms pane itself so Settings can render the Save bar as
-    a layout sibling of the scrollable card list rather than an overlay pinned
-    inside it — see the "hovering weirdly" fix. Always called, regardless of
-    which pane is showing, so the footer can mount instantly the moment the user
-    switches to Platforms without waiting on an effect. */
+/** Lifted out of the Platforms pane itself so the unsaved-changes toast in
+    Settings/index.tsx can read this same dirty/saving state — it floats over
+    the whole pane, not just the card list, so it can't live inside Platforms
+    itself. Always called, regardless of which pane is showing, so Platforms
+    mounts already holding whatever was typed instead of starting blank. */
 export function usePlatformDrafts(): PlatformDraftsApi {
   const configs = useStore((s) => s.platforms)
 
   const [drafts, setDrafts] = useState<Partial<Record<Platform, PlatformDraft>>>({})
   const [errors, setErrors] = useState<Partial<Record<Platform, string>>>({})
   const [saving, setSaving] = useState(false)
-  const [savedFlash, setSavedFlash] = useState(false)
 
   // Settings is a modal over the whole app, so this is the only screen that can be
   // showing while a platform's config changes underneath it — and the only source
@@ -126,11 +122,6 @@ export function usePlatformDrafts(): PlatformDraftsApi {
     setDrafts(nextDrafts)
     setErrors(nextErrors)
     setSaving(false)
-
-    if (Object.keys(nextErrors).length === 0) {
-      setSavedFlash(true)
-      setTimeout(() => setSavedFlash(false), SAVED_FLASH_MS)
-    }
   }
 
   return {
@@ -140,7 +131,6 @@ export function usePlatformDrafts(): PlatformDraftsApi {
     updateDraft,
     dirty: isDirty(configs, drafts),
     saving,
-    savedFlash,
     save
   }
 }
