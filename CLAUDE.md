@@ -773,9 +773,13 @@ destination at an audio access point — which fails exactly as badly as not ali
 and cost a full debugging round to notice. `programMapPid` reads the PAT for the PMT's PID,
 `videoPidFrom` reads the PMT for the stream typed 0x1b (H.264) or 0x24 (HEVC).
 
-**A joining destination is primed with everything since the last PAT.** The tables have to
-reach it before the keyframe does, or it has a complete access unit and no idea what format
-it is in. `primer` accumulates packets from each PAT onward and is handed over in one write.
+**A joining destination is primed with the tables *only*, then the stream from the keyframe
+packet itself.** The tables have to reach it first or it has a complete access unit and no
+idea what format it is in — but handing over every packet since the last PAT also hands over
+partial PES fragments of the other streams, and ffmpeg rejects those: "Packet corrupt", then
+"Packet is missing PTS", then "Error submitting a packet to the muxer: Invalid argument" and
+nothing is delivered. The old version passed a test by luck and failed on a different frame
+rate. `lastPat` and `lastPmt` are kept, and the media starts at `keyframeAt`, not after it.
 
 **Waiting for a keyframe is why the probe settings are now small.** They were briefly
 `-analyzeduration 30000000 -probesize 50000000` to let a mid-GOP destination wait for a
@@ -786,9 +790,19 @@ removes the wait, so the probe is small and the destination stays live.
 
 **One slow platform must not stall the others.** The ingest's bytes are written to every
 active destination's stdin, so a destination that stops draining would back-pressure onto the
-ingest and hold up everyone. Past `MAX_PENDING_BYTES` that one is dropped with an error
-instead. Its stdin also needs an `error` listener — an unhandled EPIPE on a killed child
-takes the whole main process down.
+ingest and hold up everyone. Past `MAX_PENDING_BYTES` — *and* still over it after
+`BACKLOG_GRACE_MS` — that one is dropped. Both numbers matter: an earlier 8 MB cap with no
+grace was about ten seconds of video, which a brief stall on the platform's side crossed, so
+a healthy stream was dropped and retried and the viewer saw a disconnect that healed itself
+seconds later. Its stdin also needs an `error` listener — an unhandled EPIPE on a killed
+child takes the whole main process down.
+
+**Stopping a destination means ending its stdin, not killing it.** EOF lets ffmpeg write the
+FLV trailer and close the RTMP session, so the platform ends the broadcast; killing it leaves
+the platform staring at a dead socket, which is the disconnect screen on Twitch and a long
+spinner on Kick. `endProcess` ends stdin and only kills after `CLOSE_GRACE_MS` for one that
+will not leave. App shutdown is the exception — it kills immediately, because waiting there
+would orphan the process.
 
 **`-map 0` is not optional in either process.** Without it ffmpeg's default stream selection
 hands the muxer nothing and it dies with "Output file does not contain any stream", which

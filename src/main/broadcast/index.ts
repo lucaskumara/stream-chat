@@ -51,12 +51,19 @@ const MIN_HEALTHY_MS = 3_000
 const MAX_BACKOFF_MS = 15_000
 
 /** A destination that stops draining would otherwise back the ingest up and stall every
-    other platform. Past this much unwritten, that one is dropped instead. */
-const MAX_PENDING_BYTES = 8 * 1024 * 1024
+    other platform. This is deliberately far beyond network jitter: at 6 Mbps it is about
+    40 seconds of video. An earlier 8 MB cap was roughly ten seconds, which a brief stall
+    on the platform's side would cross — the destination was dropped and retried, and the
+    viewer saw a disconnect that healed itself a few seconds later. */
+const MAX_PENDING_BYTES = 32 * 1024 * 1024
 
-/** The tables-plus-keyframe run a new destination is primed with. Bounded so a stream
-    with no PAT in sight cannot grow it without limit. */
-const MAX_PRIMER_BYTES = 4 * 1024 * 1024
+/** And it has to stay over the cap: one spike is not a stuck destination. */
+const BACKLOG_GRACE_MS = 15_000
+
+/** Ending stdin lets ffmpeg write the trailer and close the RTMP session, so the platform
+    sees the stream *end* rather than the connection disappear — the difference between a
+    clean stop and a disconnect screen. It is only killed if it will not leave. */
+const CLOSE_GRACE_MS = 5_000
 
 interface Outbound {
   process: ChildProcess
@@ -64,6 +71,9 @@ interface Outbound {
   error?: string
   attempts: number
   retry?: NodeJS.Timeout
+
+  /** When the write backlog first went over the cap, or 0 while it is keeping up. */
+  behindSince?: number
 }
 
 /** A platform dropping us mid-stream — Kick did this with a TLS push error — used to be
@@ -89,10 +99,12 @@ export class Relay {
   /** Bytes of the ingest's output that did not divide into whole TS packets. */
   private carry: Buffer = Buffer.alloc(0)
 
-  /** Packets since the last PAT, so a destination can be handed the stream tables and a
-      keyframe together rather than being dropped into the middle of one. */
-  private primer: Buffer[] = []
-  private primerBytes = 0
+  /** The most recent stream tables. A joining destination is handed these and then the
+      keyframe, and nothing else: priming with *every* packet since the last PAT also hands
+      over partial PES fragments of the other streams, and ffmpeg rejects those outright —
+      "Packet is missing PTS", then "Error submitting a packet to the muxer". */
+  private lastPat: Buffer | null = null
+  private lastPmt: Buffer | null = null
 
   /** Learned from the stream's own tables. A keyframe only counts on the video PID:
       audio packets carry a random access indicator too, and joining on one of those hands
@@ -164,7 +176,9 @@ export class Relay {
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
 
-    for (const platform of [...this.outbound.keys()]) this.closeDestination(platform)
+    for (const platform of [...this.outbound.keys()]) {
+      this.closeDestination(platform, false, true)
+    }
 
     this.waiting.clear()
     this.resetPackets()
@@ -177,8 +191,8 @@ export class Relay {
 
   private resetPackets(): void {
     this.carry = Buffer.alloc(0)
-    this.primer = []
-    this.primerBytes = 0
+    this.lastPat = null
+    this.lastPmt = null
     this.pmtPid = null
     this.videoPid = null
     this.lastKeyframeAt = 0
@@ -211,18 +225,10 @@ export class Relay {
 
       if (pid === PAT_PID) {
         this.pmtPid = programMapPid(packet) ?? this.pmtPid
-        this.primer = []
-        this.primerBytes = 0
+        this.lastPat = Buffer.from(packet)
       } else if (pid === this.pmtPid) {
         this.videoPid = videoPidFrom(packet) ?? this.videoPid
-      }
-
-      this.primer.push(packet)
-      this.primerBytes += TS_PACKET
-
-      if (this.primerBytes > MAX_PRIMER_BYTES) {
-        this.primer = []
-        this.primerBytes = 0
+        this.lastPmt = Buffer.from(packet)
       }
 
       if (pid === this.videoPid && hasRandomAccess(packet)) {
@@ -239,13 +245,17 @@ export class Relay {
 
     this.fanOut(packets)
 
-    if (keyframeAt >= 0) this.startWaiting(packets.subarray(keyframeAt + TS_PACKET))
+    /** From the keyframe packet itself, which begins a fresh PES — anything earlier is a
+        fragment of one already in flight. */
+    if (keyframeAt >= 0) this.startWaiting(packets.subarray(keyframeAt))
   }
 
-  /** Primed with everything from the last PAT through the keyframe, then the rest of the
-      chunk, so its very first bytes carry the tables and a complete access unit. */
-  private startWaiting(rest: Buffer): void {
-    const primer = Buffer.concat(this.primer)
+  /** The tables, then the stream from a keyframe onward, so its first bytes describe the
+      format and then begin a complete access unit. */
+  private startWaiting(fromKeyframe: Buffer): void {
+    if (!this.lastPat || !this.lastPmt) return
+
+    const tables = Buffer.concat([this.lastPat, this.lastPmt])
 
     for (const [platform, url] of [...this.waiting]) {
       this.waiting.delete(platform)
@@ -253,8 +263,8 @@ export class Relay {
       const out = this.openDestination(platform, url)
       if (!out) continue
 
-      out.process.stdin?.write(primer, () => {})
-      if (rest.length > 0) out.process.stdin?.write(rest, () => {})
+      out.process.stdin?.write(tables, () => {})
+      if (fromKeyframe.length > 0) out.process.stdin?.write(fromKeyframe, () => {})
     }
 
     this.onChange()
@@ -341,14 +351,21 @@ export class Relay {
       const stdin = out.process.stdin
       if (!stdin || stdin.destroyed) continue
 
-      /** Never let one slow platform hold up the others: past the cap this destination is
-          dropped rather than allowed to back pressure onto the ingest. */
+      /** Never let one slow platform hold up the others — but only give up on one that
+          stays behind. A momentary spike is normal and dropping on it is what made a
+          healthy stream flicker. */
       if (stdin.writableLength > MAX_PENDING_BYTES) {
-        out.error = 'fell too far behind and was dropped'
-        out.state = 'error'
-        this.closeDestination(platform, true)
-        this.onChange()
-        continue
+        out.behindSince ??= Date.now()
+
+        if (Date.now() - out.behindSince > BACKLOG_GRACE_MS) {
+          out.error = 'fell too far behind and was dropped'
+          out.state = 'error'
+          this.closeDestination(platform, true)
+          this.onChange()
+          continue
+        }
+      } else {
+        out.behindSince = undefined
       }
 
       stdin.write(chunk, (err) => {
@@ -443,16 +460,35 @@ export class Relay {
     return out
   }
 
-  private closeDestination(platform: Platform, keepError = false): void {
+  /** `immediate` is for app shutdown, where waiting would leave an orphaned process
+      behind. Everywhere else the platform is worth the few seconds a clean close takes. */
+  private closeDestination(platform: Platform, keepError = false, immediate = false): void {
     const out = this.outbound.get(platform)
     if (!out) return
 
     if (out.retry) clearTimeout(out.retry)
     if (!keepError) this.outbound.delete(platform)
 
-    out.process.stdin?.end()
-    out.process.kill()
+    endProcess(out.process, immediate)
   }
+}
+
+/** EOF on stdin is what makes ffmpeg finish properly: it writes the FLV trailer and sends
+    RTMP's stream-close, so the platform ends the broadcast instead of waiting for a dead
+    connection to time out. Killing it outright — which this used to do immediately after
+    ending stdin, defeating the whole point — is only a fallback for one that will not go. */
+function endProcess(child: ChildProcess, immediate: boolean): void {
+  if (immediate) {
+    child.stdin?.end()
+    child.kill()
+    return
+  }
+
+  child.stdin?.end()
+
+  const forced = setTimeout(() => child.kill(), CLOSE_GRACE_MS)
+
+  child.once('exit', () => clearTimeout(forced))
 }
 
 export { ingestUrl }
