@@ -761,19 +761,28 @@ the same reason.
 already in progress, and TS repeats its PAT/PMT so a late reader can find the streams without
 having seen a header. Still `-c copy` throughout — no transcode anywhere in the chain.
 
-**A destination switched on mid-GOP must be allowed to probe until the next keyframe.**
-ffmpeg's default is 5s/5MB, and with a long keyframe interval it gives up first: "Could not
-find codec parameters ... unspecified size", then the FLV muxer refuses with "dimensions not
-set" and *nothing is forwarded at all*. Reproduced with a 30s interval — 10s still passes on
-the defaults — and fixed with `-analyzeduration 30000000 -probesize 50000000`. OBS set to a
-2s keyframe interval avoids the wait entirely, which is why the Broadcast page asks for it.
+**A destination is started at a video keyframe, never mid-GOP, and the relay parses the
+transport stream to know where that is.** Starting anywhere else hands ffmpeg an incomplete
+access unit with no SPS/PPS: it reports "non-existing PPS 0 referenced" forever and either
+forwards corrupt frames or refuses with "dimensions not set" and sends nothing. Measured on
+a 30s keyframe interval: 122 PPS errors and 0 MB delivered before, 0 errors and 22 MB after.
 
-**A late joiner's first fraction of a second is incomplete, and that is inherent.** It begins
-reading part way through a GOP, so the access unit before the next keyframe is truncated —
-measured at 5 bad frames out of 834, all at the head. `-fflags +discardcorrupt` does *not*
-fix it (the packets are truncated, not flagged corrupt); a real fix means parsing the
-transport stream to start on a keyframe, which is not worth it for a blip at the very start
-of that platform's own stream.
+**The keyframe must be found on the *video* PID, which is why the PAT and PMT are parsed.**
+`random_access_indicator` is set on audio packets too, so matching it on any PID starts the
+destination at an audio access point — which fails exactly as badly as not aligning at all,
+and cost a full debugging round to notice. `programMapPid` reads the PAT for the PMT's PID,
+`videoPidFrom` reads the PMT for the stream typed 0x1b (H.264) or 0x24 (HEVC).
+
+**A joining destination is primed with everything since the last PAT.** The tables have to
+reach it before the keyframe does, or it has a complete access unit and no idea what format
+it is in. `primer` accumulates packets from each PAT onward and is handed over in one write.
+
+**Waiting for a keyframe is why the probe settings are now small.** They were briefly
+`-analyzeduration 30000000 -probesize 50000000` to let a mid-GOP destination wait for a
+keyframe, and that *worked* while being actively harmful: ffmpeg sat reading while the pipe
+filled behind it, then drained at **1.23x** — permanently behind by however long it had
+waited, which is what a huge stream delay looks like to a viewer. Starting on a keyframe
+removes the wait, so the probe is small and the destination stays live.
 
 **One slow platform must not stall the others.** The ingest's bytes are written to every
 active destination's stdin, so a destination that stops draining would back-pressure onto the

@@ -3,11 +3,38 @@ import type { PlatformSetup } from '@shared/types'
 import {
   destinationArgs,
   destinationUrl,
+  hasRandomAccess,
   ingestArgs,
   ingestUrl,
+  isSyncedPacket,
   listenUrl,
-  normalizeIngest
+  normalizeIngest,
+  packetPid,
+  programMapPid,
+  videoPidFrom
 } from '@main/broadcast/relay'
+
+/** A 188-byte TS packet, optionally carrying an adaptation field whose
+    random_access_indicator marks the start of a keyframe. */
+function tsPacket({
+  pid = 0x100,
+  adaptation = false,
+  randomAccess = false
+}: { pid?: number; adaptation?: boolean; randomAccess?: boolean } = {}): Buffer {
+  const packet = Buffer.alloc(188)
+
+  packet[0] = 0x47
+  packet[1] = (pid >> 8) & 0x1f
+  packet[2] = pid & 0xff
+  packet[3] = adaptation ? 0x30 : 0x10
+
+  if (adaptation) {
+    packet[4] = 183
+    packet[5] = randomAccess ? 0x40 : 0x00
+  }
+
+  return packet
+}
 
 function setup(partial: Partial<PlatformSetup>): PlatformSetup {
   return { channel: '', ingestUrl: '', streamKey: '', forward: false, ...partial }
@@ -103,13 +130,19 @@ describe('ingestArgs', () => {
 describe('destinationArgs', () => {
   const args = destinationArgs('rtmps://ingest.example/app/live_1_abc')
 
-  // A destination switched on mid-GOP sees no keyframe until the next one, and with
-  // ffmpeg's default 5s probe it gives up first: "Could not find codec parameters ...
-  // unspecified size", then the FLV muxer refuses with "dimensions not set" and nothing
-  // is forwarded at all. Reproduced with a 30s keyframe interval, fixed by these.
-  it('probes long enough to wait for a keyframe on a stream joined mid-GOP', () => {
-    expect(Number(args[args.indexOf('-analyzeduration') + 1])).toBeGreaterThanOrEqual(30_000_000)
-    expect(Number(args[args.indexOf('-probesize') + 1])).toBeGreaterThanOrEqual(50_000_000)
+  // A destination is only started at a keyframe, so its parameter sets arrive in the
+  // first bytes and there is nothing to wait for. A long probe here was harmful: ffmpeg
+  // read while the pipe filled, then drained at 1.23x, permanently behind by however long
+  // it had waited — which is what a huge stream delay looks like.
+  it('probes briefly, because the stream it is handed starts on a keyframe', () => {
+    expect(Number(args[args.indexOf('-analyzeduration') + 1])).toBeLessThanOrEqual(5_000_000)
+    expect(Number(args[args.indexOf('-probesize') + 1])).toBeLessThanOrEqual(10_000_000)
+  })
+
+  // Without this the progress line is suppressed and nothing ever reports itself as
+  // sending — a destination sat on "Connecting" through an entire live stream.
+  it('forces the progress line that says it is sending', () => {
+    expect(args).toContain('-stats')
   })
 
   it('reads the ingest from stdin', () => {
@@ -125,6 +158,132 @@ describe('destinationArgs', () => {
 
   it('maps every stream here too', () => {
     expect(args[args.indexOf('-map') + 1]).toBe('0')
+  })
+})
+
+describe('transport stream inspection', () => {
+  // A destination started anywhere but a keyframe reads an incomplete access unit with no
+  // SPS/PPS: ffmpeg reports "non-existing PPS 0 referenced" and either forwards corrupt
+  // frames or refuses outright. Both are things a platform dropped us over.
+  it('spots the packet that begins a keyframe', () => {
+    expect(hasRandomAccess(tsPacket({ adaptation: true, randomAccess: true }))).toBe(true)
+  })
+
+  it('does not mistake an ordinary packet for one', () => {
+    expect(hasRandomAccess(tsPacket())).toBe(false)
+    expect(hasRandomAccess(tsPacket({ adaptation: true }))).toBe(false)
+  })
+
+  // An adaptation field of length zero has no flags byte to read.
+  it('handles an empty adaptation field without reading past it', () => {
+    const packet = tsPacket({ adaptation: true, randomAccess: true })
+    packet[4] = 0
+
+    expect(hasRandomAccess(packet)).toBe(false)
+  })
+
+  // PID 0 is the PAT. A joining destination is primed from the last one so it gets the
+  // stream tables before the keyframe.
+  it('reads the PID, so the PAT can be found', () => {
+    expect(packetPid(tsPacket({ pid: 0 }))).toBe(0)
+    expect(packetPid(tsPacket({ pid: 0x1fff }))).toBe(0x1fff)
+    expect(packetPid(tsPacket({ pid: 0x100 }))).toBe(0x100)
+  })
+
+  it('recognises a whole, synced packet and rejects anything else', () => {
+    expect(isSyncedPacket(tsPacket())).toBe(true)
+    expect(isSyncedPacket(Buffer.alloc(188))).toBe(false)
+    expect(isSyncedPacket(tsPacket().subarray(0, 100))).toBe(false)
+  })
+})
+
+/** A section-carrying packet: payload unit start set, no adaptation field, a zero pointer
+    byte, then the section itself. */
+function sectionPacket(pid: number, section: Buffer): Buffer {
+  const packet = Buffer.alloc(188, 0xff)
+
+  packet[0] = 0x47
+  packet[1] = 0x40 | ((pid >> 8) & 0x1f)
+  packet[2] = pid & 0xff
+  packet[3] = 0x10
+  packet[4] = 0x00
+
+  section.copy(packet, 5)
+  return packet
+}
+
+function pat(programNumber: number, pmtPid: number): Buffer {
+  const body = Buffer.alloc(16)
+
+  body[0] = 0x00
+  const length = 13
+  body[1] = 0xb0 | ((length >> 8) & 0x0f)
+  body[2] = length & 0xff
+  body[8] = (programNumber >> 8) & 0xff
+  body[9] = programNumber & 0xff
+  body[10] = 0xe0 | ((pmtPid >> 8) & 0x1f)
+  body[11] = pmtPid & 0xff
+
+  return sectionPacket(0, body)
+}
+
+function pmt(pmtPid: number, streams: { type: number; pid: number }[]): Buffer {
+  const body = Buffer.alloc(64)
+
+  body[0] = 0x02
+  const length = 13 + streams.length * 5
+  body[1] = 0xb0 | ((length >> 8) & 0x0f)
+  body[2] = length & 0xff
+  body[10] = 0xf0
+  body[11] = 0x00
+
+  let at = 12
+  for (const stream of streams) {
+    body[at] = stream.type
+    body[at + 1] = 0xe0 | ((stream.pid >> 8) & 0x1f)
+    body[at + 2] = stream.pid & 0xff
+    body[at + 3] = 0xf0
+    body[at + 4] = 0x00
+    at += 5
+  }
+
+  return sectionPacket(pmtPid, body)
+}
+
+describe('stream tables', () => {
+  it('finds the PMT pid in a PAT', () => {
+    expect(programMapPid(pat(1, 0x1000))).toBe(0x1000)
+  })
+
+  // Program number 0 is the network information table, not a program.
+  it('skips program number zero', () => {
+    const packet = pat(0, 0x0010)
+
+    expect(programMapPid(packet)).toBeNull()
+  })
+
+  it('ignores a packet that is not the PAT', () => {
+    expect(programMapPid(tsPacket({ pid: 0x100 }))).toBeNull()
+  })
+
+  // The whole point: audio packets carry a random access indicator too, so a keyframe
+  // only counts on the video pid. Starting elsewhere fed destinations an incomplete
+  // access unit — measured at 122 "non-existing PPS" errors and nothing delivered.
+  it('picks the video stream out of a PMT, not the audio one', () => {
+    const packet = pmt(0x1000, [
+      { type: 0x0f, pid: 0x101 },
+      { type: 0x1b, pid: 0x100 }
+    ])
+
+    expect(videoPidFrom(packet)).toBe(0x100)
+  })
+
+  it('accepts HEVC as video too', () => {
+    expect(videoPidFrom(pmt(0x1000, [{ type: 0x24, pid: 0x200 }]))).toBe(0x200)
+  })
+
+  it('answers null when a program carries no video', () => {
+    expect(videoPidFrom(pmt(0x1000, [{ type: 0x0f, pid: 0x101 }]))).toBeNull()
   })
 })
 

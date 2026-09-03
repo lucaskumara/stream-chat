@@ -101,15 +101,15 @@ export function destinationArgs(url: string): string[] {
         sending, and its row sits on "Connecting" for the whole stream. */
     '-stats',
 
-    /** ffmpeg gives up probing long before a keyframe arrives on a stream joined part way
-        through, and then has no SPS to read dimensions from: "Could not find codec
-        parameters ... unspecified size", followed by the FLV muxer refusing with
-        "dimensions not set". The default is 5s/5MB; a 6 Mbps stream with a keyframe every
-        10s needs to be able to wait longer than that. */
+    /** Small on purpose. A destination is only ever started at a keyframe (see
+        `keyframeStart`), so the parameter sets are in the first bytes it reads and there
+        is nothing to wait for. A long probe here was actively harmful: ffmpeg sat reading
+        while the pipe filled, then drained the backlog at 1.23x — permanently behind by
+        however long it had waited, which is what a huge stream delay looks like. */
     '-analyzeduration',
-    '30000000',
+    '2000000',
     '-probesize',
-    '50000000',
+    '4000000',
 
     '-f',
     'mpegts',
@@ -124,3 +124,98 @@ export function destinationArgs(url: string): string[] {
     url
   ]
 }
+
+const TS_PACKET = 188
+const TS_SYNC = 0x47
+const PAT_PID = 0
+
+/** MPEG-TS carries a `random_access_indicator` in a packet's adaptation field, which is
+    set on the packet beginning a keyframe. Starting a destination anywhere else means it
+    reads an incomplete access unit and has no SPS/PPS — ffmpeg then says "non-existing
+    PPS 0 referenced" and either forwards corrupt frames or refuses outright. */
+export function hasRandomAccess(packet: Buffer): boolean {
+  const adaptation = (packet[3] >> 4) & 0b11
+
+  if (adaptation !== 0b10 && adaptation !== 0b11) return false
+  if (packet[4] === 0) return false
+
+  return (packet[5] & 0x40) !== 0
+}
+
+export function packetPid(packet: Buffer): number {
+  return ((packet[1] & 0x1f) << 8) | packet[2]
+}
+
+export function isSyncedPacket(packet: Buffer): boolean {
+  return packet.length === TS_PACKET && packet[0] === TS_SYNC
+}
+
+/** The payload of a section-carrying packet, past the adaptation field and the pointer
+    byte. Null when the packet does not begin a section, since a continuation cannot be
+    parsed on its own and the next one along will do. */
+function sectionPayload(packet: Buffer): Buffer | null {
+  const startsSection = (packet[1] & 0x40) !== 0
+  if (!startsSection) return null
+
+  const adaptation = (packet[3] >> 4) & 0b11
+  if (adaptation !== 0b01 && adaptation !== 0b11) return null
+
+  let at = 4
+  if (adaptation === 0b11) at += 1 + packet[4]
+
+  const pointer = packet[at]
+  at += 1 + pointer
+
+  return at < packet.length ? packet.subarray(at) : null
+}
+
+/** The PMT's PID, read from the Program Association Table. Program number 0 is the
+    network table rather than a program, so it is skipped. */
+export function programMapPid(packet: Buffer): number | null {
+  if (packetPid(packet) !== PAT_PID) return null
+
+  const payload = sectionPayload(packet)
+  if (!payload || payload[0] !== 0x00) return null
+
+  const sectionLength = ((payload[1] & 0x0f) << 8) | payload[2]
+  const end = Math.min(3 + sectionLength - 4, payload.length)
+
+  for (let at = 8; at + 4 <= end; at += 4) {
+    const programNumber = (payload[at] << 8) | payload[at + 1]
+    if (programNumber === 0) continue
+
+    return ((payload[at + 2] & 0x1f) << 8) | payload[at + 3]
+  }
+
+  return null
+}
+
+/** H.264 and HEVC stream types. The video PID is the one whose keyframes matter — audio
+    packets also carry a random access indicator, and starting a destination on one of
+    those hands it an incomplete video access unit, which is the whole bug. */
+const VIDEO_STREAM_TYPES = new Set([0x1b, 0x24])
+
+export function videoPidFrom(packet: Buffer): number | null {
+  const payload = sectionPayload(packet)
+  if (!payload || payload[0] !== 0x02) return null
+
+  const sectionLength = ((payload[1] & 0x0f) << 8) | payload[2]
+  const end = Math.min(3 + sectionLength - 4, payload.length)
+
+  const programInfoLength = ((payload[10] & 0x0f) << 8) | payload[11]
+  let at = 12 + programInfoLength
+
+  while (at + 5 <= end) {
+    const streamType = payload[at]
+    const elementaryPid = ((payload[at + 1] & 0x1f) << 8) | payload[at + 2]
+    const esInfoLength = ((payload[at + 3] & 0x0f) << 8) | payload[at + 4]
+
+    if (VIDEO_STREAM_TYPES.has(streamType)) return elementaryPid
+
+    at += 5 + esInfoLength
+  }
+
+  return null
+}
+
+export { TS_PACKET, PAT_PID }

@@ -6,11 +6,18 @@ import { config } from '../config'
 import {
   destinationArgs,
   destinationUrl,
+  hasRandomAccess,
   ingestArgs,
   ingestUrl,
+  isSyncedPacket,
   listenUrl,
+  packetPid,
+  PAT_PID,
+  programMapPid,
+  videoPidFrom,
   RELAY_APP,
-  RELAY_PORT
+  RELAY_PORT,
+  TS_PACKET
 } from './relay'
 
 /** electron-builder cannot execute a binary from inside app.asar, so the packed path
@@ -47,6 +54,10 @@ const MAX_BACKOFF_MS = 15_000
     other platform. Past this much unwritten, that one is dropped instead. */
 const MAX_PENDING_BYTES = 8 * 1024 * 1024
 
+/** The tables-plus-keyframe run a new destination is primed with. Bounded so a stream
+    with no PAT in sight cannot grow it without limit. */
+const MAX_PRIMER_BYTES = 4 * 1024 * 1024
+
 interface Outbound {
   process: ChildProcess
   state: DestinationState
@@ -75,6 +86,24 @@ export class Relay {
   private backoff = RESPAWN_MS
   private stopped = false
 
+  /** Bytes of the ingest's output that did not divide into whole TS packets. */
+  private carry: Buffer = Buffer.alloc(0)
+
+  /** Packets since the last PAT, so a destination can be handed the stream tables and a
+      keyframe together rather than being dropped into the middle of one. */
+  private primer: Buffer[] = []
+  private primerBytes = 0
+
+  /** Learned from the stream's own tables. A keyframe only counts on the video PID:
+      audio packets carry a random access indicator too, and joining on one of those hands
+      the destination an incomplete video access unit. */
+  private pmtPid: number | null = null
+  private videoPid: number | null = null
+
+  /** Wanted, but waiting for a keyframe before its process is started at all. Nothing is
+      buffered for these — that is the point. */
+  private waiting = new Map<Platform, string>()
+
   constructor(private readonly onChange: () => void) {}
 
   state(): BroadcastState {
@@ -85,7 +114,9 @@ export class Relay {
       receiving: this.receiving,
       destinations: PLATFORMS.map((platform) => ({
         platform,
-        state: this.outbound.get(platform)?.state ?? 'off',
+        state:
+          this.outbound.get(platform)?.state ??
+          (this.waiting.has(platform) ? 'connecting' : 'off'),
         error: this.outbound.get(platform)?.error
       })),
       error: this.failure ?? undefined
@@ -107,10 +138,16 @@ export class Relay {
     for (const platform of PLATFORMS) {
       const wanted = setup[platform].forward && this.receiving
       const url = destinationUrl(setup[platform])
-      const running = this.outbound.get(platform)
+      const running = this.outbound.get(platform) ?? this.waiting.has(platform)
 
-      if (wanted && url && !running) this.openDestination(platform, url)
-      if (!wanted && running) this.closeDestination(platform)
+      /** Queued rather than started: it joins on the next keyframe, which is what keeps it
+          from reading a half access unit and from falling behind before it begins. */
+      if (wanted && url && !running) this.waiting.set(platform, url)
+
+      if (!wanted) {
+        this.waiting.delete(platform)
+        if (this.outbound.get(platform)) this.closeDestination(platform)
+      }
     }
 
     this.onChange()
@@ -124,10 +161,94 @@ export class Relay {
 
     for (const platform of [...this.outbound.keys()]) this.closeDestination(platform)
 
+    this.waiting.clear()
+    this.resetPackets()
+
     const child = this.ingest
     this.ingest = null
     this.receiving = false
     child?.kill()
+  }
+
+  private resetPackets(): void {
+    this.carry = Buffer.alloc(0)
+    this.primer = []
+    this.primerBytes = 0
+    this.pmtPid = null
+    this.videoPid = null
+  }
+
+  /** Splits the ingest's output into whole TS packets, keeps the tables-and-keyframe run
+      that a joining destination needs, and starts anything waiting the moment a keyframe
+      goes past. */
+  private feed(chunk: Buffer): void {
+    const data = this.carry.length > 0 ? Buffer.concat([this.carry, chunk]) : chunk
+    const whole = data.length - (data.length % TS_PACKET)
+
+    this.carry = Buffer.from(data.subarray(whole))
+
+    const packets = data.subarray(0, whole)
+    let keyframeAt = -1
+
+    for (let at = 0; at < packets.length; at += TS_PACKET) {
+      const packet = packets.subarray(at, at + TS_PACKET)
+
+      if (!isSyncedPacket(packet)) {
+        /** Lost alignment: drop what is held and pick the stream up again from the next
+            tables rather than priming anyone with nonsense. */
+        this.resetPackets()
+        return
+      }
+
+      const pid = packetPid(packet)
+
+      if (pid === PAT_PID) {
+        this.pmtPid = programMapPid(packet) ?? this.pmtPid
+        this.primer = []
+        this.primerBytes = 0
+      } else if (pid === this.pmtPid) {
+        this.videoPid = videoPidFrom(packet) ?? this.videoPid
+      }
+
+      this.primer.push(packet)
+      this.primerBytes += TS_PACKET
+
+      if (this.primerBytes > MAX_PRIMER_BYTES) {
+        this.primer = []
+        this.primerBytes = 0
+      }
+
+      if (
+        keyframeAt < 0 &&
+        this.waiting.size > 0 &&
+        pid === this.videoPid &&
+        hasRandomAccess(packet)
+      ) {
+        keyframeAt = at
+      }
+    }
+
+    this.fanOut(packets)
+
+    if (keyframeAt >= 0) this.startWaiting(packets.subarray(keyframeAt + TS_PACKET))
+  }
+
+  /** Primed with everything from the last PAT through the keyframe, then the rest of the
+      chunk, so its very first bytes carry the tables and a complete access unit. */
+  private startWaiting(rest: Buffer): void {
+    const primer = Buffer.concat(this.primer)
+
+    for (const [platform, url] of [...this.waiting]) {
+      this.waiting.delete(platform)
+
+      const out = this.openDestination(platform, url)
+      if (!out) continue
+
+      out.process.stdin?.write(primer, () => {})
+      if (rest.length > 0) out.process.stdin?.write(rest, () => {})
+    }
+
+    this.onChange()
   }
 
   private openIngest(): void {
@@ -150,7 +271,7 @@ export class Relay {
         this.sync()
       }
 
-      this.fanOut(chunk)
+      this.feed(chunk)
     })
 
     child.stderr.setEncoding('utf8')
@@ -225,7 +346,7 @@ export class Relay {
     }
   }
 
-  private openDestination(platform: Platform, url: string, attempts = 0): void {
+  private openDestination(platform: Platform, url: string, attempts = 0): Outbound | null {
     console.warn(`[relay:${platform}] starting${attempts ? ` (retry ${attempts})` : ''}`)
 
     const child = spawn(ffmpegPath(), destinationArgs(url), { windowsHide: true })
@@ -291,10 +412,11 @@ export class Relay {
 
         const url = destinationUrl(config().all()[platform])
         if (url && config().all()[platform].forward && this.receiving) {
-          this.openDestination(platform, url, pending.attempts)
-        } else {
-          this.onChange()
+          /** Re-queued rather than restarted, so the retry also joins on a keyframe. */
+          this.waiting.set(platform, url)
         }
+
+        this.onChange()
       }, wait)
 
       this.outbound.set(platform, pending)
@@ -302,6 +424,8 @@ export class Relay {
     })
 
     this.onChange()
+
+    return out
   }
 
   private closeDestination(platform: Platform, keepError = false): void {
