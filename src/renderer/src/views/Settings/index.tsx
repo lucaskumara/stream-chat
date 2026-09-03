@@ -11,7 +11,7 @@ const PANES: { pane: SettingsPane; label: string }[] = [
 ]
 
 const TITLES: Record<SettingsPane, { title: string; blurb: string }> = {
-  general: { title: 'General', blurb: 'How the app starts.' },
+  general: { title: 'General', blurb: 'Logs and diagnostics.' },
   appearance: {
     title: 'Appearance',
     blurb: 'The theme, and how every chat looks and reads.'
