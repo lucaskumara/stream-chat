@@ -35,9 +35,8 @@ export function Settings(): React.ReactElement {
   const scrollTarget = useStore((s) => s.platformsScrollTarget)
   const clearScrollTarget = useStore((s) => s.clearPlatformsScrollTarget)
 
-  // Called unconditionally rather than only on the Platforms pane, so the nav's
-  // unsaved-changes dot (below) stays correct even while a different pane is
-  // showing, and Platforms itself mounts already holding whatever was typed.
+  // Called unconditionally rather than only on the Platforms pane, so Platforms
+  // itself mounts already holding whatever was typed instead of starting blank.
   const platformDrafts = usePlatformDrafts()
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -98,7 +97,6 @@ export function Settings(): React.ReactElement {
 
         {PANES.map((item) => {
           const on = item.pane === pane
-          const unsaved = item.pane === 'platforms' && platformDrafts.dirty
 
           return (
             <button
@@ -106,7 +104,7 @@ export function Settings(): React.ReactElement {
               type="button"
               aria-current={on}
               onClick={() => setPane(item.pane)}
-              className="hoverable flex h-[30px] cursor-pointer items-center gap-[6px] border-0 px-[10px] text-left text-[14px]"
+              className="hoverable flex h-[30px] cursor-pointer items-center border-0 px-[10px] text-left text-[14px]"
               style={{
                 borderRadius: 6,
                 background: on ? 'var(--ink-700)' : 'transparent',
@@ -119,15 +117,7 @@ export function Settings(): React.ReactElement {
                 if (!on) e.currentTarget.style.background = 'transparent'
               }}
             >
-              <span className="flex-1">{item.label}</span>
-
-              {unsaved && (
-                <span
-                  aria-label="Unsaved changes"
-                  className="h-[6px] w-[6px] flex-none rounded-full"
-                  style={{ background: 'var(--heading)' }}
-                />
-              )}
+              {item.label}
             </button>
           )
         })}
@@ -172,6 +162,38 @@ export function Settings(): React.ReactElement {
           >
             <ArrowUp size={16} strokeWidth={1.8} />
           </button>
+        )}
+
+        {/* Floats over the scrollable content rather than reserving space in it —
+            the fixed footer this replaced took up room on every visit even when
+            nothing was dirty. Only shown on Platforms, where the fields it's
+            about actually live. */}
+        {pane === 'platforms' && platformDrafts.dirty && (
+          <div
+            className="absolute flex items-center gap-[12px] px-[14px] py-[10px]"
+            style={{
+              bottom: 16,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'var(--ink-700)',
+              border: '1px solid var(--line-2)',
+              borderRadius: 8,
+              boxShadow: '0 8px 24px var(--shadow)'
+            }}
+          >
+            <span className="text-[13px] whitespace-nowrap" style={{ color: 'var(--heading)' }}>
+              You have unsaved changes
+            </span>
+
+            <button
+              type="button"
+              className="primary-button h-[26px] flex-none px-[12px] text-[12px]"
+              disabled={platformDrafts.saving}
+              onClick={() => void platformDrafts.save()}
+            >
+              {platformDrafts.saving ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
         )}
       </div>
     </div>
