@@ -1116,17 +1116,23 @@ with no channel set shows `NotConfigured`, whose only control opens Settings -> 
 `SignInPrompt`, `ConnectChannel`, the `AddChannel` dialog before it, and `store.connectDraft`
 are all gone.
 
-**The settings screen is a modal, not a third view.** `SettingsModal` renders a dimmed
-backdrop (`--overlay`) plus a centred card over whichever of `chats`/`broadcast` is
-underneath, inside the same `position: relative` wrapper `App` gives the content area below
-the title bar — so the title bar itself (window controls, the mode switcher, the platform
-tabs) is never dimmed or covered, only the chat/broadcast content is. The card reuses the
-same `Settings` component the old full-page view rendered — same nav, same panes — so
-nothing about *what* settings shows changed, only how it's framed. Opening it never unmounts
-the view behind it, so closing costs nothing to redraw. Three ways close it: the backdrop
-`onClick` (the card itself calls `stopPropagation`), an `Escape` keydown listener installed
-for the modal's lifetime, and the `X` button absolutely positioned in the card's corner —
-which sits in the padding gutter to the right of the nav's `max-w-[560px]` content column, so
+**The settings screen is a modal, not a third view — and it dims the whole window, title bar
+included.** `SettingsModal` renders a dimmed backdrop (`--overlay`) plus a centred card as the
+last child of `App`'s root `position: relative` element, absolutely positioned over the whole
+window rather than just the content area below the title bar. The title bar and the content
+wrapper are both earlier siblings with no `z-index` of their own, so the backdrop — later in
+DOM order — paints and hit-tests above both: the mode switcher, the platform tabs and the
+window control buttons all dim and stop responding to clicks while it is open, same as
+everything else behind it. Getting this backdrop to sit only over the content area was the
+first version and was wrong: on the dark palette the difference is subtle (`--ink-900` is
+already near-black), but on light it is stark — a lit-white frame over a greyed-out page reads
+as a bug, not two independent surfaces. The card reuses the same `Settings` component the old
+full-page view rendered — same nav, same panes — so nothing about *what* settings shows
+changed, only how it's framed. Opening it never unmounts the view behind it, so closing costs
+nothing to redraw. Three ways close it: the backdrop `onClick` (the card itself calls
+`stopPropagation`), an `Escape` keydown listener installed for the modal's lifetime, and the
+`X` button absolutely positioned in the card's corner — which sits in the padding gutter to
+the right of the nav's `max-w-[560px]` content column, so
 it never overlaps a pane's own heading. `openSettings()`/`closeSettings()` flip
 `settingsOpen`; `setView()` also closes it, so switching to Chat or Broadcast from the title
 bar while the modal is open dismisses it rather than leaving it stranded over the new view —

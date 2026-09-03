@@ -189,7 +189,7 @@ export default function App(): React.ReactElement {
   }, [mode])
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
       <TitleBar
         view={view}
         onView={setView}
@@ -202,11 +202,14 @@ export default function App(): React.ReactElement {
         onMerged={toggleMerged}
       />
 
-      <div className="relative flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1">
         {view === 'chats' && <Chats columns={columns} mode={mode} />}
         {view === 'broadcast' && <Broadcast />}
-        {settingsOpen && <SettingsModal />}
       </div>
+
+      {/* Covers the whole window, title bar included — the modal dims everything
+          behind it, not just the content area, so the frame is never left lit. */}
+      {settingsOpen && <SettingsModal />}
     </div>
   )
 }
