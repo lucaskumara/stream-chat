@@ -31,10 +31,10 @@ export function Appearance(): React.ReactElement {
 
   return (
     <div>
-      <Group label="Theme" first>
-        <ControlRow label="Appearance">
+      <Group label="Application" first>
+        <ControlRow label="Theme">
           <Segmented
-            label="Appearance"
+            label="Theme"
             value={s.themeChoice}
             options={THEMES}
             onSelect={s.setThemeChoice}
@@ -42,7 +42,7 @@ export function Appearance(): React.ReactElement {
         </ControlRow>
       </Group>
 
-      <Group label="Messages">
+      <Group label="Chat">
         <ControlRow label="Timestamps">
           <Toggle label="Timestamps" on={s.showTimestamps} onChange={s.setShowTimestamps} />
         </ControlRow>
@@ -59,9 +59,7 @@ export function Appearance(): React.ReactElement {
             onSelect={(value) => s.setCapacity(Number(value))}
           />
         </ControlRow>
-      </Group>
 
-      <Group label="Rows">
         <ControlRow label="Message density">
           <Picker
             label="Message density"
@@ -70,30 +68,26 @@ export function Appearance(): React.ReactElement {
             onSelect={s.setDensity}
           />
         </ControlRow>
-      </Group>
 
-      <Group label="Username colours">
-        <ControlRow label="Split chat">
+        <ControlRow label="Split chat colours">
           <Picker
-            label="Split chat"
+            label="Split chat colours"
             value={s.nameColorSplit}
             options={NAME_COLORS}
             onSelect={s.setNameColorSplit}
           />
         </ControlRow>
 
-        <ControlRow label="Combined chat">
+        <ControlRow label="Combined chat colours">
           <Picker
-            label="Combined chat"
+            label="Combined chat colours"
             value={s.nameColorMerged}
             options={NAME_COLORS}
             onSelect={s.setNameColorMerged}
           />
         </ControlRow>
-      </Group>
 
-      <Group label="Text size">
-        <ControlRow label="Chat text">
+        <ControlRow label="Chat text size">
           <Stepper label="chat text" size={s.fontSize} onStep={s.stepFontSize} />
         </ControlRow>
       </Group>
