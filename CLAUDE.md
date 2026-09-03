@@ -337,6 +337,14 @@ swallow part of a URL.
 channel with no set of its own still resolves the 45 global 7TV emotes. BTTV 404s the same
 way for a channel with none.
 
+**The in-flight map is cleared in `finally`, not on the success path.** Both loaders share
+one promise per channel so concurrent messages do not each fetch. Deleting the entry after
+the awaits meant a load that *threw* left it there forever, and every later message for that
+channel awaited an already-rejected promise instead of retrying — one bad minute on 7TV cost
+that channel its emotes until the app restarted. `BaseChatWatcher.open` also catches: emotes
+are additive, so a failure is a warning, and an unhandled rejection in main is a process-level
+crash rather than a missing image.
+
 **Native emotes are separate and always worked.** Each platform's own emotes (Twitch's emote
 tags, Kick's `[emote:id:name]` tokens, YouTube's `is_custom_emoji` runs) are parsed in that
 platform's `toFragments`. The third-party layer is additive.
@@ -469,6 +477,12 @@ cadence. Smoothing, if ever wanted, belongs in the renderer where it cannot stal
 **Those latency figures are uncorrected for clock skew** and are not comparable to the
 ~780ms p50 recorded for the old hand-rolled transport, which was measured with the
 `generate_204` skew pinning described below. Only compare numbers gathered the same way.
+
+**The Innertube session is cached, but a rejected one is not.** `innertube()` holds one
+promise so every poll shares a session. Caching the *failure* too — which is what a plain
+`session ??=` does — meant that no network at launch, the ordinary case, poisoned every later
+poll with the same stale error: YouTube stayed dead for the life of the process while Twitch
+and Kick reconnected on their own. The rejection clears the cache on its way through.
 
 **youtube.js is ESM-only, and that is fine here.** Electron 44 ships Node 24.18.1, where
 `require()` of ESM works natively, so it stays in `externalizeDepsPlugin` and never enters
@@ -652,6 +666,10 @@ does not change. `broadcastSources` calls `obs.sourcesChanged()`, which rebinds 
 — which is also why a dock opened *before* its channel is added lights up when it appears,
 and falls back to "waiting for …" when the tab is closed. Verified live in both directions.
 
+**The dock fan-out splits the batch once, not once per client.** Every client used to scan
+the whole batch for its own source, so the work was clients x messages on a path that runs
+ten times a second — and the docks most likely to be open are the ones on the busiest chats.
+
 **`findByKey` takes the first match, on purpose.** Nothing stops the same channel being
 added twice, and the two entries produce distinct message ids for one message. Without the
 first-match rule a dock double-prints everything the day that happens.
@@ -768,6 +786,20 @@ grace was about ten seconds of video, which a brief stall on the platform's side
 a healthy stream was dropped and retried and the viewer saw a disconnect that healed itself
 seconds later. Its stdin also needs an `error` listener — an unhandled EPIPE on a killed
 child takes the whole main process down.
+
+**A destination's retry backoff has to ride on the queue entry, not on the process.** A
+dropped platform is re-queued into `waiting` so its retry also joins on a keyframe — and
+`waiting` therefore carries `{ url, attempts }`. Counting the attempts at `openDestination`
+instead looks equivalent and is not: the re-queue started from zero every time, so
+`destinationRetryMs` never got past its first step and a platform that *rejects the key*
+reconnected every two seconds for the length of the stream. The count is cleared when the
+destination reports `sending`, so a session's worth of blips does not leave the backoff
+permanently stretched.
+
+**`endProcess` must check whether the process is already gone.** The retry path holds the
+dead child until its timer fires, and `exit` does not fire twice — so the five-second kill
+timer armed for it could never be cleared. It also `unref`s that timer, since a pending kill
+is not a reason to keep the process alive.
 
 **Stopping a destination means ending its stdin, not killing it.** EOF lets ffmpeg write the
 FLV trailer and close the RTMP session, so the platform ends the broadcast; killing it leaves
@@ -899,6 +931,14 @@ pops a caption while you read chat. The one `title` left in a message row is on 
 three-letter badge chip that stands in for a badge with no image — there the title is the only
 place the full label exists. Do not reintroduce tooltips on the bar; they were removed on
 purpose.
+
+**`useStore()` with no selector subscribes to the whole store, and in a chat app that is a
+performance bug rather than a shortcut.** `App`'s `Pane` did it: every 100ms batch, every
+keystroke in another pane's filter and every settings change re-rendered it, rebuilding
+fourteen closures and defeating `ChatPaneBar`'s `memo` on each one. Fields are selected
+individually and the callbacks are `useCallback`'d over `useStore.getState()` — the action
+closures are created once in the initializer, so reading them off the module keeps every
+handler stable. The same applies anywhere else the temptation appears.
 
 **Pane state lives in the store, not the pane.** `store.search[sourceId]` (committed terms),
 `store.searchDraft[sourceId]` (what is half-typed), `filterOpen[sourceId]` and
@@ -1179,12 +1219,70 @@ therefore pulls `sources:backlog` for each source on mount and ingests it — th
 message replay `obs/server.ts` already sends a dock on connect. Verified by crashing the
 renderer under load: 184 rows back rather than 0.
 
+**`powerMonitor` and `app` are process-wide, so a per-window listener outlives its window.**
+`keepRendererAlive` closes over one `BrowserWindow`; on macOS `activate` builds another, and
+every previous window's `resume` handler stayed subscribed — firing against destroyed
+contents and eventually tripping Node's max-listeners warning. It is removed on the window's
+`closed` now. `child-process-gone` was never per-window at all — GPU and utility processes
+belong to the app — so it moved out to `reportChildProcessFailures`, registered once.
+
+**Quitting waits for the asynchronous half of teardown.** `before-quit` used to fire
+`obs.stop()` and `sources.disconnectAll()` and let the process go, which orphans a
+destination and leaves the platform staring at a dead RTMP socket. It cancels the quit once,
+runs both, and re-issues it.
+
 **Single-instance lock matters here** — a second instance would race the first for the same
 window and the same token store.
 
 **The renderer is untrusted by construction** (it renders remote chat content). Every IPC
 handler validates its own arguments rather than trusting the preload. `openExternal` accepts
 only `http:`/`https:` — never `file:`, never a custom protocol handler.
+
+### Logging and secrets
+
+**There is a log file, and `console.*` in main is not how you reach it.** `log('scope')` in
+`main/log.ts` returns `{ debug, info, warn, error }`; every call writes one line to
+`%APPDATA%/stream-chat/logs/main.log` *and* mirrors it to the console. The scope is the
+bracketed prefix every call site used to hand-write, so it cannot drift from the module it
+came from. Do not add a bare `console.*` to main — it will not be in the file, which is the
+only copy that survives.
+
+**The file exists because a packaged build has no console at all.** `npm run dev` always had
+stdout; the installed app has nowhere to print, and the one bug that appeared *only* when
+packaged — youtube.js's parser handler throwing on a stripped `bugs` field — is exactly the
+shape this is for. Settings → General → Diagnostics opens the folder, through a `logs:open`
+IPC that takes **no argument**: the directory comes from main, so the renderer cannot ask
+the shell to open a path of its own choosing.
+
+**One rolled file is kept, at 2MB.** `main.log` becomes `main.1.log` and a fresh one starts.
+This answers "what happened just now", not "what happened last week".
+
+**The level is `debug` in dev and `info` packaged, and ffmpeg is why.** `-stats` cannot be
+turned off — the progress line is the only signal that a destination is actually sending —
+but it arrives several times a second per process. `PROGRESS_LINE` routes it to `debug`, so
+it is present when the level is turned down and does not bury every line worth reading
+otherwise.
+
+**Every line is scrubbed on the way out, and that is not belt-and-braces.** ffmpeg prints
+the destination URL — stream key and all — in its banner, in `error opening`, and in the
+muxer line. That text was logged verbatim, stored on the destination as `error`, sent to the
+renderer, and drawn in the Broadcast view with a `title` tooltip. `secrets.scrub` in
+`main/redact.ts` runs inside `formatLine`, so the lines that leak are covered without each
+call site having to know it is carrying a key.
+
+**`scrub` works two ways, and the second one is what catches the keys you never registered.**
+Values passed to `secrets.remember` — the relay key, and every platform's stream key on each
+`Relay.sync` — are replaced wherever they appear. On top of that, the last path segment of
+any `rtmp:`/`rtmps:` URL is masked on sight, because a key typed into the wrong field still
+reaches a destination process before anything has registered it. A value shorter than 6
+characters is ignored: below that a "secret" is more likely to be ordinary text, and blanking
+it would corrupt every line it appears in.
+
+**The relay key is masked in the Broadcast view, behind an eye toggle.** This is a streamer's
+app, so its own window ends up on stream — in a setup segment, a screen share, a clip. Copy
+still copies the real value; nothing has to be revealed to paste it into OBS. The stream keys
+on Settings → Platforms were already write-only (`hasStreamKey: boolean`, never the value);
+the relay key was the one secret sitting in plain text on a page.
 
 ### Build and tooling
 
@@ -1426,6 +1524,11 @@ tests, so nothing bundles them. What is covered:
 | the whole zustand store | `renderer/store.ts` |
 | the dock's query-parameter options | `renderer/obs/options.ts` |
 | the two badge-art scrapers | `platforms/kick/badges.ts`, `platforms/youtube/badges.ts` |
+| the secret scrubber, both ways | `redact.ts` |
+| log line formatting and rotation | `log.ts` |
+| the destination backoff and process teardown | `broadcast/relay.ts`, `broadcast/index.ts` |
+| retrying a failed emote load | `emotes/seventv.ts`, `emotes/bttv.ts` |
+| not caching a rejected YouTube session | `platforms/youtube/connection.ts` |
 
 **Keep the tests out of `src/renderer`, and not only for tidiness.** Tailwind v4 scans the
 renderer root for class candidates and takes them from prose, not just from JSX. Four test

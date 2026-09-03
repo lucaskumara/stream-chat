@@ -11,6 +11,7 @@ import {
   type RetryPolicy,
 } from "./channel";
 import { applyEmotes, thirdPartyEmotes } from "../emotes";
+import { log } from "../log";
 
 export abstract class BaseChatWatcher<
   TChannel extends Channel,
@@ -117,8 +118,17 @@ export abstract class BaseChatWatcher<
     this.connected = channel;
     this.rename(channel.displayName);
 
+    /** Emotes are additive — a channel with none still renders chat — so a failed load
+        is a caught warning rather than an unhandled rejection, which in main is a
+        process-level crash rather than a missing image. */
     const binding = channel.emotes;
-    if (binding) void thirdPartyEmotes.load(binding);
+    if (binding) {
+      thirdPartyEmotes
+        .load(binding)
+        .catch((error: unknown) =>
+          log("emotes").warn(`${binding.platform}/${binding.channelId} failed:`, error),
+        );
+    }
 
     this.feed = this.createFeed(channel, this.sink);
     void this.feed.start();

@@ -64,7 +64,9 @@ function openLink(href: string): void {
 
 function Notice({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
-    <div className="px-2 py-1 text-[length:var(--text-sm)] text-neutral-500">{children}</div>
+    <div className="px-2 py-1 text-[13px]" style={{ color: 'var(--fg-4)' }}>
+      {children}
+    </div>
   )
 }
 
@@ -111,7 +113,15 @@ export function ObsChat({ options }: { options: DockOptions }): React.ReactEleme
 
       socket.onmessage = (event) => {
         if (typeof event.data !== 'string') return
-        apply(JSON.parse(event.data) as ObsFrame)
+
+        // The dock has no error boundary and no console anyone reads. A throw here
+        // kills the handler for the life of the socket, so the page goes silent
+        // rather than dropping one frame.
+        try {
+          apply(JSON.parse(event.data) as ObsFrame)
+        } catch {
+          return
+        }
       }
 
       socket.onerror = () => socket?.close()
@@ -161,7 +171,7 @@ export function ObsChat({ options }: { options: DockOptions }): React.ReactEleme
       className="flex h-full min-h-0 flex-col"
       style={
         {
-          background: options.transparent ? 'transparent' : 'var(--color-ink-900)',
+          background: options.transparent ? 'transparent' : 'var(--ink-900)',
           '--chat-font-size': `${options.fontSize}px`
         } as React.CSSProperties
       }

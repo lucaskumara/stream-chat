@@ -54,6 +54,8 @@ export class BttvEmotes {
     const existing = this.inFlight.get(twitchId)
     if (existing) return existing
 
+    /** See the same note in seventv.ts: cleared in `finally` so a failed load can be
+        retried rather than pinning a rejected promise in the map. */
     const task = (async (): Promise<void> => {
       await this.loadGlobal()
       const data = await fetchOptionalJson<ApiChannel>(
@@ -64,8 +66,7 @@ export class BttvEmotes {
         twitchId,
         index([...(data?.channelEmotes ?? []), ...(data?.sharedEmotes ?? [])])
       )
-      this.inFlight.delete(twitchId)
-    })()
+    })().finally(() => this.inFlight.delete(twitchId))
 
     this.inFlight.set(twitchId, task)
     return task

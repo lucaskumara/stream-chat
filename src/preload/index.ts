@@ -21,6 +21,7 @@ const IPC = {
   openExternal: 'shell:open-external',
   copyText: 'clipboard:write',
   obsLink: 'obs:link',
+  openLogs: 'logs:open',
   windowMinimize: 'window:minimize',
   windowToggleMaximize: 'window:toggle-maximize',
   windowClose: 'window:close',
@@ -60,6 +61,8 @@ const api: ChatApi = {
     ipcRenderer.invoke(IPC.openExternal, url),
 
   copyText: (text: string): Promise<void> => ipcRenderer.invoke(IPC.copyText, text),
+
+  openLogs: (): Promise<boolean> => ipcRenderer.invoke(IPC.openLogs),
 
   obsLink: (sourceId: string): Promise<string | null> =>
     ipcRenderer.invoke(IPC.obsLink, sourceId),

@@ -3,8 +3,11 @@ import { randomBytes } from 'node:crypto'
 import type { BroadcastState, DestinationState, Platform } from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { config } from '../config'
+import { log } from '../log'
+import { secrets } from '../redact'
 import {
   destinationArgs,
+  destinationRetryMs,
   destinationUrl,
   hasRandomAccess,
   ingestArgs,
@@ -35,7 +38,10 @@ function ffmpegPath(): string {
 let cachedKey: string | null = null
 
 function relayKeyValue(): string {
-  cachedKey ??= config().relayKey(() => randomBytes(8).toString('hex'))
+  if (cachedKey === null) {
+    cachedKey = config().relayKey(() => randomBytes(8).toString('hex'))
+    secrets.remember(cachedKey)
+  }
 
   return cachedKey
 }
@@ -45,6 +51,13 @@ function relayKeyValue(): string {
     the encoder disconnects. Only a destination refusing us is worth surfacing. */
 const REAL_FAILURE =
   /connection refused|no route|unauthor|forbidden|invalid.*key|error opening|server error/i
+
+/** ffmpeg's `-stats` line is how a destination reports itself as sending, so it cannot be
+    turned off — but it arrives several times a second per process. At `warn` it buried
+    every line worth reading; at `debug` it is there when the level is turned down. */
+const PROGRESS_LINE = /^(frame|size)=/
+
+const relayLog = log('relay')
 
 const RESPAWN_MS = 800
 const MIN_HEALTHY_MS = 3_000
@@ -65,6 +78,11 @@ const BACKLOG_GRACE_MS = 15_000
     clean stop and a disconnect screen. It is only killed if it will not leave. */
 const CLOSE_GRACE_MS = 5_000
 
+interface Pending {
+  url: string
+  attempts: number
+}
+
 interface Outbound {
   process: ChildProcess
   state: DestinationState
@@ -75,12 +93,6 @@ interface Outbound {
   /** When the write backlog first went over the cap, or 0 while it is keeping up. */
   behindSince?: number
 }
-
-/** A platform dropping us mid-stream — Kick did this with a TLS push error — used to be
-    terminal: the dead entry stayed in the map, so nothing restarted it and nothing would
-    until the switch was toggled by hand. */
-const DESTINATION_RETRY_MS = 2_000
-const MAX_DESTINATION_RETRY_MS = 20_000
 
 /** Ingest and fan-out are separate processes on purpose. One ffmpeg holds OBS's connection
     and hands the stream to us as MPEG-TS; one more per platform pushes it onward. Toggling
@@ -117,8 +129,11 @@ export class Relay {
   private keyframeGapMs = 0
 
   /** Wanted, but waiting for a keyframe before its process is started at all. Nothing is
-      buffered for these — that is the point. */
-  private waiting = new Map<Platform, string>()
+      buffered for these — that is the point. The attempt count rides along, because a
+      retried destination re-queues through here: counting it at `openDestination` instead
+      reset the backoff on every retry, so a platform refusing the key reconnected every
+      two seconds forever. */
+  private waiting = new Map<Platform, Pending>()
 
   constructor(private readonly onChange: () => void) {}
 
@@ -129,13 +144,15 @@ export class Relay {
       listening: this.ingest !== null,
       receiving: this.receiving,
       keyframeSeconds: this.keyframeGapMs > 0 ? this.keyframeGapMs / 1000 : undefined,
-      destinations: PLATFORMS.map((platform) => ({
-        platform,
-        state:
-          this.outbound.get(platform)?.state ??
-          (this.waiting.has(platform) ? 'connecting' : 'off'),
-        error: this.outbound.get(platform)?.error
-      })),
+      destinations: PLATFORMS.map((platform) => {
+        const out = this.outbound.get(platform)
+
+        return {
+          platform,
+          state: out?.state ?? (this.waiting.has(platform) ? 'connecting' : 'off'),
+          error: out?.error
+        }
+      }),
       error: this.failure ?? undefined
     }
   }
@@ -153,13 +170,18 @@ export class Relay {
     const setup = config().all()
 
     for (const platform of PLATFORMS) {
+      /** Registered on every sync rather than on first use: ffmpeg prints the destination
+          URL in its banner, so a key has to be scrubbable before the process it belongs
+          to has written its first line. */
+      secrets.remember(setup[platform].streamKey)
+
       const wanted = setup[platform].forward && this.receiving
       const url = destinationUrl(setup[platform])
       const running = this.outbound.get(platform) ?? this.waiting.has(platform)
 
       /** Queued rather than started: it joins on the next keyframe, which is what keeps it
           from reading a half access unit and from falling behind before it begins. */
-      if (wanted && url && !running) this.waiting.set(platform, url)
+      if (wanted && url && !running) this.waiting.set(platform, { url, attempts: 0 })
 
       if (!wanted) {
         this.waiting.delete(platform)
@@ -257,10 +279,10 @@ export class Relay {
 
     const tables = Buffer.concat([this.lastPat, this.lastPmt])
 
-    for (const [platform, url] of [...this.waiting]) {
+    for (const [platform, pending] of [...this.waiting]) {
       this.waiting.delete(platform)
 
-      const out = this.openDestination(platform, url)
+      const out = this.openDestination(platform, pending.url, pending.attempts)
       if (!out) continue
 
       out.process.stdin?.write(tables, () => {})
@@ -275,7 +297,7 @@ export class Relay {
 
     this.startedAt = Date.now()
 
-    console.warn('[ingest] listening on 1935')
+    log('ingest').info(`listening on ${RELAY_PORT}`)
 
     const child = spawn(ffmpegPath(), ingestArgs(listenUrl(relayKeyValue())), { windowsHide: true })
 
@@ -302,7 +324,10 @@ export class Relay {
     child.stderr.setEncoding('utf8')
     child.stderr.on('data', (line: string) => {
       const text = line.trim()
-      if (text) console.warn('[ingest]', text)
+      if (!text) return
+
+      if (PROGRESS_LINE.test(text)) log('ingest').debug(text)
+      else log('ingest').warn(text)
     })
 
     child.on('error', (err) => {
@@ -323,8 +348,8 @@ export class Relay {
     /** Every restart here is a new RTMP session, which each platform sees as the stream
         ending and a new one beginning — so a loop of these is what a viewer perceives as
         the same content playing over and over. Logged with its lifetime for that reason. */
-    console.warn(
-      `[ingest] ended after ${((Date.now() - this.startedAt) / 1000).toFixed(1)}s` +
+    log('ingest').warn(
+      `ended after ${((Date.now() - this.startedAt) / 1000).toFixed(1)}s` +
         `${this.receiving ? ' while receiving' : ' without ever receiving'}`
     )
 
@@ -370,7 +395,7 @@ export class Relay {
 
       stdin.write(chunk, (err) => {
         if (err && out.state !== 'error') {
-          out.error = err.message
+          out.error = secrets.scrub(err.message)
           out.state = 'error'
           this.onChange()
         }
@@ -379,7 +404,7 @@ export class Relay {
   }
 
   private openDestination(platform: Platform, url: string, attempts = 0): Outbound | null {
-    console.warn(`[relay:${platform}] starting${attempts ? ` (retry ${attempts})` : ''}`)
+    relayLog.info(`${platform} starting${attempts ? ` (retry ${attempts})` : ''}`)
 
     const child = spawn(ffmpegPath(), destinationArgs(url), { windowsHide: true })
 
@@ -395,16 +420,24 @@ export class Relay {
       const text = line.trim()
       if (!text) return
 
-      console.warn(`[relay:${platform}]`, text)
+      if (PROGRESS_LINE.test(text)) relayLog.debug(`${platform} ${text}`)
+      else relayLog.warn(`${platform} ${text}`)
 
-      if (out.state === 'connecting' && /frame=|size=/.test(text)) {
+      if (out.state === 'connecting' && PROGRESS_LINE.test(text)) {
         out.state = 'sending'
+
+        /** It reached the platform, so whatever it took to get here is spent. Without
+            this the backoff only ever grows across a session. */
+        out.attempts = 0
         this.onChange()
       }
 
       if (REAL_FAILURE.test(text)) {
         out.state = 'error'
-        out.error = text.slice(0, 200)
+
+        /** ffmpeg quotes the URL it failed on, key and all, and this string is sent to
+            the renderer and drawn in the Broadcast view. */
+        out.error = secrets.scrub(text).slice(0, 200)
         this.onChange()
       }
     })
@@ -412,7 +445,7 @@ export class Relay {
     child.on('exit', (code) => {
       if (this.outbound.get(platform) !== out) return
 
-      console.warn(`[relay:${platform}] exited (code ${code ?? 'signal'})`)
+      relayLog.warn(`${platform} exited (code ${code ?? 'signal'})`)
 
       this.outbound.delete(platform)
 
@@ -425,10 +458,7 @@ export class Relay {
         return
       }
 
-      const wait = Math.min(
-        DESTINATION_RETRY_MS * 2 ** out.attempts,
-        MAX_DESTINATION_RETRY_MS
-      )
+      const wait = destinationRetryMs(out.attempts)
 
       const pending: Outbound = {
         process: out.process,
@@ -442,10 +472,13 @@ export class Relay {
 
         this.outbound.delete(platform)
 
-        const url = destinationUrl(config().all()[platform])
-        if (url && config().all()[platform].forward && this.receiving) {
-          /** Re-queued rather than restarted, so the retry also joins on a keyframe. */
-          this.waiting.set(platform, url)
+        const retrying = config().all()[platform]
+        const url = destinationUrl(retrying)
+
+        if (url && retrying.forward && this.receiving) {
+          /** Re-queued rather than restarted, so the retry also joins on a keyframe —
+              carrying the attempt count, which is what makes the backoff grow. */
+          this.waiting.set(platform, { url, attempts: pending.attempts })
         }
 
         this.onChange()
@@ -477,16 +510,22 @@ export class Relay {
     RTMP's stream-close, so the platform ends the broadcast instead of waiting for a dead
     connection to time out. Killing it outright — which this used to do immediately after
     ending stdin, defeating the whole point — is only a fallback for one that will not go. */
-function endProcess(child: ChildProcess, immediate: boolean): void {
+export function endProcess(child: ChildProcess, immediate: boolean): void {
+  /** A destination that already exited is reached here through the retry path, which
+      holds the dead child until its timer fires. Without this it armed a five-second
+      kill timer for a process that could never answer it — `exit` does not fire twice,
+      so nothing cleared it. */
+  if (child.exitCode !== null || child.signalCode !== null) return
+
+  child.stdin?.end()
+
   if (immediate) {
-    child.stdin?.end()
     child.kill()
     return
   }
 
-  child.stdin?.end()
-
   const forced = setTimeout(() => child.kill(), CLOSE_GRACE_MS)
+  forced.unref()
 
   child.once('exit', () => clearTimeout(forced))
 }

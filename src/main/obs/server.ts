@@ -17,6 +17,7 @@ import {
 import type { ObsFrame } from '@shared/obs'
 import type { MessageBus } from '../bus'
 import type { SourceManager } from '../sources'
+import { log } from '../log'
 
 const KEEPALIVE_MS = 30000
 
@@ -79,7 +80,7 @@ export class ObsServer {
     const port = await this.bind(ipv4, IPV4_LOOPBACK, 0)
 
     if (port === 0) {
-      console.warn('[obs] no free port — chat links are unavailable this session')
+      log('obs').warn('no free port — chat links are unavailable this session')
       this.sockets = null
       ipv4.close()
       return
@@ -99,7 +100,7 @@ export class ObsServer {
     this.detachSink = this.bus.addSink({ deliver: (batch) => this.fanout(batch) })
     this.keepalive = setInterval(() => this.reap(), KEEPALIVE_MS)
 
-    console.log(`[obs] chat links on ${this.baseUrl()}`)
+    log('obs').info(`chat links on ${this.baseUrl()}`)
   }
 
   private createServer(): Server {
@@ -206,7 +207,11 @@ export class ObsServer {
 
     res.writeHead(200, {
       'content-type': MIME[extname(full).toLowerCase()] ?? 'application/octet-stream',
-      'cache-control': 'no-cache'
+      'cache-control': 'no-cache',
+
+      /** The dock page is a browser context on loopback serving files off disk. Nothing
+          here should ever be sniffed into a different type than the extension says. */
+      'x-content-type-options': 'nosniff'
     })
     createReadStream(full).pipe(res)
   }
@@ -287,16 +292,24 @@ export class ObsServer {
     this.send(client, { type: 'status', source })
   }
 
+  /** Split once per batch rather than once per client. Every dock scanned the whole
+      batch for itself, so the work was clients x messages on a path that runs ten times
+      a second — and the docks most likely to be open are the busy ones. */
   private fanout(batch: ChatBatch): void {
+    if (this.clients.size === 0) return
+
+    const messages = groupBySource(batch.messages)
+    const moderation = groupBySource(batch.moderation)
+
     for (const client of this.clients) {
       const sourceId = client.sourceId
       if (!sourceId) continue
 
-      const messages = batch.messages.filter((message) => message.sourceId === sourceId)
-      const moderation = batch.moderation.filter((event) => event.sourceId === sourceId)
-      if (messages.length === 0 && moderation.length === 0) continue
+      const mine = messages.get(sourceId) ?? []
+      const events = moderation.get(sourceId) ?? []
+      if (mine.length === 0 && events.length === 0) continue
 
-      this.send(client, { type: 'batch', batch: { messages, moderation } })
+      this.send(client, { type: 'batch', batch: { messages: mine, moderation: events } })
     }
   }
 
@@ -331,6 +344,19 @@ function assetName(pathname: string): string | null {
   return name === '' || name.includes('..') ? null : name
 }
 
+function groupBySource<T extends { sourceId: string }>(items: T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>()
+
+  for (const item of items) {
+    const held = grouped.get(item.sourceId)
+
+    if (held) held.push(item)
+    else grouped.set(item.sourceId, [item])
+  }
+
+  return grouped
+}
+
 function notFound(res: ServerResponse): void {
   res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
   res.end('not found')
@@ -345,7 +371,7 @@ async function proxy(target: string, res: ServerResponse): Promise<void> {
     res.writeHead(upstream.status, type ? { 'content-type': type } : {})
     res.end(body)
   } catch (error) {
-    console.warn('[obs] dev server unreachable:', error)
+    log('obs').warn('dev server unreachable:', error)
     res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' })
     res.end('dev server unreachable')
   }

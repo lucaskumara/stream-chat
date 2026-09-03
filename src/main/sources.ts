@@ -9,6 +9,7 @@ import {
 } from './chat'
 import { MissingChannelError } from './chat/channel'
 import { ignoreTeardownFailure } from './lifecycle'
+import { log } from './log'
 
 function normalizeIdentifier(
   platform: Platform,
@@ -110,7 +111,7 @@ export class SourceManager {
     if (existing.length > 0) await this.removeByPlatform(platform)
 
     await this.add({ platform, label: '', identifier: wanted }).catch((error) => {
-      console.warn(`[sources] could not open ${platform}/${wanted}:`, error)
+      log('sources').warn(`could not open ${platform}/${wanted}:`, error)
     })
   }
 

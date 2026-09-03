@@ -7,7 +7,8 @@ import { SourceManager } from './sources'
 import { IPC, platformConfigs, registerIpc, unregisterIpc } from './ipc'
 import { ObsServer } from './obs/server'
 import { IrcHub } from './chat/platforms/twitch'
-import { keepRendererAlive } from './lifecycle'
+import { keepRendererAlive, reportChildProcessFailures } from './lifecycle'
+import { log, openLogFile, setLogLevel } from './log'
 import { config } from './config'
 import { Relay } from './broadcast'
 
@@ -164,6 +165,17 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     app.setAppUserModelId('com.lucaskumara.streamchat')
 
+    /** A packaged build has no console at all, so without a file there is nothing to
+        read after a failure — and the one bug that only ever appeared packaged is
+        exactly the kind this is for. Dev keeps the console it always had, plus the
+        file, and turns the level down so ffmpeg's progress lines are visible. */
+    openLogFile(app.getPath('userData'))
+    setLogLevel(isDev ? 'debug' : 'info')
+
+    log('app').info(`stream-chat ${app.getVersion()} starting (${process.platform})`)
+
+    reportChildProcessFailures()
+
     registerIpc(sources, obs, bus, relay, platformsChanged)
 
     void obs.start()
@@ -195,12 +207,24 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== 'darwin') app.quit()
   })
 
-  app.on('before-quit', () => {
+  /** Teardown has to finish before the process goes, or a destination is orphaned and
+      the platform is left staring at a dead RTMP socket. `before-quit` is cancelled once
+      and re-issued after the asynchronous half settles. */
+  let quitting = false
+
+  app.on('before-quit', (event) => {
+    if (quitting) return
+
+    quitting = true
+    event.preventDefault()
+
     relay.shutdown()
     unregisterIpc()
-    void obs.stop()
     bus.detach()
     irc.shutdown()
-    void sources.disconnectAll()
+
+    void Promise.all([obs.stop(), sources.disconnectAll()])
+      .catch((error: unknown) => log('app').warn('shutdown:', error))
+      .finally(() => app.quit())
   })
 }

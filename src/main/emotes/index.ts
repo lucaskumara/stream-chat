@@ -45,41 +45,54 @@ export function applyEmotes(
   const out: Fragment[] = []
 
   for (const fragment of fragments) {
-    if (fragment.kind !== 'text') {
-      out.push(fragment)
+    if (fragment.kind !== 'text') out.push(fragment)
+    else out.push(...splitOutEmotes(fragment, lookup))
+  }
+
+  return out
+}
+
+/** Whole tokens only, and case-sensitively: substring matching turns GIGACHAD inside a
+    longer word into an image, and folding case collides distinct names. This runs last,
+    over text fragments alone, so it cannot disturb a native emote or a link that has
+    already been carved out.
+
+    The fragment itself comes back when nothing matched, rather than a copy of it — most
+    messages carry no third-party emote at all, so this is the common path and it should
+    not allocate. */
+function splitOutEmotes(
+  fragment: Extract<Fragment, { kind: 'text' }>,
+  lookup: (name: string) => ThirdPartyEmote | undefined
+): Fragment[] {
+  const parts = fragment.text.split(/(\s+)/)
+  const out: Fragment[] = []
+  let buffer = ''
+
+  for (const part of parts) {
+    const emote = part !== '' && !/^\s+$/.test(part) ? lookup(part) : undefined
+
+    if (!emote) {
+      buffer += part
       continue
     }
 
-    const parts = fragment.text.split(/(\s+)/)
-    let buffer = ''
-    let replaced = false
-
-    for (const part of parts) {
-      const emote = part !== '' && !/^\s+$/.test(part) ? lookup(part) : undefined
-      if (!emote) {
-        buffer += part
-        continue
-      }
-      if (buffer !== '') {
-        out.push({ kind: 'text', text: buffer })
-        buffer = ''
-      }
-      out.push({
-        kind: 'emote',
-        name: emote.name,
-        url: emote.url,
-        srcSet: emote.srcSet,
-        provider: emote.provider
-      })
-      replaced = true
+    if (buffer !== '') {
+      out.push({ kind: 'text', text: buffer })
+      buffer = ''
     }
 
-    if (buffer !== '') out.push({ kind: 'text', text: buffer })
-
-    if (!replaced && buffer === fragment.text) {
-      out[out.length - 1] = fragment
-    }
+    out.push({
+      kind: 'emote',
+      name: emote.name,
+      url: emote.url,
+      srcSet: emote.srcSet,
+      provider: emote.provider
+    })
   }
+
+  if (out.length === 0) return [fragment]
+
+  if (buffer !== '') out.push({ kind: 'text', text: buffer })
 
   return out
 }

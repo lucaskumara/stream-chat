@@ -80,6 +80,9 @@ export class SevenTvEmotes {
     const existing = this.inFlight.get(key)
     if (existing) return existing
 
+    /** `finally`, not a delete on the success path: a load that threw left its entry in
+        the map forever, so every later message for that channel awaited an already
+        rejected promise instead of retrying. */
     const task = (async (): Promise<void> => {
       await this.loadGlobal()
       const user = await fetchOptionalJson<{ emote_set?: ApiEmoteSet }>(
@@ -87,8 +90,7 @@ export class SevenTvEmotes {
       )
 
       this.byChannel.set(key, index(user?.emote_set))
-      this.inFlight.delete(key)
-    })()
+    })().finally(() => this.inFlight.delete(key))
 
     this.inFlight.set(key, task)
     return task

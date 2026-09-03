@@ -1,8 +1,9 @@
 import { app, powerMonitor, type BrowserWindow, type RenderProcessGoneDetails } from 'electron'
+import { log } from './log'
 
 export function ignoreTeardownFailure(context: string): (error: unknown) => void {
   return (error: unknown) => {
-    console.debug(`[teardown] ${context} failed (already gone?):`, error)
+    log('teardown').debug(`${context} failed (already gone?):`, error)
   }
 }
 
@@ -27,12 +28,12 @@ export function keepRendererAlive(window: BrowserWindow): void {
 
     // A renderer that dies on every load would otherwise reload forever
     if (reloads.length >= RELOAD_LIMIT) {
-      console.error(`[window] ${why}, but ${reloads.length} reloads already — leaving it`)
+      log('window').error(`${why}, but ${reloads.length} reloads already — leaving it`)
       return
     }
 
     reloads.push(now)
-    console.warn(`[window] ${why} — reloading the renderer`)
+    log('window').warn(`${why} — reloading the renderer`)
     contents.reload()
   }
 
@@ -49,17 +50,12 @@ export function keepRendererAlive(window: BrowserWindow): void {
     reload(`load failed (${code} ${description}) for ${url}`)
   })
 
-  contents.on('unresponsive', () => console.warn('[window] renderer unresponsive'))
-  contents.on('responsive', () => console.warn('[window] renderer responsive again'))
-
-  // GPU and utility processes are the app's, not this window's
-  app.on('child-process-gone', (_event, details) => {
-    console.warn(`[window] ${details.type} process gone (${details.reason})`)
-  })
+  contents.on('unresponsive', () => log('window').warn('renderer unresponsive'))
+  contents.on('responsive', () => log('window').warn('renderer responsive again'))
 
   // Losing the GPU across suspend can leave a live renderer with nothing on screen, which
   // no crash event reports. Repainting is cheap, so it is done unconditionally on resume.
-  powerMonitor.on('resume', () => {
+  const onResume = (): void => {
     setTimeout(() => {
       if (window.isDestroyed() || contents.isDestroyed()) return
 
@@ -68,8 +64,23 @@ export function keepRendererAlive(window: BrowserWindow): void {
         return
       }
 
-      console.debug('[window] resumed — repainting')
+      log('window').debug('resumed — repainting')
       contents.invalidate()
     }, RESUME_SETTLE_MS)
+  }
+
+  // powerMonitor is process-wide, so a listener registered per window outlives the window
+  // it closes over. On macOS `activate` builds a new one, and every previous window's
+  // handler stayed subscribed — firing against destroyed contents and eventually tripping
+  // Node's max-listeners warning.
+  powerMonitor.on('resume', onResume)
+  window.once('closed', () => powerMonitor.off('resume', onResume))
+}
+
+/** GPU and utility processes belong to the app, not to any one window, so this is
+    registered once at startup rather than per window. */
+export function reportChildProcessFailures(): void {
+  app.on('child-process-gone', (_event, details) => {
+    log('window').warn(`${details.type} process gone (${details.reason})`)
   })
 }

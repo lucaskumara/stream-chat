@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import type { ChatBatch, ChatMessage, ModerationEvent } from '@shared/types'
 import { Backlog } from './backlog'
+import { log } from './log'
 
 const FLUSH_INTERVAL_MS = 100
 
@@ -58,8 +59,10 @@ export class MessageBus {
     this.backlog.push(msg)
 
     if (this.messages.length > MAX_BUFFERED_MESSAGES) {
-      this.messages.splice(0, this.messages.length - MAX_BUFFERED_MESSAGES)
-      this.dropped++
+      const over = this.messages.length - MAX_BUFFERED_MESSAGES
+
+      this.messages.splice(0, over)
+      this.dropped += over
     }
   }
 
@@ -114,7 +117,7 @@ export class MessageBus {
     this.moderation = []
 
     if (this.dropped > 0) {
-      console.warn(`[bus] dropped ${this.dropped} overflow batches`)
+      log('bus').warn(`dropped ${this.dropped} messages that overflowed the buffer`)
       this.dropped = 0
     }
 

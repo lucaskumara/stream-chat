@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Copy } from 'lucide-react'
+import { Copy, Eye, EyeOff } from 'lucide-react'
 import type { BroadcastState, DestinationState, Platform } from '@shared/types'
 import { PLATFORMS, REQUIRED_KEYFRAME_SECONDS } from '@shared/types'
 import { bridge } from '../bridge'
@@ -50,7 +50,7 @@ export function Broadcast(): React.ReactElement {
           style={{ border: '1px solid var(--line)', borderRadius: 9 }}
         >
           <CopyRow label="Server" value={state?.obsServer ?? ''} />
-          <CopyRow label="Stream Key" value={state?.obsKey ?? ''} />
+          <CopyRow label="Stream Key" value={state?.obsKey ?? ''} secret />
 
           <p className="mt-[10px] mb-0 text-[12px]" style={{ color: 'var(--fg-4)' }}>
             Set the keyframe interval to {REQUIRED_KEYFRAME_SECONDS}s and keep the bitrate at
@@ -206,8 +206,27 @@ function DestinationLine({
   )
 }
 
-function CopyRow({ label, value }: { label: string; value: string }): React.ReactElement {
+/** This is a streamer's app, so its own window ends up on stream — in a "how I'm set up"
+    segment, in a screen share, in a clip. A key sitting in plain text on the page is a key
+    handed to the audience, and the relay key is what lets anything on the machine push
+    into the fan-out. It is masked until asked for; copying never needs it revealed. */
+function masked(value: string): string {
+  return value === '' ? '' : '•'.repeat(Math.min(value.length, 24))
+}
+
+function CopyRow({
+  label,
+  value,
+  secret
+}: {
+  label: string
+  value: string
+  secret?: boolean
+}): React.ReactElement {
   const [copied, setCopied] = useState(false)
+  const [shown, setShown] = useState(false)
+
+  const hidden = secret === true && !shown
 
   return (
     <div className="mt-[10px] flex items-center gap-[10px] first:mt-0">
@@ -217,11 +236,27 @@ function CopyRow({ label, value }: { label: string; value: string }): React.Reac
 
       <span
         className="inset-field min-w-0 flex-1 truncate px-[10px] text-[13px]"
-        style={{ height: 30, lineHeight: '30px', color: 'var(--fg)' }}
-        title={value}
+        style={{
+          height: 30,
+          lineHeight: '30px',
+          color: hidden ? 'var(--fg-4)' : 'var(--fg)',
+          letterSpacing: hidden ? '0.15em' : undefined
+        }}
+        title={hidden ? undefined : value}
       >
-        {value}
+        {hidden ? masked(value) : value}
       </span>
+
+      {secret && (
+        <button
+          type="button"
+          aria-label={shown ? `Hide ${label}` : `Show ${label}`}
+          className="ghost-button flex h-[30px] w-[30px] flex-none items-center justify-center p-0"
+          onClick={() => setShown((was) => !was)}
+        >
+          {shown ? <EyeOff size={13} strokeWidth={1.8} /> : <Eye size={13} strokeWidth={1.8} />}
+        </button>
+      )}
 
       <button
         type="button"

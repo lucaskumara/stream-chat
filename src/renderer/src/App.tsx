@@ -14,6 +14,15 @@ import { Settings } from './views/Settings'
 const EMPTY_TERMS: string[] = []
 const EMPTY_MESSAGES: ChatMessage[] = []
 
+/** The store's actions never change identity, so reading them off the module rather than
+    through a hook keeps every callback below stable across renders — which is what lets
+    `ChatPaneBar`'s memo actually hold. */
+const actions = useStore.getState()
+
+/** `useStore()` with no selector subscribes to the whole store, so this component
+    re-rendered on every 100ms chat batch, on a keystroke in another pane's filter, and
+    on any settings change — rebuilding fourteen closures each time and defeating the
+    memo on everything below it. Each field is selected on its own instead. */
 function Pane({
   column,
   messages,
@@ -25,10 +34,47 @@ function Pane({
   mode: ThemeMode
   onDisconnect: (source: SourceState) => void
 }): React.ReactElement {
-  const s = useStore()
-
   const paneId = columnPaneId(column)
   const { sources } = column
+
+  const deleted = useStore((s) => s.deleted)
+  const showDeleted = useStore((s) => s.showDeleted)
+  const showTimestamps = useStore((s) => s.showTimestamps)
+  const density = useStore((s) => s.density)
+  const filterOpen = useStore((s) => s.filterOpen[paneId] === true)
+  const gearOpen = useStore((s) => s.gearOpenFor === paneId)
+  const searchTerms = useStore((s) => s.search[paneId]) ?? EMPTY_TERMS
+  const searchDraft = useStore((s) => s.searchDraft[paneId]) ?? ''
+  const fontSize = useStore((s) => s.fontSize[paneId] ?? s.defaultFontSize)
+
+  const onToggleFilter = useCallback(() => actions.toggleFilter(paneId), [paneId])
+  const onToggleGear = useCallback(() => actions.toggleGear(paneId), [paneId])
+  const onSearchTerms = useCallback(
+    (terms: string[]) => actions.setSearch(paneId, terms),
+    [paneId]
+  )
+  const onSearchDraft = useCallback(
+    (draft: string) => actions.setSearchDraft(paneId, draft),
+    [paneId]
+  )
+  const onAddSearchTerm = useCallback(
+    (term: string) => actions.addSearchTerm(paneId, term),
+    [paneId]
+  )
+  const onFontStep = useCallback(
+    (steps: number) => actions.stepFontSize(paneId, steps),
+    [paneId]
+  )
+  const onFontReset = useCallback(() => actions.resetFontSize(paneId), [paneId])
+
+  const onClear = useCallback(() => {
+    for (const source of sources) actions.clearSource(source.id)
+    actions.closeGear()
+  }, [sources])
+
+  const disconnect = useCallback(() => {
+    if (sources.length === 1) onDisconnect(sources[0])
+  }, [sources, onDisconnect])
 
   return (
     <ChatPane
@@ -36,30 +82,25 @@ function Pane({
       label={columnLabel(column)}
       showPlatform={sources.length > 1}
       messages={messages}
-      deleted={s.deleted}
-      showDeleted={s.showDeleted}
-      showTimestamps={s.showTimestamps}
-      density={s.density}
+      deleted={deleted}
+      showDeleted={showDeleted}
+      showTimestamps={showTimestamps}
+      density={density}
       mode={mode}
-      filterOpen={s.filterOpen[paneId] === true}
-      gearOpen={s.gearOpenFor === paneId}
-      onToggleFilter={() => s.toggleFilter(paneId)}
-      onToggleGear={() => s.toggleGear(paneId)}
-      searchTerms={s.search[paneId] ?? EMPTY_TERMS}
-      searchDraft={s.searchDraft[paneId] ?? ''}
-      onSearchTerms={(terms) => s.setSearch(paneId, terms)}
-      onSearchDraft={(draft) => s.setSearchDraft(paneId, draft)}
-      onAddSearchTerm={(term) => s.addSearchTerm(paneId, term)}
-      fontSize={s.fontSize[paneId] ?? s.defaultFontSize}
-      onFontStep={(steps) => s.stepFontSize(paneId, steps)}
-      onFontReset={() => s.resetFontSize(paneId)}
-      onClear={() => {
-        for (const source of sources) s.clearSource(source.id)
-        s.closeGear()
-      }}
-      onDisconnect={() => {
-        if (sources.length === 1) onDisconnect(sources[0])
-      }}
+      filterOpen={filterOpen}
+      gearOpen={gearOpen}
+      onToggleFilter={onToggleFilter}
+      onToggleGear={onToggleGear}
+      searchTerms={searchTerms}
+      searchDraft={searchDraft}
+      onSearchTerms={onSearchTerms}
+      onSearchDraft={onSearchDraft}
+      onAddSearchTerm={onAddSearchTerm}
+      fontSize={fontSize}
+      onFontStep={onFontStep}
+      onFontReset={onFontReset}
+      onClear={onClear}
+      onDisconnect={disconnect}
     />
   )
 }

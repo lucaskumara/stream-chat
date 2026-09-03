@@ -36,6 +36,22 @@ export function destinationUrl(setup: PlatformSetup | undefined): string {
   return `${base}/${key}`
 }
 
+/** A platform that drops us is retried rather than left dead — the failure is usually
+    transient and the switch is still on. It has to back off, though: a key the platform
+    rejects would otherwise reconnect every two seconds for the length of the stream.
+
+    The count is carried on the queued destination rather than recomputed when the
+    process starts, which is the bug this replaced: a retry re-queued with a fresh zero,
+    so the delay never grew past the first step. */
+const DESTINATION_RETRY_MS = 2_000
+const MAX_DESTINATION_RETRY_MS = 20_000
+
+export function destinationRetryMs(attempts: number): number {
+  const step = DESTINATION_RETRY_MS * 2 ** Math.max(0, attempts)
+
+  return Math.min(step, MAX_DESTINATION_RETRY_MS)
+}
+
 export function ingestUrl(relayKey: string): string {
   return `rtmp://localhost:${RELAY_PORT}/${RELAY_APP}/${relayKey}`
 }

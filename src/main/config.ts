@@ -3,6 +3,7 @@ import type { Platform, PlatformPatch, PlatformSetup } from '@shared/types'
 import { DEFAULT_INGEST, PLATFORMS } from '@shared/types'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { log } from './log'
 
 interface PlatformSlot {
   setupEnc?: string
@@ -64,7 +65,7 @@ class Config {
         relayKeyEnc: parsed.relayKeyEnc
       }
     } catch (err) {
-      console.warn('[config] unreadable, starting fresh:', err)
+      log('config').warn('unreadable, starting fresh:', err)
       return { ...EMPTY }
     }
   }
@@ -77,7 +78,7 @@ class Config {
       writeFileSync(tmp, JSON.stringify(this.data, null, 2), 'utf8')
       renameSync(tmp, this.path)
     } catch (err) {
-      console.error('[config] write failed:', err)
+      log('config').error('write failed:', err)
     }
   }
 
@@ -98,7 +99,7 @@ class Config {
         ...(JSON.parse(json) as Partial<PlatformSetup>)
       })
     } catch (err) {
-      console.warn(`[config] ${platform} setup decrypt failed, treating as unset:`, err)
+      log('config').warn(`${platform} setup decrypt failed, treating as unset:`, err)
       return blank(platform)
     }
   }
@@ -142,7 +143,7 @@ class Config {
     })
 
     if (!safeStorage.isEncryptionAvailable()) {
-      console.warn('[config] OS encryption unavailable — setup kept in memory only')
+      log('config').warn('OS encryption unavailable — setup kept in memory only')
       this.memory.set(platform, next)
       return next
     }

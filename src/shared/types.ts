@@ -171,6 +171,10 @@ export interface ChatApi {
   openExternal(url: string): Promise<void>
   copyText(text: string): Promise<void>
 
+  /** Opens the log directory in the OS file manager. False when there is no log
+      file this session — the directory could not be created. */
+  openLogs(): Promise<boolean>
+
   obsLink(sourceId: string): Promise<string | null>
 
   windowMinimize(): Promise<void>

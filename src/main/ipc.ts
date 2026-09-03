@@ -6,6 +6,7 @@ import type { MessageBus } from './bus'
 import type { ObsServer } from './obs/server'
 import type { SourceManager } from './sources'
 import { config } from './config'
+import { logDirectory } from './log'
 import type { Relay } from './broadcast'
 
 const MAX_LABEL_LENGTH = 80
@@ -21,6 +22,7 @@ export const IPC = {
   openExternal: 'shell:open-external',
   copyText: 'clipboard:write',
   obsLink: 'obs:link',
+  openLogs: 'logs:open',
 
   windowMinimize: 'window:minimize',
   windowToggleMaximize: 'window:toggle-maximize',
@@ -123,6 +125,16 @@ function registerShellHandlers(): void {
 
   handle(IPC.copyText, (_e, text: unknown) => {
     clipboard.writeText(requireString(text, 'text').slice(0, MAX_COPY_LENGTH))
+  })
+
+  /** The directory comes from main, so the renderer cannot ask the shell to open a
+      path of its own choosing — the argument here is deliberately nothing at all. */
+  handle(IPC.openLogs, () => {
+    const directory = logDirectory()
+    if (!directory) return false
+
+    shell.openPath(directory)
+    return true
   })
 }
 
