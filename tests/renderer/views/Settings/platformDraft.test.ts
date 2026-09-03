@@ -19,19 +19,17 @@ function draft(overrides: Partial<PlatformDraft> = {}): PlatformDraft {
     channel: 'xqc',
     ingestUrl: '',
     streamKey: '',
-    replacingKey: false,
     emoteProviders: { sevenTv: true, bttv: true },
     ...overrides
   }
 }
 
 describe('draftFrom', () => {
-  it('starts a draft from the saved config, with an empty and non-replacing key', () => {
+  it('starts a draft from the saved config, with an empty key', () => {
     expect(draftFrom(config({ channel: 'xqc', ingestUrl: 'rtmp://x' }))).toEqual({
       channel: 'xqc',
       ingestUrl: 'rtmp://x',
       streamKey: '',
-      replacingKey: false,
       emoteProviders: { sevenTv: true, bttv: true }
     })
   })
@@ -54,19 +52,14 @@ describe('dirtyPatch', () => {
     })
   })
 
-  // The stream key is write-only — main never sends it back — so "unchanged" is
-  // judged by whether Replace was ever clicked, not by comparing to a value the
-  // draft was never given.
-  it('leaves the stream key out while not replacing it, whatever the draft holds', () => {
-    expect(dirtyPatch(draft({ streamKey: 'leftover', replacingKey: false }), config())).toEqual({})
+  // The stream key is write-only — main never sends it back — so the draft
+  // always starts empty and "changed" just means something was typed.
+  it('leaves the stream key out while the draft is still empty', () => {
+    expect(dirtyPatch(draft({ streamKey: '' }), config())).toEqual({})
   })
 
-  it('leaves the stream key out while replacing but still empty', () => {
-    expect(dirtyPatch(draft({ streamKey: '', replacingKey: true }), config())).toEqual({})
-  })
-
-  it('carries the stream key once replacing with a real value', () => {
-    expect(dirtyPatch(draft({ streamKey: 'live_123', replacingKey: true }), config())).toEqual({
+  it('carries the stream key once something is typed', () => {
+    expect(dirtyPatch(draft({ streamKey: 'live_123' }), config())).toEqual({
       streamKey: 'live_123'
     })
   })
@@ -79,10 +72,7 @@ describe('dirtyPatch', () => {
 
   it('combines every changed field in one patch', () => {
     expect(
-      dirtyPatch(
-        draft({ channel: 'new', streamKey: 'k', replacingKey: true }),
-        config({ channel: 'xqc' })
-      )
+      dirtyPatch(draft({ channel: 'new', streamKey: 'k' }), config({ channel: 'xqc' }))
     ).toEqual({ channel: 'new', streamKey: 'k' })
   })
 })

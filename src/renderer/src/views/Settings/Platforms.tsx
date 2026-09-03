@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ExternalLink, Eye, EyeOff } from 'lucide-react'
 import type { EmoteProviderSettings, Platform, PlatformConfig } from '@shared/types'
 import { DEFAULT_INGEST, PLATFORMS } from '@shared/types'
@@ -7,8 +7,8 @@ import { ChatLink } from '../../components/ChatLink'
 import { PlatformMark } from '../../components/PlatformMark'
 import { ControlRow, Toggle } from '../../components/controls'
 import { PLATFORM_COLOR, PLATFORM_NAME } from '../../theme'
-import { useStore } from '../../store'
-import { dirtyPatch, draftFrom, type PlatformDraft } from './platformDraft'
+import type { PlatformDraft } from './platformDraft'
+import type { PlatformDraftsApi } from './usePlatformDrafts'
 
 /** Where each platform actually shows these values, and which of them it shows. Twitch
     publishes no stream URL anywhere — the encoder picks an ingest server — so its button
@@ -19,7 +19,7 @@ const HELP: Record<Platform, { label: string; url: string }> = {
     label: 'Get your stream key',
     url: 'https://studio.youtube.com/channel/UC/livestreaming'
   },
-  kick: { label: 'Get your URL and key', url: 'https://dashboard.kick.com/channel/stream' }
+  kick: { label: 'Get your stream URL and key', url: 'https://dashboard.kick.com/channel/stream' }
 }
 
 const CHANNEL_HINT: Record<Platform, string> = {
@@ -37,135 +37,24 @@ const EXTRA: Partial<Record<Platform, string>> = {
   kick: 'Kick gives every channel its own stream URL, so it needs both.'
 }
 
-const SAVED_FLASH_MS = 1500
-
-function emptyDraft(): PlatformDraft {
-  return {
-    channel: '',
-    ingestUrl: '',
-    streamKey: '',
-    replacingKey: false,
-    emoteProviders: { sevenTv: true, bttv: true }
-  }
+/** Settings/index.tsx computes this same id to scroll a specific card into view
+    when Settings is opened from a platform-specific prompt — see the coordinated
+    scroll effect there for why that lives at the pane level rather than here. */
+export function platformCardId(platform: Platform): string {
+  return `platform-card-${platform}`
 }
 
-function isDirty(configs: PlatformConfig[], drafts: Partial<Record<Platform, PlatformDraft>>): boolean {
-  return PLATFORMS.some((platform) => {
-    const config = configs.find((c) => c.platform === platform)
-    const draft = drafts[platform]
-
-    return config !== undefined && draft !== undefined && Object.keys(dirtyPatch(draft, config)).length > 0
-  })
-}
-
-export function Platforms(): React.ReactElement {
-  const configs = useStore((s) => s.platforms)
-
-  const [drafts, setDrafts] = useState<Partial<Record<Platform, PlatformDraft>>>({})
-  const [errors, setErrors] = useState<Partial<Record<Platform, string>>>({})
-  const [saving, setSaving] = useState(false)
-  const [savedFlash, setSavedFlash] = useState(false)
-
-  // Settings is a modal over the whole app, so this is the only screen that can be
-  // showing while a platform's config changes underneath it — and the only source
-  // of that change while it's open is this component's own save. Filling in a
-  // draft only when one doesn't exist yet, rather than resyncing on every config
-  // change, is what keeps a save from clobbering whatever the user is mid-typing.
-  useEffect(() => {
-    setDrafts((held) => {
-      const next = { ...held }
-      let changed = false
-
-      for (const config of configs) {
-        if (next[config.platform]) continue
-
-        next[config.platform] = draftFrom(config)
-        changed = true
-      }
-
-      return changed ? next : held
-    })
-  }, [configs])
-
-  const updateDraft = (platform: Platform, patch: Partial<PlatformDraft>): void => {
-    setDrafts((held) => ({
-      ...held,
-      [platform]: { ...(held[platform] ?? emptyDraft()), ...patch }
-    }))
-
-    if (patch.channel !== undefined) {
-      setErrors((held) => {
-        if (!held[platform]) return held
-
-        const next = { ...held }
-        delete next[platform]
-        return next
-      })
-    }
-  }
-
-  const dirty = isDirty(configs, drafts)
-
-  const handleSave = async (): Promise<void> => {
-    setSaving(true)
-
-    const nextDrafts = { ...drafts }
-    const nextErrors: Partial<Record<Platform, string>> = {}
-
-    for (const platform of PLATFORMS) {
-      const config = configs.find((c) => c.platform === platform)
-      const draft = drafts[platform]
-      if (!config || !draft) continue
-
-      const patch = dirtyPatch(draft, config)
-      if (Object.keys(patch).length === 0) continue
-
-      if (patch.channel) {
-        const result = await bridge()
-          .api.verifyChannel(platform, patch.channel)
-          .catch((error): { ok: true; canonicalIdentifier?: string } => {
-            console.debug('[platforms]', platform, 'verifyChannel', error)
-            return { ok: true }
-          })
-
-        if (!result.ok) {
-          nextErrors[platform] = result.reason ?? `${PLATFORM_NAME[platform]} channel not found.`
-          delete patch.channel
-        } else if (result.canonicalIdentifier) {
-          patch.channel = result.canonicalIdentifier
-          nextDrafts[platform] = { ...draft, channel: result.canonicalIdentifier }
-        }
-      }
-
-      if (Object.keys(patch).length > 0) {
-        await bridge()
-          .api.savePlatform(platform, patch)
-          .catch((error) => console.debug('[platforms]', platform, 'savePlatform', error))
-
-        nextDrafts[platform] = { ...(nextDrafts[platform] ?? draft), streamKey: '', replacingKey: false }
-      }
-    }
-
-    setDrafts(nextDrafts)
-    setErrors(nextErrors)
-    setSaving(false)
-
-    if (Object.keys(nextErrors).length === 0) {
-      setSavedFlash(true)
-      setTimeout(() => setSavedFlash(false), SAVED_FLASH_MS)
-    }
-  }
-
+export function Platforms(props: PlatformDraftsApi): React.ReactElement {
   return (
     <div>
       {PLATFORMS.map((platform, at) => (
         <PlatformCard
           key={platform}
           platform={platform}
-          config={configs.find((c) => c.platform === platform)}
-          draft={drafts[platform] ?? emptyDraft()}
-          onDraftChange={(patch) => updateDraft(platform, patch)}
-          error={errors[platform]}
+          config={props.configs.find((c) => c.platform === platform)}
+          draft={props.draftFor(platform)}
+          onDraftChange={(patch) => props.updateDraft(platform, patch)}
+          error={props.errorFor(platform)}
           first={at === 0}
         />
       ))}
@@ -174,24 +63,6 @@ export function Platforms(): React.ReactElement {
         Chat is read anonymously — the channel is all it needs. The stream URL and key are
         only used to forward your OBS stream to that platform.
       </p>
-
-      <div
-        className="sticky bottom-0 mt-[20px] flex items-center justify-end gap-[12px] py-[14px]"
-        style={{ background: 'var(--ink-900)', borderTop: '1px solid var(--line)' }}
-      >
-        <span className="text-[12px]" style={{ color: 'var(--fg-4)', opacity: savedFlash ? 1 : 0 }}>
-          All changes saved
-        </span>
-
-        <button
-          type="button"
-          className="primary-button h-[30px] px-[16px] text-[13px]"
-          disabled={!dirty || saving}
-          onClick={() => void handleSave()}
-        >
-          {saving ? 'Saving…' : 'Save changes'}
-        </button>
-      </div>
     </div>
   )
 }
@@ -218,7 +89,7 @@ function PlatformCard({
   }
 
   return (
-    <section className={first ? '' : 'mt-[18px]'}>
+    <section id={platformCardId(platform)} className={first ? '' : 'mt-[18px]'}>
       <div
         className="px-[14px] py-[12px]"
         style={{ border: '1px solid var(--line)', borderRadius: 9 }}
@@ -284,14 +155,11 @@ function PlatformCard({
         <Field
           platform={platform}
           label="Stream key"
-          placeholder="Paste your stream key"
+          placeholder={config?.hasStreamKey ? '••••••••••••••••' : 'Paste your stream key'}
           value={draft.streamKey}
           onChange={(value) => onDraftChange({ streamKey: value })}
           secret
           revealable
-          alreadySet={config?.hasStreamKey === true}
-          replacing={draft.replacingKey}
-          onStartReplace={() => onDraftChange({ streamKey: '', replacingKey: true })}
         />
 
         {EXTRA[platform] && (
@@ -328,11 +196,12 @@ function PlatformCard({
   )
 }
 
-/** A secret field never receives its value from main — it is told only that one exists,
-    and shows dots until the user chooses to replace it. A revealable field (the stream URL
-    too, not only the key) starts hidden behind an eye toggle regardless — no critical value
-    shown by default. Fully controlled: the draft lives in the parent, so this is presentation
-    and the masked/replace state machine alone. */
+/** Fully controlled — the draft lives in the hook, so this is presentation only.
+    The stream key is always a live input, never a separate masked-then-Replace
+    step: main never sends the real value back, so there is nothing to reveal by
+    unmasking, and the placeholder alone (dots once one is set) is what signals a
+    key already exists. Typing simply overwrites the placeholder, the same as any
+    other input — nothing is "wiped" first. */
 function Field({
   platform,
   label,
@@ -341,9 +210,6 @@ function Field({
   onChange,
   secret,
   revealable,
-  alreadySet,
-  replacing,
-  onStartReplace,
   error
 }: {
   platform: Platform
@@ -353,14 +219,10 @@ function Field({
   onChange: (value: string) => void
   secret?: boolean
   revealable?: boolean
-  alreadySet?: boolean
-  replacing?: boolean
-  onStartReplace?: () => void
   error?: string
 }): React.ReactElement {
   const [revealed, setRevealed] = useState(false)
 
-  const masked = secret && alreadySet && !replacing
   const inputType = revealable ? (revealed ? 'text' : 'password') : secret ? 'password' : 'text'
 
   return (
@@ -370,59 +232,40 @@ function Field({
           {label}
         </span>
 
-        {masked ? (
-          <>
-            <span
-              className="inset-field flex min-w-0 flex-1 items-center px-[10px] text-[13px]"
-              style={{ height: 30, color: 'var(--fg-4)', letterSpacing: '0.15em' }}
-            >
-              ••••••••••••••••
-            </span>
+        <div className="relative min-w-0 flex-1">
+          <input
+            type={inputType}
+            value={value}
+            placeholder={placeholder}
+            aria-label={`${PLATFORM_NAME[platform]} ${label}`}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => onChange(e.currentTarget.value)}
+            className="inset-field w-full px-[10px] text-[13px]"
+            style={{
+              height: 30,
+              paddingRight: revealable ? 30 : undefined,
+              borderColor: error ? 'var(--error)' : undefined
+            }}
+          />
 
+          {revealable && (
             <button
               type="button"
-              className="ghost-button h-[30px] flex-none px-[10px] text-[12px]"
-              onClick={onStartReplace}
+              aria-label={`${revealed ? 'Hide' : 'Show'} ${PLATFORM_NAME[platform]} ${label}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setRevealed((r) => !r)}
+              className="absolute top-1/2 right-[8px] flex -translate-y-1/2 cursor-pointer items-center border-0 bg-transparent p-0"
+              style={{ color: 'var(--fg-4)' }}
             >
-              Replace
+              {revealed ? (
+                <EyeOff size={14} strokeWidth={1.8} />
+              ) : (
+                <Eye size={14} strokeWidth={1.8} />
+              )}
             </button>
-          </>
-        ) : (
-          <div className="relative min-w-0 flex-1">
-            <input
-              type={inputType}
-              value={value}
-              placeholder={placeholder}
-              aria-label={`${PLATFORM_NAME[platform]} ${label}`}
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(e) => onChange(e.currentTarget.value)}
-              className="inset-field w-full px-[10px] text-[13px]"
-              style={{
-                height: 30,
-                paddingRight: revealable ? 30 : undefined,
-                borderColor: error ? 'var(--error)' : undefined
-              }}
-            />
-
-            {revealable && (
-              <button
-                type="button"
-                aria-label={`${revealed ? 'Hide' : 'Show'} ${PLATFORM_NAME[platform]} ${label}`}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setRevealed((r) => !r)}
-                className="absolute top-1/2 right-[8px] flex -translate-y-1/2 cursor-pointer items-center border-0 bg-transparent p-0"
-                style={{ color: 'var(--fg-4)' }}
-              >
-                {revealed ? (
-                  <EyeOff size={14} strokeWidth={1.8} />
-                ) : (
-                  <Eye size={14} strokeWidth={1.8} />
-                )}
-              </button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </label>
 
       {error && (

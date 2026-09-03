@@ -1,15 +1,13 @@
 import type { EmoteProviderSettings, PlatformConfig, PlatformPatch } from '@shared/types'
 
 /** The page's own working copy of one platform's card, held until Save changes is
-    clicked. `streamKey`/`replacingKey` mirror the masked-then-editable UI: the
-    key is write-only from main, so "changed" means Replace was clicked and
-    something was typed, never a comparison to a value the draft was never
-    given. */
+    clicked. The stream key is write-only from main, so the draft always starts
+    empty — "changed" is simply whether the field holds anything at all, never a
+    comparison to a value the draft was never given. */
 export interface PlatformDraft {
   channel: string
   ingestUrl: string
   streamKey: string
-  replacingKey: boolean
   emoteProviders: EmoteProviderSettings
 }
 
@@ -18,7 +16,6 @@ export function draftFrom(config: PlatformConfig): PlatformDraft {
     channel: config.channel,
     ingestUrl: config.ingestUrl,
     streamKey: '',
-    replacingKey: false,
     emoteProviders: { ...config.emoteProviders }
   }
 }
@@ -36,7 +33,7 @@ export function dirtyPatch(draft: PlatformDraft, saved: PlatformConfig): Platfor
 
   if (draft.channel !== saved.channel) patch.channel = draft.channel
   if (draft.ingestUrl !== saved.ingestUrl) patch.ingestUrl = draft.ingestUrl
-  if (draft.replacingKey && draft.streamKey !== '') patch.streamKey = draft.streamKey
+  if (draft.streamKey !== '') patch.streamKey = draft.streamKey
   if (emoteProvidersChanged(draft.emoteProviders, saved.emoteProviders)) {
     patch.emoteProviders = draft.emoteProviders
   }

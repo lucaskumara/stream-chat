@@ -144,6 +144,30 @@ describe('settings modal', () => {
 
     expect(state().settingsOpen).toBe(false)
   })
+
+  // "Open settings" from a not-configured platform's own prompt should land on
+  // that platform's card, not just the top of the Platforms pane.
+  describe('openSettingsForPlatform', () => {
+    it('opens straight to the platforms pane with a scroll target', () => {
+      state().openSettingsForPlatform('kick')
+
+      expect(state().settingsOpen).toBe(true)
+      expect(state().settingsPane).toBe('platforms')
+      expect(state().platformsScrollTarget).toBe('kick')
+    })
+
+    it('starts with no scroll target from a plain openSettings', () => {
+      expect(state().platformsScrollTarget).toBeNull()
+    })
+
+    it('is cleared once consumed', () => {
+      state().openSettingsForPlatform('youtube')
+
+      state().clearPlatformsScrollTarget()
+
+      expect(state().platformsScrollTarget).toBeNull()
+    })
+  })
 })
 
 describe('setCapacity', () => {

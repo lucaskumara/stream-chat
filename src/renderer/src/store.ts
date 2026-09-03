@@ -45,6 +45,12 @@ interface ChatState {
   settingsOpen: boolean
   settingsPane: SettingsPane
 
+  /** Set alongside opening Settings from a platform-specific prompt (a
+      NotConfigured column, Broadcast's "Add a stream key"), so the Platforms
+      pane can jump straight to that card instead of landing on top showing
+      whichever platform is first. Cleared once the scroll has happened. */
+  platformsScrollTarget: Platform | null
+
   /** One chat per platform, so the tab strip is the platform list and a pane is
       whichever source carries a visible platform. Panes run in PLATFORMS order,
       which is the order the tabs are drawn in. */
@@ -94,6 +100,8 @@ interface ChatState {
   openSettings: () => void
   closeSettings: () => void
   setSettingsPane: (pane: SettingsPane) => void
+  openSettingsForPlatform: (platform: Platform) => void
+  clearPlatformsScrollTarget: () => void
   toggleFilter: (sourceId: string) => void
   setShowDeleted: (showDeleted: boolean) => void
   setShowTimestamps: (showTimestamps: boolean) => void
@@ -209,6 +217,7 @@ export const useStore = create<ChatState>()((set) => ({
   view: 'chats',
   settingsOpen: false,
   settingsPane: 'general',
+  platformsScrollTarget: null,
   filterOpen: {},
 
   showDeleted: true,
@@ -279,6 +288,11 @@ export const useStore = create<ChatState>()((set) => ({
   closeSettings: () => set({ settingsOpen: false }),
 
   setSettingsPane: (settingsPane) => set({ settingsPane }),
+
+  openSettingsForPlatform: (platform) =>
+    set({ settingsOpen: true, settingsPane: 'platforms', platformsScrollTarget: platform }),
+
+  clearPlatformsScrollTarget: () => set({ platformsScrollTarget: null }),
 
   toggleFilter: (sourceId) =>
     set((s) => ({

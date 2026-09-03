@@ -16,8 +16,7 @@ const NAME: Record<Platform, string> = {
 
 export function Broadcast(): React.ReactElement {
   const platforms = useStore((s) => s.platforms)
-  const openSettings = useStore((s) => s.openSettings)
-  const setPane = useStore((s) => s.setSettingsPane)
+  const openSettingsForPlatform = useStore((s) => s.openSettingsForPlatform)
 
   const [state, setState] = useState<BroadcastState | null>(null)
 
@@ -95,10 +94,7 @@ export function Broadcast(): React.ReactElement {
                 <button
                   type="button"
                   className="ghost-button h-[26px] flex-none px-[10px] text-[12px]"
-                  onClick={() => {
-                    setPane('platforms')
-                    openSettings()
-                  }}
+                  onClick={() => openSettingsForPlatform(platform)}
                 >
                   Add a stream key
                 </button>

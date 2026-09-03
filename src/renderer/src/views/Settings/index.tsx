@@ -1,6 +1,10 @@
+import { useEffect, useRef, useState } from 'react'
+import { ArrowUp } from 'lucide-react'
 import type { SettingsPane } from '../../store'
 import { useStore } from '../../store'
-import { Platforms } from './Platforms'
+import { Platforms, platformCardId } from './Platforms'
+import { PlatformsSaveBar } from './PlatformsSaveBar'
+import { usePlatformDrafts } from './usePlatformDrafts'
 import { Appearance } from './Appearance'
 import { General } from './General'
 
@@ -22,11 +26,58 @@ const TITLES: Record<SettingsPane, { title: string; blurb: string }> = {
   }
 }
 
+const SCROLL_TOP_THRESHOLD_PX = 200
+
 export function Settings(): React.ReactElement {
   const pane = useStore((s) => s.settingsPane)
   const setPane = useStore((s) => s.setSettingsPane)
+  const scrollTarget = useStore((s) => s.platformsScrollTarget)
+  const clearScrollTarget = useStore((s) => s.clearPlatformsScrollTarget)
+
+  // Called unconditionally rather than only on the Platforms pane, so the Save
+  // bar below can mount the instant the user switches to it without waiting on
+  // an effect to catch up.
+  const platformDrafts = usePlatformDrafts()
+
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [showScrollTop, setShowScrollTop] = useState(false)
+
+  // Consuming a scroll target sets it back to null, which would otherwise also
+  // re-run the pane-reset effect below and immediately undo the scroll it just
+  // did — this ref is what tells that effect "skip it, this pass was already
+  // handled" rather than the two fighting over the same scroll position.
+  const consumedScrollTarget = useRef(false)
 
   const { title, blurb } = TITLES[pane]
+
+  // Opening Settings from a platform-specific prompt (a NotConfigured column,
+  // Broadcast's "Add a stream key") should jump straight to that card rather
+  // than leaving the user to find it among the other two.
+  useEffect(() => {
+    if (!scrollTarget) return
+
+    document.getElementById(platformCardId(scrollTarget))?.scrollIntoView({ block: 'start' })
+    consumedScrollTarget.current = true
+    clearScrollTarget()
+  }, [scrollTarget, clearScrollTarget])
+
+  // A pane switch swaps content inside the same scrolling box, so without this a
+  // long pane (Platforms) left scrolled down leaves a short one (General) opening
+  // stuck mid-scroll, showing nothing. Declared after the effect above so a
+  // scroll-to-target's own pane switch runs first within the same commit.
+  useEffect(() => {
+    if (consumedScrollTarget.current) {
+      consumedScrollTarget.current = false
+      return
+    }
+
+    scrollRef.current?.scrollTo({ top: 0 })
+    setShowScrollTop(false)
+  }, [pane])
+
+  const handleScroll = (): void => {
+    setShowScrollTop((scrollRef.current?.scrollTop ?? 0) > SCROLL_TOP_THRESHOLD_PX)
+  }
 
   return (
     <div className="flex min-h-0 flex-1" style={{ background: 'var(--ink-900)' }}>
@@ -64,19 +115,50 @@ export function Settings(): React.ReactElement {
         })}
       </nav>
 
-      <div className="min-w-0 flex-1 overflow-y-auto px-[28px] py-[22px] chat-scroll">
-        <div className="max-w-[560px]">
-          <h1 className="m-0 text-[17px] font-semibold" style={{ color: 'var(--heading)' }}>
-            {title}
-          </h1>
-          <p className="mt-[4px] mb-[20px] text-[13px]" style={{ color: 'var(--fg-4)' }}>
-            {blurb}
-          </p>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="relative min-h-0 flex-1">
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="chat-scroll absolute inset-0 overflow-y-auto px-[28px] py-[22px]"
+          >
+            <div className="max-w-[560px]">
+              <h1 className="m-0 text-[17px] font-semibold" style={{ color: 'var(--heading)' }}>
+                {title}
+              </h1>
+              <p className="mt-[4px] mb-[20px] text-[13px]" style={{ color: 'var(--fg-4)' }}>
+                {blurb}
+              </p>
 
-          {pane === 'general' && <General />}
-          {pane === 'appearance' && <Appearance />}
-          {pane === 'platforms' && <Platforms />}
+              {pane === 'general' && <General />}
+              {pane === 'appearance' && <Appearance />}
+              {pane === 'platforms' && <Platforms {...platformDrafts} />}
+            </div>
+          </div>
+
+          {showScrollTop && (
+            <button
+              type="button"
+              aria-label="Scroll to top"
+              onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="icon-button absolute flex items-center justify-center"
+              style={{
+                bottom: 16,
+                right: 16,
+                width: 32,
+                height: 32,
+                borderRadius: 999,
+                background: 'var(--ink-700)',
+                border: '1px solid var(--line-2)',
+                boxShadow: '0 6px 18px var(--shadow)'
+              }}
+            >
+              <ArrowUp size={16} strokeWidth={1.8} />
+            </button>
+          )}
         </div>
+
+        {pane === 'platforms' && <PlatformsSaveBar {...platformDrafts} />}
       </div>
     </div>
   )
