@@ -9,7 +9,8 @@ import type {
   Platform,
   PlatformConfig,
   PlatformPatch,
-  SourceState
+  SourceState,
+  VerifyChannelResult
 } from '@shared/types'
 
 const IPC = {
@@ -29,6 +30,7 @@ const IPC = {
   windowMaximized: 'window:maximized',
   platforms: 'platforms:list',
   savePlatform: 'platforms:save',
+  verifyChannel: 'platforms:verify',
   broadcast: 'broadcast:state',
   batch: 'chat:batch',
   sourceState: 'sources:state',
@@ -103,6 +105,9 @@ const api: ChatApi = {
 
   savePlatform: (platform: Platform, patch: PlatformPatch): Promise<void> =>
     ipcRenderer.invoke(IPC.savePlatform, platform, patch),
+
+  verifyChannel: (platform: Platform, identifier: string): Promise<VerifyChannelResult> =>
+    ipcRenderer.invoke(IPC.verifyChannel, platform, identifier),
 
   onPlatforms: (cb: (configs: PlatformConfig[]) => void): (() => void) => {
     const handler = (_e: Electron.IpcRendererEvent, configs: PlatformConfig[]): void =>

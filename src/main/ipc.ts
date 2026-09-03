@@ -14,6 +14,7 @@ import type { SourceManager } from './sources'
 import { config } from './config'
 import { logDirectory } from './log'
 import type { Relay } from './broadcast'
+import { verifyChannel } from './chat/verify'
 
 const MAX_LABEL_LENGTH = 80
 const MAX_IDENTIFIER_LENGTH = 100
@@ -38,6 +39,7 @@ export const IPC = {
 
   platforms: 'platforms:list',
   savePlatform: 'platforms:save',
+  verifyChannel: 'platforms:verify',
 
   broadcast: 'broadcast:state',
 
@@ -97,6 +99,10 @@ function registerPlatformHandlers(onPlatformChange: () => Promise<void>): void {
 
     await onPlatformChange()
   })
+
+  handle(IPC.verifyChannel, (_e, platform: unknown, identifier: unknown) =>
+    verifyChannel(parsePlatform(platform), requireString(identifier, 'identifier'))
+  )
 }
 
 function registerBroadcastHandlers(relay: Relay): void {

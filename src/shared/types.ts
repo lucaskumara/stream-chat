@@ -126,6 +126,15 @@ export interface PlatformConfig {
   emoteProviders: EmoteProviderSettings
 }
 
+/** `canonicalIdentifier` is only ever set alongside `ok: true` — a channel that
+    doesn't exist has nothing to correct. Absent even on success when the
+    platform has no safe correction to offer (e.g. Kick's fetch never landed). */
+export interface VerifyChannelResult {
+  ok: boolean
+  reason?: string
+  canonicalIdentifier?: string
+}
+
 /** Twitch publishes one global ingest for everybody and YouTube's is fixed, so both are
     prefilled. Kick runs on Amazon IVS, which gives every channel its own ingest host, so
     there is nothing to prefill and no API to ask. */
@@ -201,6 +210,7 @@ export interface ChatApi {
 
   platforms(): Promise<PlatformConfig[]>
   savePlatform(platform: Platform, patch: PlatformPatch): Promise<void>
+  verifyChannel(platform: Platform, identifier: string): Promise<VerifyChannelResult>
 
   onPlatforms(cb: (configs: PlatformConfig[]) => void): () => void
 

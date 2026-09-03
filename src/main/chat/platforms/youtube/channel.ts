@@ -54,6 +54,20 @@ function referenceFor(identifier: string): Reference {
   };
 }
 
+/** The one identifier shape it's safe to normalize the case of. A UC… channel id
+    and an 11-char video id are case-sensitive and break when folded — see the
+    CLAUDE.md invariant — so both are left untouched. There is no canonical-cased
+    handle available from resolve today, so this lowercases rather than matching
+    the site's real casing. */
+export function canonicalHandle(identifier: string): string | undefined {
+  const value = identifier.trim();
+
+  if (VIDEO_ID.test(value) && !value.startsWith("@")) return undefined;
+  if (CHANNEL_ID.test(value)) return undefined;
+
+  return `@${value.replace(/^@/, "").toLowerCase()}`;
+}
+
 export async function resolveChannel(
   identifier: string,
 ): Promise<ChannelLookup<YouTubeChannel>> {

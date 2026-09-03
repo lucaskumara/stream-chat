@@ -8,7 +8,7 @@ vi.mock("@main/chat/platforms/youtube/connection", () => ({
   innertube: async () => ({ resolveURL, getInfo, getChannel })
 }));
 
-const { resolveChannel } = await import("@main/chat/platforms/youtube/channel");
+const { resolveChannel, canonicalHandle } = await import("@main/chat/platforms/youtube/channel");
 
 const VIDEO_ID = "jNQXAC9IVRw";
 
@@ -156,5 +156,26 @@ describe("resolveChannel", () => {
         reason: "socket hang up"
       });
     });
+  });
+});
+
+describe("canonicalHandle", () => {
+  // YouTube handles are the one identifier shape it's safe to lowercase — a
+  // UC… id and a video id are case-sensitive and break when folded, which is
+  // exactly why those two are left alone below.
+  it("lowercases a handle", () => {
+    expect(canonicalHandle("@TheBurntPeanut")).toBe("@theburntpeanut");
+  });
+
+  it("adds the @ back for a handle typed without one", () => {
+    expect(canonicalHandle("LofiGirl")).toBe("@lofigirl");
+  });
+
+  it("leaves a UC… channel id untouched", () => {
+    expect(canonicalHandle("UCSJ4gkVC6NrvII8umztf0Ow")).toBeUndefined();
+  });
+
+  it("leaves an 11-character video id untouched", () => {
+    expect(canonicalHandle(VIDEO_ID)).toBeUndefined();
   });
 });
