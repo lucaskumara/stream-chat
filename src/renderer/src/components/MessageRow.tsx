@@ -104,14 +104,14 @@ function Emote({
       {hovered && (
         <span
           role="tooltip"
-          className="pointer-events-none absolute z-10 -translate-x-1/2 text-[11px] whitespace-nowrap"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 text-[.9em] whitespace-nowrap"
           style={{
             bottom: 'calc(100% + 5px)',
             left: '50%',
             background: 'var(--ink-600)',
             border: '1px solid var(--line-2)',
             borderRadius: 6,
-            padding: '4px 7px',
+            padding: '.3em .55em',
             boxShadow: '0 8px 20px rgba(0,0,0,.5)'
           }}
         >
