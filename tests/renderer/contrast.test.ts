@@ -62,14 +62,34 @@ describe('readable on light', () => {
 
 describe('nameColor', () => {
   it('uses the author colour when the platform sent one', () => {
-    expect(nameColor(message('a-1', '#00FF00'), 'dark')).toBe('#00FF00')
+    expect(nameColor(message('a-1', '#00FF00'), 'dark', 'author')).toBe('#00FF00')
   })
 
   it('is stable for one author and readable in both modes', () => {
-    const dark = nameColor(message('a-1'), 'dark')
+    const dark = nameColor(message('a-1'), 'dark', 'author')
 
-    expect(nameColor(message('a-1'), 'dark')).toBe(dark)
+    expect(nameColor(message('a-1'), 'dark', 'author')).toBe(dark)
     expect(luminance(dark)).toBeGreaterThanOrEqual(0.4)
-    expect(luminance(nameColor(message('a-1'), 'light'))).toBeLessThanOrEqual(0.51)
+    expect(luminance(nameColor(message('a-1'), 'light', 'author'))).toBeLessThanOrEqual(0.51)
+  })
+
+  // 'platform' paints every name with its own message's platform colour, whatever
+  // the author sent — the whole point is to tell platforms apart in a merged column.
+  it('uses the platform colour, ignoring any author colour, in platform mode', () => {
+    expect(nameColor(message('a-1', '#00FF00'), 'dark', 'platform')).toBe(
+      readable('#9146ff', 'dark')
+    )
+  })
+
+  it('lifts the platform colour for readability the same as any other colour', () => {
+    expect(luminance(nameColor(message('a-1'), 'dark', 'platform'))).toBeCloseTo(0.4, 2)
+  })
+
+  // 'none' drops colour in favour of the same heading tone the rest of the chrome
+  // uses for emphasis, not a hardcoded black or white — so it still inverts with
+  // the theme rather than needing its own light/dark branch here.
+  it('returns the heading token in none mode, regardless of author colour', () => {
+    expect(nameColor(message('a-1', '#00FF00'), 'dark', 'none')).toBe('var(--heading)')
+    expect(nameColor(message('a-1'), 'light', 'none')).toBe('var(--heading)')
   })
 })

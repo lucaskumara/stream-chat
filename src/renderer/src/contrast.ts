@@ -1,5 +1,6 @@
 import type { ChatMessage } from '@shared/types'
-import type { ThemeMode } from './theme'
+import { PLATFORM_COLOR, type ThemeMode } from './theme'
+import type { NameColorMode } from './store'
 
 /** What Twitch's own client picks from when a user never chose a colour. */
 const DEFAULT_NAME_COLORS = [
@@ -57,10 +58,18 @@ export function readable(hex: string, mode: ThemeMode): string {
   return rgb(channels.map((value) => Math.round(value + (255 - value) * towardsWhite)))
 }
 
-/** A message either carries the user's own colour or carries nothing — main never
-    invents one — so the gap is filled from a hash of the author id, the same way
-    Twitch's client does it. */
-export function nameColor(msg: ChatMessage, mode: ThemeMode): string {
+/** 'none' drops colour for the same heading tone the rest of the chrome uses for
+    emphasis — not a hardcoded black or white, so it still inverts with the theme.
+    'platform' paints every name with its message's own platform colour, lifted or
+    darkened the same as any other colour. 'author' (the original, only behaviour
+    before the other two existed) prefers a message's own colour, and falls back to
+    a hash of the author id the same way Twitch's own client does — main never
+    invents one, so the gap is filled here. */
+export function nameColor(msg: ChatMessage, mode: ThemeMode, colorMode: NameColorMode): string {
+  if (colorMode === 'none') return 'var(--heading)'
+
+  if (colorMode === 'platform') return readable(PLATFORM_COLOR[msg.platform], mode)
+
   if (msg.authorColor) return readable(msg.authorColor, mode)
 
   const seed = msg.authorId || msg.authorName

@@ -26,6 +26,14 @@ export type SettingsPane = 'general' | 'appearance' | 'platforms'
 export type Density = 'comfortable' | 'compact'
 export type ThemeChoice = 'dark' | 'system' | 'light'
 
+/** 'author' is a message's own colour, or the per-author hash fallback — the
+    original, only behaviour before this existed. 'platform' paints every name with
+    its message's platform colour, which only reads as distinct from 'author' where
+    more than one platform's messages actually share a column. 'none' drops colour
+    entirely, in favour of the same heading tone the rest of the chrome uses for
+    emphasis. */
+export type NameColorMode = 'author' | 'platform' | 'none'
+
 interface ChatState {
   sources: SourceState[]
   bySource: Messages
@@ -60,7 +68,12 @@ interface ChatState {
 
   density: Density
   themeChoice: ThemeChoice
-  colorByPlatform: boolean
+
+  /** Which panes are split — one platform per column — and which are the one
+      merged column varies by layout, so the name colouring choice is held once for
+      each rather than as a single flag. */
+  nameColorSplit: NameColorMode
+  nameColorMerged: NameColorMode
 
   /** Every chat renders at this size, in px from CHAT_FONT_SIZES — one setting for
       the whole app, not per source. */
@@ -88,7 +101,8 @@ interface ChatState {
   setDensity: (density: Density) => void
   setThemeChoice: (theme: ThemeChoice) => void
   setSystemDark: (systemDark: boolean) => void
-  setColorByPlatform: (on: boolean) => void
+  setNameColorSplit: (mode: NameColorMode) => void
+  setNameColorMerged: (mode: NameColorMode) => void
   stepFontSize: (steps: number) => void
   setSearch: (sourceId: string, terms: string[]) => void
   setSearchDraft: (sourceId: string, draft: string) => void
@@ -203,7 +217,8 @@ export const useStore = create<ChatState>()((set) => ({
 
   density: 'comfortable',
   themeChoice: 'dark',
-  colorByPlatform: true,
+  nameColorSplit: 'author',
+  nameColorMerged: 'author',
   fontSize: CHAT_FONT_DEFAULT,
 
   systemDark: true,
@@ -288,7 +303,9 @@ export const useStore = create<ChatState>()((set) => ({
 
   setSystemDark: (systemDark) => set({ systemDark }),
 
-  setColorByPlatform: (colorByPlatform) => set({ colorByPlatform }),
+  setNameColorSplit: (nameColorSplit) => set({ nameColorSplit }),
+
+  setNameColorMerged: (nameColorMerged) => set({ nameColorMerged }),
 
   stepFontSize: (steps) => set((s) => ({ fontSize: steppedSize(s.fontSize, steps) })),
 

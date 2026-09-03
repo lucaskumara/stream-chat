@@ -1,5 +1,5 @@
 import { ControlRow, Picker, Segmented, Stepper, Toggle } from '../../components/controls'
-import type { Density, ThemeChoice } from '../../store'
+import type { Density, NameColorMode, ThemeChoice } from '../../store'
 import { useStore } from '../../store'
 import { Group } from './Group'
 
@@ -18,6 +18,12 @@ const CAPACITIES = [
   { value: '200', label: '200 messages' },
   { value: '500', label: '500 messages' },
   { value: '1000', label: '1000 messages' }
+]
+
+const NAME_COLORS: { value: NameColorMode; label: string }[] = [
+  { value: 'author', label: 'Normal colours' },
+  { value: 'platform', label: 'Platform colour' },
+  { value: 'none', label: 'No colour' }
 ]
 
 export function Appearance(): React.ReactElement {
@@ -64,12 +70,24 @@ export function Appearance(): React.ReactElement {
             onSelect={s.setDensity}
           />
         </ControlRow>
+      </Group>
 
-        <ControlRow label="Colour usernames by platform">
-          <Toggle
-            label="Colour usernames by platform"
-            on={s.colorByPlatform}
-            onChange={s.setColorByPlatform}
+      <Group label="Username colours">
+        <ControlRow label="Split chat">
+          <Picker
+            label="Split chat"
+            value={s.nameColorSplit}
+            options={NAME_COLORS}
+            onSelect={s.setNameColorSplit}
+          />
+        </ControlRow>
+
+        <ControlRow label="Combined chat">
+          <Picker
+            label="Combined chat"
+            value={s.nameColorMerged}
+            options={NAME_COLORS}
+            onSelect={s.setNameColorMerged}
           />
         </ControlRow>
       </Group>

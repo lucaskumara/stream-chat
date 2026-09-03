@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import type { Badge, ChatMessage, EmoteProvider, Fragment, Platform } from '@shared/types'
 import { nameColor, readable } from '../contrast'
+import type { NameColorMode } from '../store'
 import {
   BADGE_WASH,
   EVENT_ACCENT,
@@ -228,6 +229,10 @@ export interface MessageRowProps {
       and the event badge are lifted or darkened toward it. The OBS dock omits it and
       keeps the dark treatment, which is what it renders on. */
   mode?: ThemeMode
+
+  /** The OBS dock omits this too, and gets 'author' — its one column never merges
+      platforms, so there is nothing for 'platform' or 'none' to usefully change. */
+  nameColorMode?: NameColorMode
   onOpenLink: (url: string) => void
 }
 
@@ -238,6 +243,7 @@ function MessageRowImpl({
   showPlatform,
   compact,
   mode = 'dark',
+  nameColorMode = 'author',
   onOpenLink
 }: MessageRowProps): React.ReactElement {
   const event = EVENT_ACCENT[msg.kind as keyof typeof EVENT_ACCENT]
@@ -312,7 +318,7 @@ function MessageRowImpl({
 
         <span
           className="cursor-pointer font-semibold hover:underline"
-          style={{ color: nameColor(msg, mode) }}
+          style={{ color: nameColor(msg, mode, nameColorMode) }}
           data-author={msg.authorName}
         >
           {msg.authorDisplayName ?? msg.authorName}

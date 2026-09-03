@@ -5,7 +5,7 @@ import type { ChatMessage, SourceState } from '@shared/types'
 import type { ThemeMode } from '../theme'
 import { bridge } from '../bridge'
 import { authorTerm, matchesSearch, parseSearch } from '../search'
-import type { Density } from '../store'
+import type { Density, NameColorMode } from '../store'
 import { ChatPaneBar } from './ChatPaneBar'
 import { EmptyBlock } from './controls'
 import { MessageRow } from './MessageRow'
@@ -23,6 +23,7 @@ export interface ChatPaneProps {
   showDeleted: boolean
   showTimestamps: boolean
   density: Density
+  nameColorMode: NameColorMode
   mode: ThemeMode
   filterOpen: boolean
   onToggleFilter: () => void
@@ -43,6 +44,7 @@ export function ChatPane({
   showDeleted,
   showTimestamps,
   density,
+  nameColorMode,
   mode,
   filterOpen,
   onToggleFilter,
@@ -194,6 +196,7 @@ export function ChatPane({
                     showTimestamps={showTimestamps}
                     showPlatform={showPlatform}
                     compact={density === 'compact'}
+                    nameColorMode={nameColorMode}
                     mode={mode}
                     onOpenLink={openLink}
                   />

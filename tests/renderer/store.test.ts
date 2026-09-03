@@ -371,3 +371,87 @@ describe('theme', () => {
     expect(state().systemDark).toBe(false)
   })
 })
+
+describe('density', () => {
+  it('starts comfortable', () => {
+    expect(state().density).toBe('comfortable')
+  })
+
+  it('switches to compact and back', () => {
+    state().setDensity('compact')
+    expect(state().density).toBe('compact')
+
+    state().setDensity('comfortable')
+    expect(state().density).toBe('comfortable')
+  })
+})
+
+describe('name colour', () => {
+  it('starts at the normal, per-author colouring for both layouts', () => {
+    expect(state().nameColorSplit).toBe('author')
+    expect(state().nameColorMerged).toBe('author')
+  })
+
+  // Held separately so a choice for the merged column does not leak into split
+  // panes, which never mix platforms and would render every name identically.
+  it('holds the split and merged choices independently', () => {
+    state().setNameColorMerged('platform')
+
+    expect(state().nameColorMerged).toBe('platform')
+    expect(state().nameColorSplit).toBe('author')
+
+    state().setNameColorSplit('none')
+
+    expect(state().nameColorSplit).toBe('none')
+    expect(state().nameColorMerged).toBe('platform')
+  })
+})
+
+describe('settings pane', () => {
+  it('starts on General', () => {
+    expect(state().settingsPane).toBe('general')
+  })
+
+  it('switches panes independently of whether the modal is open', () => {
+    state().setSettingsPane('platforms')
+
+    expect(state().settingsPane).toBe('platforms')
+    expect(state().settingsOpen).toBe(false)
+  })
+})
+
+describe('setPlatforms', () => {
+  it('holds whatever main last reported', () => {
+    const configs = [
+      {
+        platform: 'twitch' as const,
+        channel: 'xqc',
+        ingestUrl: 'rtmps://ingest.global-contribute.live-video.net/app/',
+        hasStreamKey: true,
+        forward: false,
+        emoteProviders: { sevenTv: true, bttv: true }
+      }
+    ]
+
+    state().setPlatforms(configs)
+
+    expect(state().platforms).toEqual(configs)
+  })
+
+  it('replaces rather than merges with what was held before', () => {
+    state().setPlatforms([
+      {
+        platform: 'twitch' as const,
+        channel: 'xqc',
+        ingestUrl: '',
+        hasStreamKey: false,
+        forward: false,
+        emoteProviders: { sevenTv: true, bttv: true }
+      }
+    ])
+
+    state().setPlatforms([])
+
+    expect(state().platforms).toEqual([])
+  })
+})

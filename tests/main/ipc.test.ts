@@ -175,6 +175,14 @@ describe('parsePlatformPatch', () => {
     expect(() => parsePlatformPatch({ channel: 7 })).toThrow(/channel must be a string/)
   })
 
+  // A pasted stream key or a hand-typed channel could otherwise carry an unbounded
+  // string all the way into the encrypted config file.
+  it('caps every field at 500 characters', () => {
+    const patch = parsePlatformPatch({ streamKey: 'k'.repeat(600) })
+
+    expect(patch.streamKey).toHaveLength(500)
+  })
+
   it('refuses a patch that is not an object', () => {
     for (const value of [null, undefined, 'twitch', 7]) {
       expect(() => parsePlatformPatch(value)).toThrow(/must be an object/)

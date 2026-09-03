@@ -39,6 +39,8 @@ function Pane({
   const showDeleted = useStore((s) => s.showDeleted)
   const showTimestamps = useStore((s) => s.showTimestamps)
   const density = useStore((s) => s.density)
+  const nameColorSplit = useStore((s) => s.nameColorSplit)
+  const nameColorMerged = useStore((s) => s.nameColorMerged)
   const filterOpen = useStore((s) => s.filterOpen[paneId] === true)
   const searchTerms = useStore((s) => s.search[paneId]) ?? EMPTY_TERMS
   const searchDraft = useStore((s) => s.searchDraft[paneId]) ?? ''
@@ -68,6 +70,7 @@ function Pane({
       showDeleted={showDeleted}
       showTimestamps={showTimestamps}
       density={density}
+      nameColorMode={sources.length > 1 ? nameColorMerged : nameColorSplit}
       mode={mode}
       filterOpen={filterOpen}
       onToggleFilter={onToggleFilter}
