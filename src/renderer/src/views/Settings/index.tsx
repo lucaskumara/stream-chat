@@ -3,10 +3,11 @@ import { ArrowUp } from 'lucide-react'
 import type { SettingsPane } from '../../store'
 import { useStore } from '../../store'
 import { Platforms, platformCardId } from './Platforms'
-import { PlatformsSaveBar } from './PlatformsSaveBar'
 import { usePlatformDrafts } from './usePlatformDrafts'
 import { Appearance } from './Appearance'
 import { General } from './General'
+
+const SCROLL_TARGET_TOP_GAP_PX = 16
 
 const PANES: { pane: SettingsPane; label: string }[] = [
   { pane: 'general', label: 'General' },
@@ -34,9 +35,9 @@ export function Settings(): React.ReactElement {
   const scrollTarget = useStore((s) => s.platformsScrollTarget)
   const clearScrollTarget = useStore((s) => s.clearPlatformsScrollTarget)
 
-  // Called unconditionally rather than only on the Platforms pane, so the Save
-  // bar below can mount the instant the user switches to it without waiting on
-  // an effect to catch up.
+  // Called unconditionally rather than only on the Platforms pane, so the nav's
+  // unsaved-changes dot (below) stays correct even while a different pane is
+  // showing, and Platforms itself mounts already holding whatever was typed.
   const platformDrafts = usePlatformDrafts()
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -52,11 +53,19 @@ export function Settings(): React.ReactElement {
 
   // Opening Settings from a platform-specific prompt (a NotConfigured column,
   // Broadcast's "Add a stream key") should jump straight to that card rather
-  // than leaving the user to find it among the other two.
+  // than leaving the user to find it among the other two. Scrolled manually
+  // rather than via scrollIntoView, which lands the card flush against the
+  // container's edge with no breathing room above it.
   useEffect(() => {
     if (!scrollTarget) return
 
-    document.getElementById(platformCardId(scrollTarget))?.scrollIntoView({ block: 'start' })
+    const container = scrollRef.current
+    const card = document.getElementById(platformCardId(scrollTarget))
+
+    if (container && card) {
+      container.scrollTop = Math.max(0, card.offsetTop - SCROLL_TARGET_TOP_GAP_PX)
+    }
+
     consumedScrollTarget.current = true
     clearScrollTarget()
   }, [scrollTarget, clearScrollTarget])
@@ -89,6 +98,7 @@ export function Settings(): React.ReactElement {
 
         {PANES.map((item) => {
           const on = item.pane === pane
+          const unsaved = item.pane === 'platforms' && platformDrafts.dirty
 
           return (
             <button
@@ -96,7 +106,7 @@ export function Settings(): React.ReactElement {
               type="button"
               aria-current={on}
               onClick={() => setPane(item.pane)}
-              className="hoverable flex h-[30px] cursor-pointer items-center border-0 px-[10px] text-left text-[14px]"
+              className="hoverable flex h-[30px] cursor-pointer items-center gap-[6px] border-0 px-[10px] text-left text-[14px]"
               style={{
                 borderRadius: 6,
                 background: on ? 'var(--ink-700)' : 'transparent',
@@ -109,56 +119,60 @@ export function Settings(): React.ReactElement {
                 if (!on) e.currentTarget.style.background = 'transparent'
               }}
             >
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+
+              {unsaved && (
+                <span
+                  aria-label="Unsaved changes"
+                  className="h-[6px] w-[6px] flex-none rounded-full"
+                  style={{ background: 'var(--heading)' }}
+                />
+              )}
             </button>
           )
         })}
       </nav>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="relative min-h-0 flex-1">
-          <div
-            ref={scrollRef}
-            onScroll={handleScroll}
-            className="chat-scroll absolute inset-0 overflow-y-auto px-[28px] py-[22px]"
-          >
-            <div className="max-w-[560px]">
-              <h1 className="m-0 text-[17px] font-semibold" style={{ color: 'var(--heading)' }}>
-                {title}
-              </h1>
-              <p className="mt-[4px] mb-[20px] text-[13px]" style={{ color: 'var(--fg-4)' }}>
-                {blurb}
-              </p>
+      <div className="relative min-w-0 flex-1">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="chat-scroll absolute inset-0 overflow-y-auto px-[28px] py-[22px]"
+        >
+          <div className="max-w-[560px]">
+            <h1 className="m-0 text-[17px] font-semibold" style={{ color: 'var(--heading)' }}>
+              {title}
+            </h1>
+            <p className="mt-[4px] mb-[20px] text-[13px]" style={{ color: 'var(--fg-4)' }}>
+              {blurb}
+            </p>
 
-              {pane === 'general' && <General />}
-              {pane === 'appearance' && <Appearance />}
-              {pane === 'platforms' && <Platforms {...platformDrafts} />}
-            </div>
+            {pane === 'general' && <General />}
+            {pane === 'appearance' && <Appearance />}
+            {pane === 'platforms' && <Platforms {...platformDrafts} />}
           </div>
-
-          {showScrollTop && (
-            <button
-              type="button"
-              aria-label="Scroll to top"
-              onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="icon-button absolute flex items-center justify-center"
-              style={{
-                bottom: 16,
-                right: 16,
-                width: 32,
-                height: 32,
-                borderRadius: 999,
-                background: 'var(--ink-700)',
-                border: '1px solid var(--line-2)',
-                boxShadow: '0 6px 18px var(--shadow)'
-              }}
-            >
-              <ArrowUp size={16} strokeWidth={1.8} />
-            </button>
-          )}
         </div>
 
-        {pane === 'platforms' && <PlatformsSaveBar {...platformDrafts} />}
+        {showScrollTop && (
+          <button
+            type="button"
+            aria-label="Scroll to top"
+            onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="icon-button absolute flex items-center justify-center"
+            style={{
+              bottom: 16,
+              right: 16,
+              width: 32,
+              height: 32,
+              borderRadius: 999,
+              background: 'var(--ink-700)',
+              border: '1px solid var(--line-2)',
+              boxShadow: '0 6px 18px var(--shadow)'
+            }}
+          >
+            <ArrowUp size={16} strokeWidth={1.8} />
+          </button>
+        )}
       </div>
     </div>
   )

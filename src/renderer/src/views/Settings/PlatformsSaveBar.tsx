@@ -1,14 +1,15 @@
 import type { PlatformDraftsApi } from './usePlatformDrafts'
 
-/** A layout sibling of the scrollable card list, not an overlay pinned inside it —
-    spanning the full content column so it reads as a docked toolbar rather than a
-    box floating over whatever's scrolled behind it. Padded to match the scroll
-    area's own side padding so the button still lines up with everything above it. */
+/** Ordinary flowing content at the end of the card list, not pinned — a fixed
+    footer reserved height on every pane even when there was nothing to save,
+    which read as wasted space more than it read as a toolbar. The nav dot (see
+    Settings/index.tsx) is what reminds a scrolled-away user there's something
+    to save; this is just where the action itself lives. */
 export function PlatformsSaveBar({ dirty, saving, savedFlash, save }: PlatformDraftsApi): React.ReactElement {
   return (
     <div
-      className="flex flex-none items-center justify-end gap-[12px] px-[28px] py-[14px]"
-      style={{ background: 'var(--ink-900)', borderTop: '1px solid var(--line)' }}
+      className="mt-[20px] flex items-center justify-end gap-[12px] pt-[14px]"
+      style={{ borderTop: '1px solid var(--line)' }}
     >
       <span className="text-[12px]" style={{ color: 'var(--fg-4)', opacity: savedFlash ? 1 : 0 }}>
         All changes saved
