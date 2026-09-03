@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink } from 'lucide-react'
-import type { Platform, PlatformConfig, PlatformPatch } from '@shared/types'
+import { ExternalLink, Eye, EyeOff } from 'lucide-react'
+import type {
+  EmoteProviderSettings,
+  Platform,
+  PlatformConfig,
+  PlatformPatch
+} from '@shared/types'
 import { DEFAULT_INGEST, PLATFORMS } from '@shared/types'
 import { bridge } from '../../bridge'
 import { PlatformMark } from '../../components/PlatformMark'
-import { PLATFORM_COLOR } from '../../theme'
+import { ControlRow, Toggle } from '../../components/controls'
+import { PLATFORM_COLOR, PLATFORM_NAME } from '../../theme'
 import { useStore } from '../../store'
-
-const NAME: Record<Platform, string> = {
-  twitch: 'Twitch',
-  youtube: 'YouTube',
-  kick: 'Kick'
-}
 
 /** Where each platform actually shows these values, and which of them it shows. Twitch
     publishes no stream URL anywhere — the encoder picks an ingest server — so its button
@@ -39,6 +39,8 @@ const EXTRA: Partial<Record<Platform, string>> = {
 
   kick: 'Kick gives every channel its own stream URL, so it needs both.'
 }
+
+const DEFAULT_EMOTE_PROVIDERS: EmoteProviderSettings = { sevenTv: true, bttv: true }
 
 export function Platforms(): React.ReactElement {
   const configs = useStore((s) => s.platforms)
@@ -72,6 +74,13 @@ function PlatformCard({
   first: boolean
 }): React.ReactElement {
   const help = HELP[platform]
+  const providers = config?.emoteProviders ?? DEFAULT_EMOTE_PROVIDERS
+
+  const setProvider = (key: keyof EmoteProviderSettings, value: boolean): void => {
+    void bridge()
+      .api.savePlatform(platform, { emoteProviders: { ...providers, [key]: value } })
+      .catch((error) => console.debug('[platforms]', platform, 'emoteProviders', error))
+  }
 
   return (
     <section className={first ? '' : 'mt-[18px]'}>
@@ -81,7 +90,7 @@ function PlatformCard({
         </span>
 
         <h2 className="m-0 flex-1 text-[15px] font-semibold" style={{ color: 'var(--heading)' }}>
-          {NAME[platform]}
+          {PLATFORM_NAME[platform]}
         </h2>
 
         <button
@@ -113,6 +122,7 @@ function PlatformCard({
             label="Stream URL"
             placeholder="rtmps://…from your Kick dashboard"
             value={config?.ingestUrl ?? ''}
+            revealable
           />
         )}
 
@@ -123,6 +133,7 @@ function PlatformCard({
           placeholder="Paste your stream key"
           value=""
           secret
+          revealable
           alreadySet={config?.hasStreamKey === true}
         />
 
@@ -131,13 +142,37 @@ function PlatformCard({
             {EXTRA[platform]}
           </p>
         )}
+
+        <div className="mt-[14px] mb-[10px] h-px" style={{ background: 'var(--line)' }} />
+
+        <div className="section-label mb-[8px]">Emotes</div>
+
+        <ControlRow label="7TV emotes">
+          <Toggle
+            label="7TV emotes"
+            on={providers.sevenTv}
+            onChange={(on) => setProvider('sevenTv', on)}
+          />
+        </ControlRow>
+
+        {platform === 'twitch' && (
+          <ControlRow label="BTTV emotes">
+            <Toggle
+              label="BTTV emotes"
+              on={providers.bttv}
+              onChange={(on) => setProvider('bttv', on)}
+            />
+          </ControlRow>
+        )}
       </div>
     </section>
   )
 }
 
 /** A secret field never receives its value from main — it is told only that one exists,
-    and shows dots until the user chooses to replace it. */
+    and shows dots until the user chooses to replace it. A revealable field (the stream URL
+    too, not only the key) starts hidden behind an eye toggle regardless — no critical value
+    shown by default. */
 function Field({
   platform,
   field,
@@ -145,6 +180,7 @@ function Field({
   placeholder,
   value,
   secret,
+  revealable,
   alreadySet
 }: {
   platform: Platform
@@ -153,11 +189,13 @@ function Field({
   placeholder: string
   value: string
   secret?: boolean
+  revealable?: boolean
   alreadySet?: boolean
 }): React.ReactElement {
   const [draft, setDraft] = useState(value)
   const [editing, setEditing] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [revealed, setRevealed] = useState(false)
 
   useEffect(() => {
     if (!editing) setDraft(value)
@@ -165,6 +203,7 @@ function Field({
 
   const commit = (): void => {
     setEditing(false)
+    setRevealed(false)
 
     if (secret && !draft) return
     if (!secret && draft === value) return
@@ -180,6 +219,7 @@ function Field({
   }
 
   const masked = secret && alreadySet && !editing
+  const inputType = revealable ? (revealed ? 'text' : 'password') : secret ? 'password' : 'text'
 
   return (
     <label className="mt-[10px] flex items-center gap-[10px] first:mt-0">
@@ -201,6 +241,7 @@ function Field({
             className="ghost-button h-[30px] flex-none px-[10px] text-[12px]"
             onClick={() => {
               setDraft('')
+              setRevealed(false)
               setEditing(true)
             }}
           >
@@ -208,27 +249,46 @@ function Field({
           </button>
         </>
       ) : (
-        <input
-          type={secret ? 'password' : 'text'}
-          value={draft}
-          placeholder={placeholder}
-          aria-label={`${NAME[platform]} ${label}`}
-          spellCheck={false}
-          autoComplete="off"
-          onFocus={() => setEditing(true)}
-          onChange={(e) => setDraft(e.currentTarget.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') e.currentTarget.blur()
-            if (e.key === 'Escape') {
-              setDraft(value)
-              setEditing(false)
-              e.currentTarget.blur()
-            }
-          }}
-          className="inset-field min-w-0 flex-1 px-[10px] text-[13px]"
-          style={{ height: 30 }}
-        />
+        <div className="relative min-w-0 flex-1">
+          <input
+            type={inputType}
+            value={draft}
+            placeholder={placeholder}
+            aria-label={`${PLATFORM_NAME[platform]} ${label}`}
+            spellCheck={false}
+            autoComplete="off"
+            onFocus={() => setEditing(true)}
+            onChange={(e) => setDraft(e.currentTarget.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+              if (e.key === 'Escape') {
+                setDraft(value)
+                setEditing(false)
+                e.currentTarget.blur()
+              }
+            }}
+            className="inset-field w-full px-[10px] text-[13px]"
+            style={{ height: 30, paddingRight: revealable ? 30 : undefined }}
+          />
+
+          {revealable && (
+            <button
+              type="button"
+              aria-label={`${revealed ? 'Hide' : 'Show'} ${PLATFORM_NAME[platform]} ${label}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setRevealed((r) => !r)}
+              className="absolute top-1/2 right-[8px] flex -translate-y-1/2 cursor-pointer items-center border-0 bg-transparent p-0"
+              style={{ color: 'var(--fg-4)' }}
+            >
+              {revealed ? (
+                <EyeOff size={14} strokeWidth={1.8} />
+              ) : (
+                <Eye size={14} strokeWidth={1.8} />
+              )}
+            </button>
+          )}
+        </div>
       )}
 
       <span

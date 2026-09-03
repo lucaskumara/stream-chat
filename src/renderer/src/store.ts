@@ -21,7 +21,7 @@ export const CHAT_FONT_DEFAULT = 15
 
 export type View = 'chats' | 'broadcast' | 'settings'
 
-export type SettingsPane = 'general' | 'appearance' | 'chat' | 'platforms'
+export type SettingsPane = 'general' | 'appearance' | 'platforms'
 
 export type Density = 'comfortable' | 'compact'
 export type ThemeChoice = 'dark' | 'system' | 'light'

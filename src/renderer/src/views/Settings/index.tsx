@@ -2,20 +2,20 @@ import type { SettingsPane } from '../../store'
 import { useStore } from '../../store'
 import { Platforms } from './Platforms'
 import { Appearance } from './Appearance'
-import { Chat } from './Chat'
 import { General } from './General'
 
 const PANES: { pane: SettingsPane; label: string }[] = [
   { pane: 'general', label: 'General' },
   { pane: 'appearance', label: 'Appearance' },
-  { pane: 'chat', label: 'Chat' },
   { pane: 'platforms', label: 'Platforms' }
 ]
 
 const TITLES: Record<SettingsPane, { title: string; blurb: string }> = {
   general: { title: 'General', blurb: 'How the app starts.' },
-  appearance: { title: 'Appearance', blurb: 'The theme the whole app is painted in.' },
-  chat: { title: 'Chat', blurb: 'What every chat shows, how it reads, and how much it keeps.' },
+  appearance: {
+    title: 'Appearance',
+    blurb: 'The theme, and how every chat looks and reads.'
+  },
   platforms: {
     title: 'Platforms',
     blurb: 'Which chat to open, and where to forward your stream.'
@@ -75,7 +75,6 @@ export function Settings(): React.ReactElement {
 
           {pane === 'general' && <General />}
           {pane === 'appearance' && <Appearance />}
-          {pane === 'chat' && <Chat />}
           {pane === 'platforms' && <Platforms />}
         </div>
       </div>

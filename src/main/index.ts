@@ -6,6 +6,7 @@ import { MessageBus } from './bus'
 import { SourceManager } from './sources'
 import { IPC, platformConfigs, registerIpc, unregisterIpc } from './ipc'
 import { ObsServer } from './obs/server'
+import { thirdPartyEmotes } from './emotes'
 import { IrcHub } from './chat/platforms/twitch'
 import { keepRendererAlive, reportChildProcessFailures } from './lifecycle'
 import { log, openLogFile, setLogLevel } from './log'
@@ -49,6 +50,8 @@ async function runSync(): Promise<void> {
   const setup = config().all()
 
   for (const platform of PLATFORMS) {
+    thirdPartyEmotes.setEnabled(platform, setup[platform].emoteProviders)
+
     const channel = setup[platform].channel
 
     if (channel) await sources.ensureOnly(platform, channel)

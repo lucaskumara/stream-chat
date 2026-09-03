@@ -196,4 +196,36 @@ describe('parsePlatformPatch', () => {
     expect(() => parsePlatformPatch({ forward: 'yes' })).toThrow(/must be a boolean/)
     expect(() => parsePlatformPatch({ forward: 1 })).toThrow(/must be a boolean/)
   })
+
+  it('reads the emote provider toggles', () => {
+    expect(parsePlatformPatch({ emoteProviders: { sevenTv: true, bttv: false } })).toEqual({
+      emoteProviders: { sevenTv: true, bttv: false }
+    })
+  })
+
+  it('leaves emoteProviders out when the patch does not carry it', () => {
+    expect(parsePlatformPatch({ channel: 'x' })).toEqual({ channel: 'x' })
+  })
+
+  it('refuses an emoteProviders that is not an object', () => {
+    expect(() => parsePlatformPatch({ emoteProviders: true })).toThrow(/emoteProviders must be an object/)
+    expect(() => parsePlatformPatch({ emoteProviders: null })).toThrow(/emoteProviders must be an object/)
+  })
+
+  // A patch always carries the whole toggle pair — no partial-object merge inside main —
+  // so a caller that forgets one flag must fail loudly rather than silently flip it on.
+  it('refuses an emoteProviders missing either flag', () => {
+    expect(() => parsePlatformPatch({ emoteProviders: { sevenTv: true } })).toThrow(
+      /emoteProviders.sevenTv and emoteProviders.bttv must be booleans/
+    )
+    expect(() => parsePlatformPatch({ emoteProviders: { bttv: true } })).toThrow(
+      /emoteProviders.sevenTv and emoteProviders.bttv must be booleans/
+    )
+  })
+
+  it('refuses an emoteProviders with non-boolean flags', () => {
+    expect(() =>
+      parsePlatformPatch({ emoteProviders: { sevenTv: 'yes', bttv: false } })
+    ).toThrow(/must be booleans/)
+  })
 })

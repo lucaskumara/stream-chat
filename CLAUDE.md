@@ -370,6 +370,19 @@ large channels have zero 7TV emotes and hundreds of BTTV ones.
 dead on arrival — no caller ever used them, because filtering happened at draw time in
 `MessageRow` — and went with the rewiring.
 
+**An `enabled` filter is back, and this one has a caller.** Settings → Platforms lets a user
+turn 7TV and/or BTTV off per platform (`PlatformSetup.emoteProviders`); this is not a revival
+of the dead-on-arrival filter above, which never had a caller at all. `ThirdPartyEmotes.
+setEnabled(platform, settings)` is called from `main/index.ts`'s `runSync()` — once at
+startup and again on every platform save — and filtering happens in `lookup()`, not `load()`:
+`load()` always fetches both providers regardless of the toggle, so re-enabling one takes
+effect on the very next message with no reconnect needed. `setEnabled` takes the app's own
+`Platform`; the map inside is keyed by `SevenTvPlatform` (the `google`/`youtube` mapping
+happens once there, not on every hot-path `lookup()` call). Deliberately not read from
+`config()` directly inside `emotes/index.ts` — that file has zero Electron dependency today,
+which is what lets `tests/main/emotes/index.test.ts` and `providers.test.ts` import it
+without mocking `electron`, and pulling `config.ts` in would break that.
+
 ### Twitch
 
 **Twitch chat is read anonymously, and GQL is what supplies the properly-cased display
@@ -925,12 +938,17 @@ cannot shift the text of every other row sideways. Both maps are keyed on the sa
 a kind in one and not the other renders a chip with `undefined` colours. Twitch is still the
 only platform that emits any of them, so this whole path is dark on Kick and YouTube.
 
-**The chrome does not explain itself on hover.** The pane bar's icon buttons, the search
-field, the platform tabs, and emote and badge *images* all carry `aria-label` but no `title`, so nothing
-pops a caption while you read chat. The one `title` left in a message row is on the
-three-letter badge chip that stands in for a badge with no image — there the title is the only
-place the full label exists. Do not reintroduce tooltips on the bar; they were removed on
-purpose.
+**The chrome does not explain itself on hover — with one deliberate exception.** The pane
+bar's icon buttons, the search field, the platform tabs, and badge *images* all carry
+`aria-label` but no `title`, so nothing pops a caption while you read chat. The one `title`
+left in a message row is on the three-letter badge chip that stands in for a badge with no
+image — there the title is the only place the full label exists. Do not reintroduce
+tooltips on the bar; they were removed on purpose. **Emotes are the exception**: hovering one
+shows a small custom popup (not a native `title`) with the raw token that was replaced and
+which provider drew the image — 7TV, BTTV, or the platform's own name for a native emote,
+via `PLATFORM_NAME` in `theme.ts`. With enough unfamiliar third-party emotes on screen at
+once, "what did that image used to say, and where did it come from" was worth the one
+exception.
 
 **`useStore()` with no selector subscribes to the whole store, and in a chat app that is a
 performance bug rather than a shortcut.** `App`'s `Pane` did it: every 100ms batch, every
@@ -1138,7 +1156,19 @@ two, and `resolveChannel` has one path.
 **Settings -> Platforms is the only place a platform is configured**, and it holds three
 fields each: the channel whose chat to open, and the stream URL and key to forward video
 to. `syncChannels` in `main/index.ts` reacts to every save, so setting a channel opens its
-chat and clearing it closes it. That is the only route by which a source is created.
+chat and clearing it closes it. That is the only route by which a source is created. Each
+card also carries an Emotes block — 7TV for every platform, BTTV for Twitch only — that
+toggles `PlatformSetup.emoteProviders` rather than the channel/URL/key trio; see the emote
+invariant on `ThirdPartyEmotes.setEnabled` for how that reaches the running chat.
+
+**The stream URL and stream key fields start hidden, behind an eye icon, regardless of
+whether the value is secret.** The key never had an alternative — main never sends it back,
+so an already-saved key stays a masked-dots-plus-Replace row with no eye icon at all, since
+there is nothing there to reveal. The stream URL is different: main *does* send its real
+value to the renderer (it is configuration, not a secret), so before this it sat in a plain,
+always-visible `text` input. `revealable` on `Field` covers both: a live, editable value
+(a fresh key being typed, or Kick's URL) renders as `type="password"` by default with an
+`Eye`/`EyeOff` toggle, defaulting closed on every mount and again on every `Replace` click.
 
 **The stream key never leaves main.** `platformConfigs()` reports `hasStreamKey: boolean`
 rather than the value, so the renderer cannot read a key back even though it can set one —
@@ -1450,7 +1480,7 @@ Two separate caps, easy to confuse: `MessageBus` buffers **2,000** messages betw
 flushes (overflow is dropped with a warning), while the renderer store keeps **500** per
 source (`DEFAULT_CAPACITY`) and evicts from the front. The load test above predates the
 store cap; it exercised the DOM, not the 500-message ring. The store's ring is settable from
-Settings -> Chat (200/500/1000) — `setCapacity` re-caps what is already held rather than
+Settings -> Appearance (200/500/1000) — `setCapacity` re-caps what is already held rather than
 waiting for eviction, or lowering the number would leave the longer history on screen.
 
 Badges and author colours are **back** on all three platforms, resolved in main and verified
@@ -1491,6 +1521,17 @@ YouTube super-chats and memberships are **not** mapped at all — see the YouTub
 `kind: 'chat'`, so any UI keyed on message kind is Twitch-only in practice.
 
 ## Verifying changes
+
+**Test-driven is the default for anything with real logic, not just "tests alongside the
+code."** For a new behavior — a validator, a filter, a parser, a state transition — write
+the test against the wanted behavior first, run it and confirm it fails for the expected
+reason (not a typo or an import error), and only then write the code that makes it pass.
+The point isn't ceremony: writing the test first is what forces "what does this actually
+need to do" to be answered in concrete inputs and outputs before the implementation can
+smuggle in an assumption the test would have caught. This applies most clearly to `src/main`
+and `src/shared` logic, where the suite below actually reaches; pure UI/reorg work with no
+unit-testable surface (this suite has no component tests — see below) still gets verified in
+the running app, just without a red-then-green step to point at.
 
 `npm run typecheck` is the first gate — all three tsconfig projects must pass — and
 `npm run test` is the second. Neither proves the app works; that still takes the running

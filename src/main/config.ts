@@ -27,7 +27,13 @@ interface PersistedShape {
 const EMPTY: PersistedShape = { version: 3 }
 
 function blank(platform: Platform): PlatformSetup {
-  return { channel: '', ingestUrl: DEFAULT_INGEST[platform], streamKey: '', forward: false }
+  return {
+    channel: '',
+    ingestUrl: DEFAULT_INGEST[platform],
+    streamKey: '',
+    forward: false,
+    emoteProviders: { sevenTv: true, bttv: true }
+  }
 }
 
 class Config {

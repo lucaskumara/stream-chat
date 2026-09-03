@@ -1,4 +1,4 @@
-import type { Fragment } from '@shared/types'
+import type { EmoteProviderSettings, Fragment, Platform } from '@shared/types'
 import { SevenTvEmotes, type SevenTvPlatform } from './seventv'
 import { BttvEmotes } from './bttv'
 import type { ThirdPartyEmote } from './types'
@@ -12,9 +12,27 @@ export interface EmoteBinding {
   channelId: string
 }
 
+const ALL_ENABLED: EmoteProviderSettings = { sevenTv: true, bttv: true }
+
+/** 7TV calls YouTube "google", not "youtube" — see the same trap noted in seventv.ts. This
+    is the one place the app's own Platform meets that naming. */
+function toSevenTvPlatform(platform: Platform): SevenTvPlatform {
+  return platform === 'youtube' ? 'google' : platform
+}
+
 export class ThirdPartyEmotes {
   private seventv = new SevenTvEmotes()
   private bttv = new BttvEmotes()
+  private enabled = new Map<SevenTvPlatform, EmoteProviderSettings>()
+
+  /** Settings -> Platforms calls this on every save (and once at startup), keyed by the
+      app's own Platform rather than by binding.platform, so a toggle takes effect on the
+      very next lookup() with no reconnect. load() deliberately ignores this and always
+      fetches both providers — fetching is already cheap and additive, and doing it
+      unconditionally is what makes re-enabling a provider instant too. */
+  setEnabled(platform: Platform, settings: EmoteProviderSettings): void {
+    this.enabled.set(toSevenTvPlatform(platform), settings)
+  }
 
   async load(binding: EmoteBinding): Promise<void> {
     const { platform, channelId } = binding
@@ -28,10 +46,11 @@ export class ThirdPartyEmotes {
 
   lookup(binding: EmoteBinding, name: string): ThirdPartyEmote | undefined {
     const { platform, channelId } = binding
+    const settings = this.enabled.get(platform) ?? ALL_ENABLED
 
     return (
-      this.seventv.lookup(platform, channelId, name) ??
-      (platform === 'twitch' ? this.bttv.lookup(channelId, name) : undefined)
+      (settings.sevenTv ? this.seventv.lookup(platform, channelId, name) : undefined) ??
+      (platform === 'twitch' && settings.bttv ? this.bttv.lookup(channelId, name) : undefined)
     )
   }
 }

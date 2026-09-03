@@ -1,5 +1,11 @@
 import { BrowserWindow, clipboard, ipcMain, shell } from 'electron'
-import type { AddSourceRequest, Platform, PlatformConfig, PlatformPatch } from '@shared/types'
+import type {
+  AddSourceRequest,
+  EmoteProviderSettings,
+  Platform,
+  PlatformConfig,
+  PlatformPatch
+} from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { obsChatPath } from '@shared/obs'
 import type { MessageBus } from './bus'
@@ -78,7 +84,8 @@ export function platformConfigs(): PlatformConfig[] {
     channel: all[platform].channel,
     ingestUrl: all[platform].ingestUrl,
     hasStreamKey: all[platform].streamKey.length > 0,
-    forward: all[platform].forward
+    forward: all[platform].forward,
+    emoteProviders: all[platform].emoteProviders
   }))
 }
 
@@ -234,7 +241,27 @@ export function parsePlatformPatch(value: unknown): PlatformPatch {
     patch.forward = record.forward
   }
 
+  if (record.emoteProviders !== undefined) {
+    patch.emoteProviders = parseEmoteProviders(record.emoteProviders)
+  }
+
   return patch
+}
+
+/** Always the whole pair, never a partial merge inside main — a caller that forgets one
+    flag fails loudly instead of silently flipping it on. */
+function parseEmoteProviders(value: unknown): EmoteProviderSettings {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('emoteProviders must be an object')
+  }
+
+  const { sevenTv, bttv } = value as Record<string, unknown>
+
+  if (typeof sevenTv !== 'boolean' || typeof bttv !== 'boolean') {
+    throw new Error('emoteProviders.sevenTv and emoteProviders.bttv must be booleans')
+  }
+
+  return { sevenTv, bttv }
 }
 
 export function parseAddSource(value: unknown): AddSourceRequest {

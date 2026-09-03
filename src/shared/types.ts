@@ -92,6 +92,14 @@ export interface AddSourceRequest {
   identifier?: string
 }
 
+/** Which third-party emote providers to match for a platform. Not secret, unlike the rest
+    of PlatformSetup — it just rides in the same encrypted blob for simplicity. BTTV only
+    ever applies to Twitch, but every platform carries the field so the shape stays uniform. */
+export interface EmoteProviderSettings {
+  sevenTv: boolean
+  bttv: boolean
+}
+
 /** What a platform needs to be useful: a channel to read chat from, and where to push
     video. The stream key is a secret and never leaves the main process — the renderer is
     told only whether one is set. */
@@ -103,6 +111,8 @@ export interface PlatformSetup {
   /** Whether to forward the OBS stream here. Persisted, so it survives a restart and the
       relay is listening again before the user thinks to check. */
   forward: boolean
+
+  emoteProviders: EmoteProviderSettings
 }
 
 export type PlatformPatch = Partial<PlatformSetup>
@@ -113,6 +123,7 @@ export interface PlatformConfig {
   ingestUrl: string
   hasStreamKey: boolean
   forward: boolean
+  emoteProviders: EmoteProviderSettings
 }
 
 /** Twitch publishes one global ingest for everybody and YouTube's is fixed, so both are

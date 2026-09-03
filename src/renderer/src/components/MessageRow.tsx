@@ -16,9 +16,16 @@ import {
   Zap,
   type LucideIcon
 } from 'lucide-react'
-import type { Badge, ChatMessage, Fragment } from '@shared/types'
+import type { Badge, ChatMessage, EmoteProvider, Fragment, Platform } from '@shared/types'
 import { nameColor, readable } from '../contrast'
-import { BADGE_WASH, EVENT_ACCENT, PLATFORM_COLOR, ROW_WASH, type ThemeMode } from '../theme'
+import {
+  BADGE_WASH,
+  EVENT_ACCENT,
+  PLATFORM_COLOR,
+  PLATFORM_NAME,
+  ROW_WASH,
+  type ThemeMode
+} from '../theme'
 import { PlatformMark } from './PlatformMark'
 
 const KIND_GLYPH: Partial<Record<ChatMessage['kind'], LucideIcon>> = {
@@ -51,18 +58,68 @@ function formatTime(ts: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-function Emote({ name, url }: { name: string; url: string }): React.ReactElement {
+/** Source label for the hover popup below: 7TV and BTTV name themselves, and a native
+    emote (Twitch/Kick/YouTube's own) names the platform it came from — there is no
+    "native" to show a user. */
+function emoteSource(provider: EmoteProvider | undefined, platform: Platform): string {
+  if (provider === '7tv') return '7TV'
+  if (provider === 'bttv') return 'BTTV'
+  return PLATFORM_NAME[platform]
+}
+
+/** The one deliberate exception to "the chrome does not explain itself on hover" (see
+    CLAUDE.md): a small popup showing the raw text that became this emote and which
+    provider supplied the image, so a run of unfamiliar images stays legible. */
+function Emote({
+  name,
+  url,
+  provider,
+  platform
+}: {
+  name: string
+  url: string
+  provider: EmoteProvider | undefined
+  platform: Platform
+}): React.ReactElement {
   const [failed, setFailed] = useState(false)
+  const [hovered, setHovered] = useState(false)
+
   if (failed) return <span style={{ color: 'var(--chip-fg)' }}>{name}</span>
+
   return (
-    <img
-      src={url}
-      alt={name}
-      loading="lazy"
-      draggable={false}
-      className="mx-[1px] inline-block h-[1.55em] max-w-none align-middle"
-      onError={() => setFailed(true)}
-    />
+    <span
+      className="relative inline-block align-middle"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <img
+        src={url}
+        alt={name}
+        loading="lazy"
+        draggable={false}
+        className="mx-[1px] inline-block h-[1.55em] max-w-none align-middle"
+        onError={() => setFailed(true)}
+      />
+
+      {hovered && (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 text-[11px] whitespace-nowrap"
+          style={{
+            bottom: 'calc(100% + 5px)',
+            left: '50%',
+            background: 'var(--ink-600)',
+            border: '1px solid var(--line-2)',
+            borderRadius: 6,
+            padding: '4px 7px',
+            boxShadow: '0 8px 20px rgba(0,0,0,.5)'
+          }}
+        >
+          <span style={{ color: 'var(--heading)' }}>{name}</span>
+          <span style={{ color: 'var(--fg-4)' }}> · {emoteSource(provider, platform)}</span>
+        </span>
+      )}
+    </span>
   )
 }
 
@@ -112,16 +169,25 @@ function BadgeView({ badge, mode }: { badge: Badge; mode: ThemeMode }): React.Re
 
 function FragmentView({
   fragment,
+  platform,
   onOpenLink
 }: {
   fragment: Fragment
+  platform: Platform
   onOpenLink: (url: string) => void
 }): React.ReactElement {
   switch (fragment.kind) {
     case 'text':
       return <span>{fragment.text}</span>
     case 'emote':
-      return <Emote name={fragment.name} url={fragment.url} />
+      return (
+        <Emote
+          name={fragment.name}
+          url={fragment.url}
+          provider={fragment.provider}
+          platform={platform}
+        />
+      )
     case 'mention':
       return (
         <span
@@ -270,7 +336,7 @@ function MessageRowImpl({
 
         {msg.fragments.map((fragment, i) => (
           <span key={i}>
-            <FragmentView fragment={fragment} onOpenLink={onOpenLink} />{' '}
+            <FragmentView fragment={fragment} platform={msg.platform} onOpenLink={onOpenLink} />{' '}
           </span>
         ))}
       </span>

@@ -37,7 +37,14 @@ function tsPacket({
 }
 
 function setup(partial: Partial<PlatformSetup>): PlatformSetup {
-  return { channel: '', ingestUrl: '', streamKey: '', forward: false, ...partial }
+  return {
+    channel: '',
+    ingestUrl: '',
+    streamKey: '',
+    forward: false,
+    emoteProviders: { sevenTv: true, bttv: true },
+    ...partial
+  }
 }
 
 describe('normalizeIngest', () => {
