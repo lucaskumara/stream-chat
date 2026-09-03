@@ -2,12 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-A unified live chat client for Twitch, YouTube and Kick. Electron + React 19 + TypeScript.
-Single-user desktop app: the user signs into their own accounts, so there is no backend,
-no database, and no OAuth app verification workflow.
+A unified live chat client for Twitch, YouTube and Kick, which also relays one OBS stream to
+all three. Electron + React 19 + TypeScript. Single-user desktop app: no backend, no
+database, and **no accounts anywhere** — chat is read anonymously and restreaming needs only
+a pasted stream key.
 
 The code is deliberately comment-free. The "Invariants" section below is where the "why"
-lives — read it before touching the message pipeline, emotes, or either Twitch transport.
+lives — read it before touching the message pipeline, emotes, or the relay.
 
 ## Commands
 
