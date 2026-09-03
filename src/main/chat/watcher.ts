@@ -69,6 +69,19 @@ export abstract class BaseChatWatcher<
     return this.running;
   }
 
+  /** Jumps a pending offline/error retry and re-resolves right away, rather than waiting
+      out `scheduleAttach`'s timer. A no-op unless one is actually pending — already
+      connected, mid-attach and not yet running all have nothing to jump. Exists for the
+      one case a platform's own state can't tell it about itself: this app's broadcast
+      relay knows the instant a stream reaches a platform, before that platform's own
+      chat has any way to notice on its own. */
+  recheck(): void {
+    if (!this.running || this.connected || this.timers.size === 0) return;
+
+    this.cancelScheduled();
+    void this.attach().catch(alreadyReported);
+  }
+
   protected rename(label: string): void {
     if (label) this.currentLabel = label;
   }
@@ -223,6 +236,7 @@ export interface ChatWatcher {
 
   connect(): Promise<void>;
   disconnect(): Promise<void>;
+  recheck(): void;
 }
 
 export abstract class PollingFeed implements ChatFeed {

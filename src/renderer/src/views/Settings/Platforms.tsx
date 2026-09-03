@@ -31,8 +31,12 @@ const CHANNEL_HINT: Record<Platform, string> = {
 /** Only where there is something the user must actually do. Twitch needs no note: its
     ingest is a constant main already holds, so the card is just a channel and a key. */
 const EXTRA: Partial<Record<Platform, string>> = {
-  /** YouTube will not start a broadcast just because video arrives unless this is on. */
-  youtube: 'Turn on Auto-start in Studio, or pushing video will not go live.',
+  /** YouTube will not start a broadcast just because video arrives unless this is on, and
+      won't end one just because the video stops — Auto-stop is what makes turning this off
+      actually end the stream instead of leaving Studio waiting to reconnect. */
+  youtube:
+    'Turn on Auto-start in Studio, or pushing video will not go live. Turn on Auto-stop ' +
+    'too, or ending it here leaves the broadcast waiting to reconnect instead of ending.',
 
   kick: 'Kick gives every channel its own stream URL, so it needs both.'
 }

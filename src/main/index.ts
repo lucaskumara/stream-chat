@@ -1,6 +1,6 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
-import type { SourceState } from '@shared/types'
+import type { Platform, SourceState } from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { MessageBus } from './bus'
 import { SourceManager } from './sources'
@@ -59,9 +59,30 @@ async function runSync(): Promise<void> {
   }
 }
 
+/** A platform's chat can't tell on its own the instant its stream reaches that platform —
+    YouTube in particular only notices by re-resolving, on a multi-minute offline timer.
+    This app already knows the moment sooner than any chat watcher can, because it owns
+    the relay: the false→true edge on a destination's own `sending` state is that signal,
+    so it jumps that platform's chat straight past its backoff. Tracked here rather than
+    inside `Relay`, which stays video-only and unaware `sources` exists at all. */
+const sendingPlatforms = new Set<Platform>()
+
 function broadcastRelay(): void {
+  const state = relay.state()
+
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC.broadcastState, relay.state())
+    mainWindow.webContents.send(IPC.broadcastState, state)
+  }
+
+  for (const destination of state.destinations) {
+    const nowSending = destination.state === 'sending'
+
+    if (nowSending && !sendingPlatforms.has(destination.platform)) {
+      sources.recheckPlatform(destination.platform)
+    }
+
+    if (nowSending) sendingPlatforms.add(destination.platform)
+    else sendingPlatforms.delete(destination.platform)
   }
 }
 

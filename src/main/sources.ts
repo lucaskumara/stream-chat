@@ -119,6 +119,15 @@ export class SourceManager {
     this.onStateChange(this.list())
   }
 
+  /** Jumps every entry for a platform past its own offline/error backoff — see
+      `BaseChatWatcher.recheck`. Called from the relay's "now sending" edge, which is the
+      one signal a chat watcher has no way to notice on its own. */
+  recheckPlatform(platform: Platform): void {
+    for (const entry of this.entries.values()) {
+      if (entry.state.platform === platform) entry.watcher.recheck()
+    }
+  }
+
   async removeByPlatform(platform: Platform): Promise<void> {
     const doomed = [...this.entries.values()].filter((entry) => entry.state.platform === platform)
 
