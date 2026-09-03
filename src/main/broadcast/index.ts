@@ -51,7 +51,15 @@ interface Outbound {
   process: ChildProcess
   state: DestinationState
   error?: string
+  attempts: number
+  retry?: NodeJS.Timeout
 }
+
+/** A platform dropping us mid-stream — Kick did this with a TLS push error — used to be
+    terminal: the dead entry stayed in the map, so nothing restarted it and nothing would
+    until the switch was toggled by hand. */
+const DESTINATION_RETRY_MS = 2_000
+const MAX_DESTINATION_RETRY_MS = 20_000
 
 /** Ingest and fan-out are separate processes on purpose. One ffmpeg holds OBS's connection
     and hands the stream to us as MPEG-TS; one more per platform pushes it onward. Toggling
@@ -127,6 +135,8 @@ export class Relay {
 
     this.startedAt = Date.now()
 
+    console.warn('[ingest] listening on 1935')
+
     const child = spawn(ffmpegPath(), ingestArgs(listenUrl(relayKeyValue())), { windowsHide: true })
 
     this.ingest = child
@@ -163,6 +173,14 @@ export class Relay {
       A process that dies immediately backs off rather than spinning on a busy port. */
   private reopenIngest(child: ChildProcess): void {
     if (this.ingest !== child) return
+
+    /** Every restart here is a new RTMP session, which each platform sees as the stream
+        ending and a new one beginning — so a loop of these is what a viewer perceives as
+        the same content playing over and over. Logged with its lifetime for that reason. */
+    console.warn(
+      `[ingest] ended after ${((Date.now() - this.startedAt) / 1000).toFixed(1)}s` +
+        `${this.receiving ? ' while receiving' : ' without ever receiving'}`
+    )
 
     const healthy = Date.now() - this.startedAt > MIN_HEALTHY_MS
     this.backoff = healthy ? RESPAWN_MS : Math.min(this.backoff * 2, MAX_BACKOFF_MS)
@@ -207,10 +225,12 @@ export class Relay {
     }
   }
 
-  private openDestination(platform: Platform, url: string): void {
+  private openDestination(platform: Platform, url: string, attempts = 0): void {
+    console.warn(`[relay:${platform}] starting${attempts ? ` (retry ${attempts})` : ''}`)
+
     const child = spawn(ffmpegPath(), destinationArgs(url), { windowsHide: true })
 
-    const out: Outbound = { process: child, state: 'connecting' }
+    const out: Outbound = { process: child, state: 'connecting', attempts }
     this.outbound.set(platform, out)
 
     /** A broken pipe here is this destination ending, not a fault worth reporting — the
@@ -236,13 +256,48 @@ export class Relay {
       }
     })
 
-    child.on('exit', () => {
+    child.on('exit', (code) => {
       if (this.outbound.get(platform) !== out) return
 
-      /** Exiting while it was meant to be sending is a failure the user should see; a kill
-          on the way out of a toggle is not. */
-      if (out.state !== 'error') this.outbound.delete(platform)
+      console.warn(`[relay:${platform}] exited (code ${code ?? 'signal'})`)
 
+      this.outbound.delete(platform)
+
+      /** A platform that drops us should be retried rather than left dead: the failure is
+          usually transient, and the switch is still on. Backs off so a rejected key does
+          not reconnect forever. */
+      const setup = config().all()[platform]
+      if (!setup.forward || !this.receiving) {
+        this.onChange()
+        return
+      }
+
+      const wait = Math.min(
+        DESTINATION_RETRY_MS * 2 ** out.attempts,
+        MAX_DESTINATION_RETRY_MS
+      )
+
+      const pending: Outbound = {
+        process: out.process,
+        state: 'error',
+        error: out.error ?? 'dropped — reconnecting',
+        attempts: out.attempts + 1
+      }
+
+      pending.retry = setTimeout(() => {
+        if (this.outbound.get(platform) !== pending) return
+
+        this.outbound.delete(platform)
+
+        const url = destinationUrl(config().all()[platform])
+        if (url && config().all()[platform].forward && this.receiving) {
+          this.openDestination(platform, url, pending.attempts)
+        } else {
+          this.onChange()
+        }
+      }, wait)
+
+      this.outbound.set(platform, pending)
       this.onChange()
     })
 
@@ -253,6 +308,7 @@ export class Relay {
     const out = this.outbound.get(platform)
     if (!out) return
 
+    if (out.retry) clearTimeout(out.retry)
     if (!keepError) this.outbound.delete(platform)
 
     out.process.stdin?.end()

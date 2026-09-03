@@ -62,6 +62,12 @@ export function ingestArgs(listen: string): string[] {
     '-hide_banner',
     '-loglevel',
     'warning',
+
+    /** `-loglevel warning` suppresses the progress line, and the progress line is the only
+        thing that says an encoder is actually sending. Without `-stats` the app reported
+        "Connecting" forever while a stream was plainly live. */
+    '-stats',
+
     '-listen',
     '1',
     '-i',
@@ -90,6 +96,10 @@ export function destinationArgs(url: string): string[] {
     '-hide_banner',
     '-loglevel',
     'warning',
+
+    /** Same reason as the ingest: without this the destination never reports itself as
+        sending, and its row sits on "Connecting" for the whole stream. */
+    '-stats',
 
     /** ffmpeg gives up probing long before a keyframe arrives on a stream joined part way
         through, and then has no SPS to read dimensions from: "Could not find codec
