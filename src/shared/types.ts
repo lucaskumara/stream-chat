@@ -13,6 +13,13 @@ export type Fragment =
       url: string
       srcSet?: string
       provider?: EmoteProvider
+
+      /** Other providers that also matched this exact name, in the same priority
+          order (7TV before BTTV) main tried them in — so a live toggle turning
+          the primary provider off can fall through to one of these instead of
+          only ever falling to plain text. Absent when nothing else matched,
+          which is the common case. */
+      alternates?: { provider: EmoteProvider; url: string; srcSet?: string }[]
     }
   | { kind: 'mention'; text: string; userId?: string }
   | { kind: 'link'; text: string; href: string }
@@ -126,12 +133,14 @@ export interface PlatformConfig {
   platform: Platform
   channel: string
   ingestUrl: string
-  hasStreamKey: boolean
 
-  /** The saved key's length — not the key itself, which never leaves main. Lets
-      the settings screen mask it at its real length instead of a fixed run of
-      dots that lies about how long it is. */
-  streamKeyLength: number
+  /** The real, saved key — sent to the renderer the same way `ingestUrl` already
+      is. An earlier version kept this write-only (only `hasStreamKey: boolean`
+      left main), which meant the settings field could only ever show a fixed
+      run of placeholder dots with a reveal toggle that had nothing real to
+      reveal. The renderer is still the same process boundary `ingestUrl` — no
+      more sensitive, in practice — already crosses without issue. */
+  streamKey: string
 
   forward: boolean
   emoteProviders: EmoteProviderSettings

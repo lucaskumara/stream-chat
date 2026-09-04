@@ -112,6 +112,7 @@ interface ChatState {
   setNameColorSplit: (mode: NameColorMode) => void
   setNameColorMerged: (mode: NameColorMode) => void
   stepFontSize: (steps: number) => void
+  resetFontSize: () => void
   setSearch: (sourceId: string, terms: string[]) => void
   setSearchDraft: (sourceId: string, draft: string) => void
   addSearchTerm: (sourceId: string, term: string) => void
@@ -322,6 +323,8 @@ export const useStore = create<ChatState>()((set) => ({
   setNameColorMerged: (nameColorMerged) => set({ nameColorMerged }),
 
   stepFontSize: (steps) => set((s) => ({ fontSize: steppedSize(s.fontSize, steps) })),
+
+  resetFontSize: () => set({ fontSize: CHAT_FONT_DEFAULT }),
 
   setSearch: (sourceId, terms) =>
     set((s) => ({ search: { ...s.search, [sourceId]: terms } })),

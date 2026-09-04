@@ -11,8 +11,7 @@ const GIGACHAD: ThirdPartyEmote = {
   provider: '7tv'
 }
 
-const lookup = (name: string): ThirdPartyEmote | undefined =>
-  name === GIGACHAD.name ? GIGACHAD : undefined
+const lookup = (name: string): ThirdPartyEmote[] => (name === GIGACHAD.name ? [GIGACHAD] : [])
 
 describe('applyEmotes', () => {
   it('replaces a whole token with the emote', () => {
@@ -91,5 +90,41 @@ describe('applyEmotes', () => {
 
   it('answers empty for no fragments', () => {
     expect(applyEmotes([], lookup)).toEqual([])
+  })
+
+  // A name both 7TV and BTTV have used to come back from lookup() as a single
+  // match, whichever the caller happened to prefer — so the fragment carried
+  // only that one provider's image and nothing to fall back to once the
+  // renderer's own toggle turned that provider off. The extra matches ride
+  // along as `alternates`, in the same order lookup() returned them, so the
+  // renderer can pick a different one live instead of only ever falling to text.
+  it('carries every other match as alternates, in priority order', () => {
+    const BTTV_ALSO: ThirdPartyEmote = {
+      name: 'GIGACHAD',
+      url: 'https://cdn.betterttv.net/emote/1/1x',
+      srcSet: 'https://cdn.betterttv.net/emote/1/1x 1x',
+      animated: false,
+      provider: 'bttv'
+    }
+
+    const both = (name: string): ThirdPartyEmote[] =>
+      name === 'GIGACHAD' ? [GIGACHAD, BTTV_ALSO] : []
+
+    const [emote] = applyEmotes([{ kind: 'text', text: 'GIGACHAD' }], both)
+
+    expect(emote).toEqual({
+      kind: 'emote',
+      name: 'GIGACHAD',
+      url: GIGACHAD.url,
+      srcSet: GIGACHAD.srcSet,
+      provider: '7tv',
+      alternates: [{ provider: 'bttv', url: BTTV_ALSO.url, srcSet: BTTV_ALSO.srcSet }]
+    })
+  })
+
+  it('carries no alternates when only one provider matched', () => {
+    const [emote] = applyEmotes([{ kind: 'text', text: 'GIGACHAD' }], lookup)
+
+    expect(emote).not.toHaveProperty('alternates')
   })
 })

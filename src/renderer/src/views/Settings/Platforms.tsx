@@ -7,7 +7,7 @@ import { ChatLink } from '../../components/ChatLink'
 import { PlatformMark } from '../../components/PlatformMark'
 import { ControlRow, Toggle } from '../../components/controls'
 import { PLATFORM_COLOR, PLATFORM_NAME } from '../../theme'
-import { keyPlaceholder, type PlatformDraft } from './platformDraft'
+import type { PlatformDraft } from './platformDraft'
 import type { PlatformDraftsApi } from './usePlatformDrafts'
 
 /** Where each platform actually shows these values, and which of them it shows. Twitch
@@ -159,7 +159,7 @@ function PlatformCard({
         <Field
           platform={platform}
           label="Stream key"
-          placeholder={keyPlaceholder(config)}
+          placeholder="Paste your stream key"
           value={draft.streamKey}
           onChange={(value) => onDraftChange({ streamKey: value })}
           secret
@@ -201,14 +201,10 @@ function PlatformCard({
 }
 
 /** Fully controlled — the draft lives in the hook, so this is presentation only.
-    The stream key is always a live input, never a separate masked-then-Replace
-    step: main never sends the real value back, so there is nothing to reveal by
-    unmasking, and the placeholder alone (dots at the saved key's real length) is
-    what signals a key already exists. Typing simply overwrites the placeholder,
-    the same as any other input — nothing is "wiped" first. The reveal toggle only
-    appears once there is a real, typed value behind it: a placeholder is drawn by
-    the browser in plain text regardless of the input's type, so toggling it while
-    the field is still empty would visibly do nothing. */
+    The stream key is a live input seeded with the real saved value, the same as
+    the stream URL always was, so there is something genuine for the reveal
+    toggle to unmask — it stays visible unconditionally rather than only once
+    something is typed, matching every other revealable field. */
 function Field({
   platform,
   label,
@@ -256,7 +252,7 @@ function Field({
             }}
           />
 
-          {revealable && value !== '' && (
+          {revealable && (
             <button
               type="button"
               aria-label={`${revealed ? 'Hide' : 'Show'} ${PLATFORM_NAME[platform]} ${label}`}

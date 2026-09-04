@@ -76,8 +76,6 @@ export function registerIpc(
   registerObsHandlers(obs)
 }
 
-/** The stream key is write-only from the renderer's side: it can set one and be told
-    whether one exists, but never read it back. */
 export function platformConfigs(): PlatformConfig[] {
   const all = config().all()
 
@@ -85,8 +83,7 @@ export function platformConfigs(): PlatformConfig[] {
     platform,
     channel: all[platform].channel,
     ingestUrl: all[platform].ingestUrl,
-    hasStreamKey: all[platform].streamKey.length > 0,
-    streamKeyLength: all[platform].streamKey.length,
+    streamKey: all[platform].streamKey,
     forward: all[platform].forward,
     emoteProviders: all[platform].emoteProviders
   }))

@@ -114,8 +114,6 @@ export function usePlatformDrafts(): PlatformDraftsApi {
         await bridge()
           .api.savePlatform(platform, patch)
           .catch((error) => console.debug('[platforms]', platform, 'savePlatform', error))
-
-        nextDrafts[platform] = { ...(nextDrafts[platform] ?? draft), streamKey: '' }
       }
     }
 

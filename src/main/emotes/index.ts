@@ -1,4 +1,4 @@
-import type { EmoteProviderSettings, Fragment, Platform } from '@shared/types'
+import type { Fragment } from '@shared/types'
 import { SevenTvEmotes, type SevenTvPlatform } from './seventv'
 import { BttvEmotes } from './bttv'
 import type { ThirdPartyEmote } from './types'
@@ -12,27 +12,9 @@ export interface EmoteBinding {
   channelId: string
 }
 
-const ALL_ENABLED: EmoteProviderSettings = { sevenTv: true, bttv: true }
-
-/** 7TV calls YouTube "google", not "youtube" — see the same trap noted in seventv.ts. This
-    is the one place the app's own Platform meets that naming. */
-function toSevenTvPlatform(platform: Platform): SevenTvPlatform {
-  return platform === 'youtube' ? 'google' : platform
-}
-
 export class ThirdPartyEmotes {
   private seventv = new SevenTvEmotes()
   private bttv = new BttvEmotes()
-  private enabled = new Map<SevenTvPlatform, EmoteProviderSettings>()
-
-  /** Settings -> Platforms calls this on every save (and once at startup), keyed by the
-      app's own Platform rather than by binding.platform, so a toggle takes effect on the
-      very next lookup() with no reconnect. load() deliberately ignores this and always
-      fetches both providers — fetching is already cheap and additive, and doing it
-      unconditionally is what makes re-enabling a provider instant too. */
-  setEnabled(platform: Platform, settings: EmoteProviderSettings): void {
-    this.enabled.set(toSevenTvPlatform(platform), settings)
-  }
 
   async load(binding: EmoteBinding): Promise<void> {
     const { platform, channelId } = binding
@@ -44,14 +26,27 @@ export class ThirdPartyEmotes {
     ])
   }
 
-  lookup(binding: EmoteBinding, name: string): ThirdPartyEmote | undefined {
+  /** Every provider's match for this name, in priority order (7TV first, then Twitch-only
+      BTTV) — not just the one lookup() used to prefer. An earlier version gated this by a
+      per-platform enabled setting (Settings -> Platforms' toggles, pushed in via a since-
+      removed setEnabled), so a name both providers had was still only ever resolved to
+      whichever one happened to be enabled, and the fragment built from it carried nothing
+      to fall back to. Filtering now happens in the renderer instead — see
+      src/renderer/src/emotes.ts's selectEmote — off every match here rather than the one
+      main used to pick, so toggling live can choose a different one without a reconnect. */
+  lookup(binding: EmoteBinding, name: string): ThirdPartyEmote[] {
     const { platform, channelId } = binding
-    const settings = this.enabled.get(platform) ?? ALL_ENABLED
+    const matches: ThirdPartyEmote[] = []
 
-    return (
-      (settings.sevenTv ? this.seventv.lookup(platform, channelId, name) : undefined) ??
-      (platform === 'twitch' && settings.bttv ? this.bttv.lookup(channelId, name) : undefined)
-    )
+    const sevenTv = this.seventv.lookup(platform, channelId, name)
+    if (sevenTv) matches.push(sevenTv)
+
+    if (platform === 'twitch') {
+      const bttv = this.bttv.lookup(channelId, name)
+      if (bttv) matches.push(bttv)
+    }
+
+    return matches
   }
 }
 
@@ -59,7 +54,7 @@ export const thirdPartyEmotes = new ThirdPartyEmotes()
 
 export function applyEmotes(
   fragments: Fragment[],
-  lookup: (name: string) => ThirdPartyEmote | undefined
+  lookup: (name: string) => ThirdPartyEmote[]
 ): Fragment[] {
   const out: Fragment[] = []
 
@@ -81,16 +76,16 @@ export function applyEmotes(
     not allocate. */
 function splitOutEmotes(
   fragment: Extract<Fragment, { kind: 'text' }>,
-  lookup: (name: string) => ThirdPartyEmote | undefined
+  lookup: (name: string) => ThirdPartyEmote[]
 ): Fragment[] {
   const parts = fragment.text.split(/(\s+)/)
   const out: Fragment[] = []
   let buffer = ''
 
   for (const part of parts) {
-    const emote = part !== '' && !/^\s+$/.test(part) ? lookup(part) : undefined
+    const matches = part !== '' && !/^\s+$/.test(part) ? lookup(part) : []
 
-    if (!emote) {
+    if (matches.length === 0) {
       buffer += part
       continue
     }
@@ -100,12 +95,21 @@ function splitOutEmotes(
       buffer = ''
     }
 
+    const [primary, ...rest] = matches
+
     out.push({
       kind: 'emote',
-      name: emote.name,
-      url: emote.url,
-      srcSet: emote.srcSet,
-      provider: emote.provider
+      name: primary.name,
+      url: primary.url,
+      srcSet: primary.srcSet,
+      provider: primary.provider,
+      ...(rest.length > 0 && {
+        alternates: rest.map((match) => ({
+          provider: match.provider,
+          url: match.url,
+          srcSet: match.srcSet
+        }))
+      })
     })
   }
 

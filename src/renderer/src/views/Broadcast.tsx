@@ -30,7 +30,9 @@ export function Broadcast(): React.ReactElement {
 
   /** A platform can be forwarded to once it has a key. Twitch and YouTube carry a fixed
       ingest, so in practice that is the moment the key is pasted. */
-  const ready = PLATFORMS.filter((p) => platforms.find((c) => c.platform === p)?.hasStreamKey)
+  const ready = PLATFORMS.filter(
+    (p) => (platforms.find((c) => c.platform === p)?.streamKey ?? '') !== ''
+  )
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto chat-scroll" style={{ background: 'var(--ink-900)' }}>

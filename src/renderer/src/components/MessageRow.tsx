@@ -25,7 +25,7 @@ import type {
   Platform
 } from '@shared/types'
 import { nameColor, readable } from '../contrast'
-import { emoteProviderEnabled } from '../emotes'
+import { selectEmote } from '../emotes'
 import type { NameColorMode } from '../store'
 import {
   BADGE_WASH,
@@ -35,6 +35,7 @@ import {
   ROW_WASH,
   type ThemeMode
 } from '../theme'
+import { HoverPopup } from './HoverPopup'
 import { PlatformMark } from './PlatformMark'
 
 const KIND_GLYPH: Partial<Record<ChatMessage['kind'], LucideIcon>> = {
@@ -91,15 +92,17 @@ function Emote({
   platform: Platform
 }): React.ReactElement {
   const [failed, setFailed] = useState(false)
-  const [hovered, setHovered] = useState(false)
 
   if (failed) return <span style={{ color: 'var(--chip-fg)' }}>{name}</span>
 
   return (
-    <span
-      className="relative inline-block align-middle"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+    <HoverPopup
+      popup={
+        <>
+          <span style={{ color: 'var(--heading)' }}>{name}</span>
+          <span style={{ color: 'var(--fg-4)' }}> · {emoteSource(provider, platform)}</span>
+        </>
+      }
     >
       <img
         src={url}
@@ -109,26 +112,7 @@ function Emote({
         className="mx-[1px] inline-block h-[1.55em] max-w-none align-middle"
         onError={() => setFailed(true)}
       />
-
-      {hovered && (
-        <span
-          role="tooltip"
-          className="pointer-events-none absolute z-10 -translate-x-1/2 text-[.9em] whitespace-nowrap"
-          style={{
-            bottom: 'calc(100% + 5px)',
-            left: '50%',
-            background: 'var(--ink-600)',
-            border: '1px solid var(--line-2)',
-            borderRadius: 6,
-            padding: '.3em .55em',
-            boxShadow: '0 8px 20px rgba(0,0,0,.5)'
-          }}
-        >
-          <span style={{ color: 'var(--heading)' }}>{name}</span>
-          <span style={{ color: 'var(--fg-4)' }}> · {emoteSource(provider, platform)}</span>
-        </span>
-      )}
-    </span>
+    </HoverPopup>
   )
 }
 
@@ -139,61 +123,39 @@ function Emote({
     an emote gets, not just the chip's plain `title`. */
 function BadgeView({ badge, mode }: { badge: Badge; mode: ThemeMode }): React.ReactElement {
   const [failed, setFailed] = useState(false)
-  const [hovered, setHovered] = useState(false)
 
   const glyph = badge.url && !failed ? undefined : badge.id ? BADGE_GLYPH[badge.id] : undefined
 
   return (
-    <span
-      className="relative mr-1 inline-block align-middle"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {badge.url && !failed ? (
-        <img
-          src={badge.url}
-          srcSet={badge.srcSet}
-          alt={badge.label}
-          loading="lazy"
-          draggable={false}
-          className="inline-block h-[1.1em] w-[1.1em] object-contain align-middle"
-          onError={() => setFailed(true)}
-        />
-      ) : glyph ? (
-        <glyph.icon
-          size="1.1em"
-          strokeWidth={2.5}
-          aria-hidden
-          className="inline-block align-middle"
-          style={{ color: readable(glyph.color, mode) }}
-        />
-      ) : (
-        <span
-          className="rounded-sm px-1 text-[.75em] font-semibold tracking-wide uppercase"
-          style={{ background: 'var(--chip-bg)', color: 'var(--chip-fg)' }}
-        >
-          {badge.label.slice(0, 3)}
-        </span>
-      )}
-
-      {hovered && (
-        <span
-          role="tooltip"
-          className="pointer-events-none absolute z-10 -translate-x-1/2 text-[.9em] whitespace-nowrap"
-          style={{
-            bottom: 'calc(100% + 5px)',
-            left: '50%',
-            background: 'var(--ink-600)',
-            border: '1px solid var(--line-2)',
-            borderRadius: 6,
-            padding: '.3em .55em',
-            boxShadow: '0 8px 20px rgba(0,0,0,.5)',
-            color: 'var(--heading)'
-          }}
-        >
-          {badge.label}
-        </span>
-      )}
+    <span className="mr-1 inline-block align-middle">
+      <HoverPopup popup={<span style={{ color: 'var(--heading)' }}>{badge.label}</span>}>
+        {badge.url && !failed ? (
+          <img
+            src={badge.url}
+            srcSet={badge.srcSet}
+            alt={badge.label}
+            loading="lazy"
+            draggable={false}
+            className="inline-block h-[1.1em] w-[1.1em] object-contain align-middle"
+            onError={() => setFailed(true)}
+          />
+        ) : glyph ? (
+          <glyph.icon
+            size="1.1em"
+            strokeWidth={2.5}
+            aria-hidden
+            className="inline-block align-middle"
+            style={{ color: readable(glyph.color, mode) }}
+          />
+        ) : (
+          <span
+            className="rounded-sm px-1 text-[.75em] font-semibold tracking-wide uppercase"
+            style={{ background: 'var(--chip-bg)', color: 'var(--chip-fg)' }}
+          >
+            {badge.label.slice(0, 3)}
+          </span>
+        )}
+      </HoverPopup>
     </span>
   )
 }
@@ -212,19 +174,26 @@ function FragmentView({
   switch (fragment.kind) {
     case 'text':
       return <span>{fragment.text}</span>
-    case 'emote':
-      if (!emoteProviderEnabled(fragment.provider, providers)) {
+    case 'emote': {
+      const selected = selectEmote(
+        { provider: fragment.provider, url: fragment.url, srcSet: fragment.srcSet },
+        fragment.alternates,
+        providers
+      )
+
+      if (!selected) {
         return <span style={{ color: 'var(--chip-fg)' }}>{fragment.name}</span>
       }
 
       return (
         <Emote
           name={fragment.name}
-          url={fragment.url}
-          provider={fragment.provider}
+          url={selected.url}
+          provider={selected.provider}
           platform={platform}
         />
       )
+    }
     case 'mention':
       return (
         <span

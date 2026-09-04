@@ -127,7 +127,12 @@ export function Settings(): React.ReactElement {
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="chat-scroll absolute inset-0 overflow-y-auto px-[28px] py-[22px]"
+          // Top is 44px rather than 0 — padding alone doesn't move it, since the
+          // scrollbar track rides this box's own top edge regardless of interior
+          // padding, and it was landing directly under the close button, which
+          // floats over this column at top:10.
+          className="chat-scroll absolute inset-x-0 bottom-0 overflow-y-auto px-[28px] py-[22px]"
+          style={{ top: 44 }}
         >
           <div className="max-w-[560px]">
             <h1 className="m-0 text-[17px] font-semibold" style={{ color: 'var(--heading)' }}>

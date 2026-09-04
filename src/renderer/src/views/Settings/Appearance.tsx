@@ -1,6 +1,6 @@
 import { ControlRow, Picker, Segmented, Stepper, Toggle } from '../../components/controls'
 import type { Density, NameColorMode, ThemeChoice } from '../../store'
-import { useStore } from '../../store'
+import { CHAT_FONT_DEFAULT, useStore } from '../../store'
 import { Group } from './Group'
 
 const THEMES: { value: ThemeChoice; label: string }[] = [
@@ -88,7 +88,19 @@ export function Appearance(): React.ReactElement {
         </ControlRow>
 
         <ControlRow label="Chat text size">
-          <Stepper label="chat text" size={s.fontSize} onStep={s.stepFontSize} />
+          <div className="flex items-center gap-[8px]">
+            {s.fontSize !== CHAT_FONT_DEFAULT && (
+              <button
+                type="button"
+                className="ghost-button h-[24px] flex-none px-[10px] text-[12px]"
+                onClick={s.resetFontSize}
+              >
+                Reset
+              </button>
+            )}
+
+            <Stepper label="chat text" size={s.fontSize} onStep={s.stepFontSize} />
+          </div>
         </ControlRow>
       </Group>
     </div>

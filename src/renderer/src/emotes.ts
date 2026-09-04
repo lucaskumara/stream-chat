@@ -17,3 +17,26 @@ export function emoteProviderEnabled(
 
   return true
 }
+
+export interface EmoteCandidate {
+  provider?: EmoteProvider
+  url: string
+  srcSet?: string
+}
+
+/** Picks the first still-enabled candidate — the fragment's own primary provider
+    first, then each alternate in the order main found them (7TV before BTTV) —
+    so toggling the primary off can fall through to a second provider that also
+    had this name, rather than straight to plain text. Returns null once every
+    candidate's provider is off, which the caller renders as plain text. */
+export function selectEmote(
+  primary: EmoteCandidate,
+  alternates: EmoteCandidate[] | undefined,
+  providers: EmoteProviderSettings | undefined
+): EmoteCandidate | null {
+  for (const candidate of [primary, ...(alternates ?? [])]) {
+    if (emoteProviderEnabled(candidate.provider, providers)) return candidate
+  }
+
+  return null
+}

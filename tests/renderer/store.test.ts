@@ -375,6 +375,14 @@ describe('font size', () => {
     state().stepFontSize(-100)
     expect(state().fontSize).toBe(CHAT_FONT_SIZES[0])
   })
+
+  it('resets straight back to the default from anywhere on the scale', () => {
+    state().stepFontSize(100)
+
+    state().resetFontSize()
+
+    expect(state().fontSize).toBe(CHAT_FONT_DEFAULT)
+  })
 })
 
 describe('display options', () => {
@@ -470,8 +478,7 @@ describe('setPlatforms', () => {
         platform: 'twitch' as const,
         channel: 'xqc',
         ingestUrl: 'rtmps://ingest.global-contribute.live-video.net/app/',
-        hasStreamKey: true,
-        streamKeyLength: 24,
+        streamKey: 'live_abc123',
         forward: false,
         emoteProviders: { sevenTv: true, bttv: true }
       }
@@ -488,8 +495,7 @@ describe('setPlatforms', () => {
         platform: 'twitch' as const,
         channel: 'xqc',
         ingestUrl: '',
-        hasStreamKey: false,
-        streamKeyLength: 0,
+        streamKey: '',
         forward: false,
         emoteProviders: { sevenTv: true, bttv: true }
       }

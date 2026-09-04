@@ -1,9 +1,9 @@
 import type { EmoteProviderSettings, PlatformConfig, PlatformPatch } from '@shared/types'
 
 /** The page's own working copy of one platform's card, held until Save changes is
-    clicked. The stream key is write-only from main, so the draft always starts
-    empty — "changed" is simply whether the field holds anything at all, never a
-    comparison to a value the draft was never given. */
+    clicked — seeded from the real saved config, the same as `channel` and
+    `ingestUrl` always were, so "changed" is a plain comparison against what was
+    loaded rather than "holds anything at all". */
 export interface PlatformDraft {
   channel: string
   ingestUrl: string
@@ -15,18 +15,9 @@ export function draftFrom(config: PlatformConfig): PlatformDraft {
   return {
     channel: config.channel,
     ingestUrl: config.ingestUrl,
-    streamKey: '',
+    streamKey: config.streamKey,
     emoteProviders: { ...config.emoteProviders }
   }
-}
-
-/** Main never sends the key back, only its length — so a saved key is masked at
-    its real length rather than a fixed run of dots that lies about how long it
-    is. */
-export function keyPlaceholder(config: PlatformConfig | undefined): string {
-  if (!config?.hasStreamKey) return 'Paste your stream key'
-
-  return '•'.repeat(config.streamKeyLength)
 }
 
 function emoteProvidersChanged(draft: EmoteProviderSettings, saved: EmoteProviderSettings): boolean {
@@ -36,13 +27,16 @@ function emoteProvidersChanged(draft: EmoteProviderSettings, saved: EmoteProvide
 /** Only the fields that actually differ from what's saved — an empty object
     means this platform has nothing to save. Save changes calls this per
     platform rather than sending the whole draft, so an untouched field is never
-    overwritten with a value that merely wasn't edited. */
+    overwritten with a value that merely wasn't edited. Clearing the key field
+    and saving is now a real, explicit "remove this key" — the comparison is
+    against the saved value, not "holds anything at all", so an empty draft
+    that matches an already-empty saved key is correctly not dirty either. */
 export function dirtyPatch(draft: PlatformDraft, saved: PlatformConfig): PlatformPatch {
   const patch: PlatformPatch = {}
 
   if (draft.channel !== saved.channel) patch.channel = draft.channel
   if (draft.ingestUrl !== saved.ingestUrl) patch.ingestUrl = draft.ingestUrl
-  if (draft.streamKey !== '') patch.streamKey = draft.streamKey
+  if (draft.streamKey !== saved.streamKey) patch.streamKey = draft.streamKey
   if (emoteProvidersChanged(draft.emoteProviders, saved.emoteProviders)) {
     patch.emoteProviders = draft.emoteProviders
   }
