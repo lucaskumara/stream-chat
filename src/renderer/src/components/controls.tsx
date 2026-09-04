@@ -118,7 +118,8 @@ export function Stepper({
         aria-label={`Smaller ${label}`}
         disabled={size <= first}
         onClick={() => onStep(-1)}
-        className="icon-button h-[20px] w-[22px] rounded-[4px]"
+        className="icon-button rounded-[4px]"
+        style={{ width: 22, height: 20 }}
       >
         <Minus size={13} strokeWidth={1.8} />
       </button>
@@ -135,7 +136,8 @@ export function Stepper({
         aria-label={`Larger ${label}`}
         disabled={size >= last}
         onClick={() => onStep(1)}
-        className="icon-button h-[20px] w-[22px] rounded-[4px]"
+        className="icon-button rounded-[4px]"
+        style={{ width: 22, height: 20 }}
       >
         <Plus size={13} strokeWidth={1.8} />
       </button>

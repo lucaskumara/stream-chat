@@ -92,7 +92,7 @@ export function Appearance(): React.ReactElement {
             {s.fontSize !== CHAT_FONT_DEFAULT && (
               <button
                 type="button"
-                className="ghost-button h-[24px] flex-none px-[10px] text-[12px]"
+                className="ghost-button h-[26px] flex-none px-[10px] text-[12px]"
                 onClick={s.resetFontSize}
               >
                 Reset
