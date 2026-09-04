@@ -39,6 +39,21 @@ describe("resolveChannel", () => {
     expect(lookup.state === "ok" && lookup.channel.continuation).toBe("token");
   });
 
+  // The clickable name in the pane bar opens the live watch page directly,
+  // not the channel page — the video id is already in hand once connected.
+  it("builds the channel url from the live video id", async () => {
+    resolveURL.mockResolvedValue({ payload: { videoId: VIDEO_ID } });
+    getInfo.mockResolvedValue(
+      info({ is_live: true, author: "Lofi Girl", channel_id: "UC1" }, "token")
+    );
+
+    const lookup = await resolveChannel("@LofiGirl");
+
+    expect(lookup.state === "ok" && lookup.channel.url).toBe(
+      `https://www.youtube.com/watch?v=${VIDEO_ID}`
+    );
+  });
+
   // The bug this pins: /@handle/live keeps resolving to the just-ended stream's
   // videoId and carries no browseId, so channelName() never runs — and getInfo
   // has the real name in hand on exactly this path. Dropping it left the tab

@@ -25,6 +25,16 @@ describe("resolveChannel", () => {
     expect(lookup.state === "ok" && lookup.channel.login).toBe("excorpse");
   });
 
+  // The clickable name in the pane bar opens this, so it has to be the login
+  // (case-insensitive on Twitch's side) rather than the cased display name.
+  it("builds the channel url from the login", async () => {
+    twitchGql.mockResolvedValue({ user: { id: "100", displayName: "Excorpse" } });
+
+    const lookup = await resolveChannel("Excorpse");
+
+    expect(lookup.state === "ok" && lookup.channel.url).toBe("https://twitch.tv/excorpse");
+  });
+
   it("carries the numeric user id 7TV needs, not the login", async () => {
     twitchGql.mockResolvedValue({ user: { id: "100289331", displayName: "Excorpse" } });
 

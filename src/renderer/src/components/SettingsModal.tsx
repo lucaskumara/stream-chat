@@ -44,7 +44,12 @@ export function SettingsModal(): React.ReactElement {
         <button
           type="button"
           className="icon-button absolute"
-          style={{ top: 10, right: 10 }}
+          // Settings' own scroll container is also absolutely positioned and
+          // declared later in the tree (nested inside <Settings/>, which renders
+          // after this button) — with both at the default z-index:auto, paint
+          // order falls back to tree order and the scroll container covered this
+          // button entirely. An explicit z-index takes it out of that ordering.
+          style={{ top: 10, right: 10, zIndex: 1 }}
           aria-label="Close settings"
           onClick={close}
         >

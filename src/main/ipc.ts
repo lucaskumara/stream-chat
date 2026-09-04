@@ -86,6 +86,7 @@ export function platformConfigs(): PlatformConfig[] {
     channel: all[platform].channel,
     ingestUrl: all[platform].ingestUrl,
     hasStreamKey: all[platform].streamKey.length > 0,
+    streamKeyLength: all[platform].streamKey.length,
     forward: all[platform].forward,
     emoteProviders: all[platform].emoteProviders
   }))

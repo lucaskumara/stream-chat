@@ -58,6 +58,14 @@ describe("resolveChannel", () => {
     expect(lookup.state === "ok" && lookup.channel.displayName).toBe("askedfor");
   });
 
+  it("builds the channel url from the slug", async () => {
+    answering(200, payload({ slug: "excorpse" }));
+
+    const lookup = await resolveChannel("excorpse");
+
+    expect(lookup.state === "ok" && lookup.channel.url).toBe("https://kick.com/excorpse");
+  });
+
   // chatroom.id is not channel.id — they match on old channels and diverge on new
   // ones, and chat lives on the chatroom.
   it("subscribes to the chatroom id, not the channel id", async () => {

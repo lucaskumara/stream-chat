@@ -60,6 +60,7 @@ export class SourceManager {
       await watcher.connect()
 
       if (watcher.label) state.label = watcher.label
+      state.channelUrl = watcher.url
     } catch (error) {
       if (error instanceof MissingChannelError) {
         await this.remove(sourceId)
@@ -175,8 +176,9 @@ export class SourceManager {
         state.status = status
         state.error = error
 
-        const label = this.entries.get(state.id)?.watcher.label
-        if (label) state.label = label
+        const watcher = this.entries.get(state.id)?.watcher
+        if (watcher?.label) state.label = watcher.label
+        state.channelUrl = watcher?.url
 
         this.onStateChange(this.list())
       }

@@ -25,6 +25,10 @@ export class TwitchChannel extends Channel {
 
     return { platform: 'twitch', channelId: this.broadcasterId }
   }
+
+  get url(): string {
+    return `https://twitch.tv/${this.login}`
+  }
 }
 
 /** Anonymous, always. GQL answers `{ data: { user: null } }` for a login nobody owns,

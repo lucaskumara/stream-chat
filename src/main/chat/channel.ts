@@ -9,6 +9,14 @@ export abstract class Channel {
   get emotes(): EmoteBinding | null {
     return null;
   }
+
+  /** The page a click on the pane bar's name opens, in the user's browser. Undefined
+      for a channel with nowhere to send it — none of the three platforms hit that
+      today, but the base stays permissive rather than forcing every subclass to
+      implement one. */
+  get url(): string | undefined {
+    return undefined;
+  }
 }
 
 export type ChannelLookup<TChannel extends Channel> =

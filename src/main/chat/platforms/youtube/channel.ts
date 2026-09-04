@@ -25,6 +25,13 @@ export class YouTubeChannel extends Channel {
 
     return { platform: "google", channelId: this.channelId };
   }
+
+  /** The live watch page, not the channel page — the video id is already in hand
+      once connected, and it's the actual live stream a click on the name should
+      open rather than a channel page the user then has to find the stream from. */
+  get url(): string {
+    return `${ORIGIN}/watch?v=${this.videoId}`;
+  }
 }
 
 type Reference =

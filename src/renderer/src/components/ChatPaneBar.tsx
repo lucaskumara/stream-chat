@@ -1,10 +1,20 @@
 import { memo, useCallback } from 'react'
 import { Search, X } from 'lucide-react'
+import type { Platform } from '@shared/types'
+import { bridge } from '../bridge'
 import { termLabel } from '../search'
+import { PlatformMark } from './PlatformMark'
 
 export interface ChatPaneBarProps {
   label: string
   offline: boolean
+
+  /** Only a pane holding a single chat has one platform and one channel to send a
+      click to — a merged pane's label already joins several, so neither is drawn
+      there. */
+  platform?: Platform
+  channelUrl?: string
+
   filterOpen: boolean
   terms: string[]
   draft: string
@@ -18,6 +28,8 @@ export interface ChatPaneBarProps {
 function ChatPaneBarImpl({
   label,
   offline,
+  platform,
+  channelUrl,
   filterOpen,
   terms,
   draft,
@@ -58,9 +70,27 @@ function ChatPaneBarImpl({
         className="flex h-[44px] items-center gap-[10px] pr-[8px] pl-[12px]"
         style={{ borderBottom: '1px solid var(--line)' }}
       >
-        <span className="truncate text-[14px] font-semibold" style={{ color: 'var(--heading)' }}>
-          {label}
-        </span>
+        {platform && (
+          <span className="flex-none" style={{ color: 'var(--fg-3)' }}>
+            <PlatformMark platform={platform} height={14} />
+          </span>
+        )}
+
+        {channelUrl ? (
+          <button
+            type="button"
+            onClick={() => void bridge().api.openExternal(channelUrl)}
+            aria-label={`Open ${label} in your browser`}
+            className="min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left text-[14px] font-semibold hover:underline"
+            style={{ color: 'var(--heading)' }}
+          >
+            {label}
+          </button>
+        ) : (
+          <span className="truncate text-[14px] font-semibold" style={{ color: 'var(--heading)' }}>
+            {label}
+          </span>
+        )}
 
         {offline && (
           <span

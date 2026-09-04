@@ -78,6 +78,11 @@ export interface SourceState {
   label: string
   status: SourceStatus
 
+  /** The page a click on the pane bar's name opens, in the user's browser. Absent
+      until the channel has actually connected — there is nothing to send a click
+      to before then. */
+  channelUrl?: string
+
   error?: string
 }
 
@@ -122,6 +127,12 @@ export interface PlatformConfig {
   channel: string
   ingestUrl: string
   hasStreamKey: boolean
+
+  /** The saved key's length — not the key itself, which never leaves main. Lets
+      the settings screen mask it at its real length instead of a fixed run of
+      dots that lies about how long it is. */
+  streamKeyLength: number
+
   forward: boolean
   emoteProviders: EmoteProviderSettings
 }

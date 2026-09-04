@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
-import type { ChatMessage } from '@shared/types'
+import type { ChatMessage, EmoteProviderSettings, Platform } from '@shared/types'
 import { bridge } from './bridge'
 import { chatColumns, columnLabel, columnPaneId, type ChatColumn } from './layout'
 import { resolvedTheme, type ThemeMode } from './theme'
@@ -45,6 +45,19 @@ function Pane({
   const searchTerms = useStore((s) => s.search[paneId]) ?? EMPTY_TERMS
   const searchDraft = useStore((s) => s.searchDraft[paneId]) ?? ''
   const fontSize = useStore((s) => s.fontSize)
+  const platformConfigs = useStore((s) => s.platforms)
+
+  // Turning a 7TV/BTTV toggle off has to hide it from history immediately, not
+  // just from messages that arrive after — see MessageRow's emoteProviders prop.
+  // Recomputed only when the configs actually change, so a 100ms batch elsewhere
+  // does not reshape this on every render.
+  const emoteProviders = useMemo(
+    () =>
+      Object.fromEntries(
+        platformConfigs.map((config) => [config.platform, config.emoteProviders])
+      ) as Partial<Record<Platform, EmoteProviderSettings>>,
+    [platformConfigs]
+  )
 
   const onToggleFilter = useCallback(() => actions.toggleFilter(paneId), [paneId])
   const onSearchTerms = useCallback(
@@ -80,6 +93,7 @@ function Pane({
       onSearchDraft={onSearchDraft}
       onAddSearchTerm={onAddSearchTerm}
       fontSize={fontSize}
+      emoteProviders={emoteProviders}
     />
   )
 }

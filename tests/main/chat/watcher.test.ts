@@ -28,6 +28,10 @@ describe("messageId", () => {
 
 class TestChannel extends Channel {
   readonly platform: Platform = "twitch";
+
+  get url(): string {
+    return "https://example.com/name";
+  }
 }
 
 function stubFeed(): ChatFeed {
@@ -65,6 +69,36 @@ function offlineWatcher(): TestWatcher {
   watcher.resolveMock.mockResolvedValue({ state: "offline", reason: "not live" });
   return watcher;
 }
+
+describe("BaseChatWatcher.url", () => {
+  // The pane bar's clickable name reads this off the watcher, which has to fall
+  // through to the connected channel's own url rather than caching one — a
+  // watcher that reconnects to a different channel must not keep the old link.
+  it("is undefined until a channel is connected", () => {
+    const watcher = new TestWatcher({ sourceId: "src-1", identifier: "chan", events: stubEvents() });
+
+    expect(watcher.url).toBeUndefined();
+  });
+
+  it("takes the connected channel's url", async () => {
+    const watcher = new TestWatcher({ sourceId: "src-1", identifier: "chan", events: stubEvents() });
+    watcher.resolveMock.mockResolvedValue({ state: "ok", channel: new TestChannel("name") });
+
+    await watcher.connect();
+
+    expect(watcher.url).toBe("https://example.com/name");
+  });
+
+  it("goes back to undefined once disconnected", async () => {
+    const watcher = new TestWatcher({ sourceId: "src-1", identifier: "chan", events: stubEvents() });
+    watcher.resolveMock.mockResolvedValue({ state: "ok", channel: new TestChannel("name") });
+
+    await watcher.connect();
+    await watcher.disconnect();
+
+    expect(watcher.url).toBeUndefined();
+  });
+});
 
 describe("BaseChatWatcher.recheck", () => {
   beforeEach(() => {

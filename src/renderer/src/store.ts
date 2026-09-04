@@ -13,11 +13,11 @@ const DEFAULT_CAPACITY = 500
 
 const DELETED_LIMIT = 4000
 
-/** The handoff lists steps 12/14/16/18/20/24 with a default of 15, which is not one of
-    them — in the mock either stepper button therefore jumps straight to 12. 15 is added
-    as a step so the stepper moves one notch at a time from the default. */
-export const CHAT_FONT_SIZES = [12, 14, 15, 16, 18, 20, 24]
-export const CHAT_FONT_DEFAULT = 15
+/** Even steps of 2 from the floor to the ceiling, so every stepper click moves the same
+    amount — the 15 that used to sit between 14 and 16 broke that for the one notch on
+    either side of the default. */
+export const CHAT_FONT_SIZES = [12, 14, 16, 18, 20, 22, 24]
+export const CHAT_FONT_DEFAULT = 16
 
 export type View = 'chats' | 'broadcast'
 
@@ -225,7 +225,7 @@ export const useStore = create<ChatState>()((set) => ({
   capacity: DEFAULT_CAPACITY,
 
   density: 'comfortable',
-  themeChoice: 'dark',
+  themeChoice: 'system',
   nameColorSplit: 'author',
   nameColorMerged: 'author',
   fontSize: CHAT_FONT_DEFAULT,
@@ -333,11 +333,18 @@ export const useStore = create<ChatState>()((set) => ({
       return { searchDraft: { ...s.searchDraft, [sourceId]: draft } }
     }),
 
+  // Clicking a name in chat is the only caller — it always means "filter by this
+  // person", so the panel holding the now-nonzero term count has to open too, or
+  // the click reads as if nothing happened. Opens it even on a repeat click of an
+  // already-filtered name, since the panel could still be closed from before.
   addSearchTerm: (sourceId, term) =>
     set((s) => {
       const existing = s.search[sourceId] ?? []
-      if (existing.some((held) => held.toLowerCase() === term.toLowerCase())) return s
+      const already = existing.some((held) => held.toLowerCase() === term.toLowerCase())
 
-      return { search: { ...s.search, [sourceId]: [...existing, term] } }
+      return {
+        search: already ? s.search : { ...s.search, [sourceId]: [...existing, term] },
+        filterOpen: { ...s.filterOpen, [sourceId]: true }
+      }
     })
 }))

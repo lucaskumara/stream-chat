@@ -16,8 +16,16 @@ import {
   Zap,
   type LucideIcon
 } from 'lucide-react'
-import type { Badge, ChatMessage, EmoteProvider, Fragment, Platform } from '@shared/types'
+import type {
+  Badge,
+  ChatMessage,
+  EmoteProvider,
+  EmoteProviderSettings,
+  Fragment,
+  Platform
+} from '@shared/types'
 import { nameColor, readable } from '../contrast'
+import { emoteProviderEnabled } from '../emotes'
 import type { NameColorMode } from '../store'
 import {
   BADGE_WASH,
@@ -124,46 +132,68 @@ function Emote({
   )
 }
 
+/** The one other deliberate exception to "the chrome does not explain itself on
+    hover" (see CLAUDE.md, alongside Emote's popup below): a badge image carries no
+    text anywhere on it, and the three-letter chip that stands in for a missing one
+    is the only place its full label survives — so both need the same hover popup
+    an emote gets, not just the chip's plain `title`. */
 function BadgeView({ badge, mode }: { badge: Badge; mode: ThemeMode }): React.ReactElement {
   const [failed, setFailed] = useState(false)
+  const [hovered, setHovered] = useState(false)
 
-  if (badge.url && !failed) {
-    return (
-      <img
-        src={badge.url}
-        srcSet={badge.srcSet}
-        alt={badge.label}
-        loading="lazy"
-        draggable={false}
-        className="mr-1 inline-block h-[1.1em] w-[1.1em] object-contain align-middle"
-        onError={() => setFailed(true)}
-      />
-    )
-  }
-
-  const glyph = badge.id ? BADGE_GLYPH[badge.id] : undefined
-
-  if (glyph) {
-    const Glyph = glyph.icon
-
-    return (
-      <Glyph
-        size="1.1em"
-        strokeWidth={2.5}
-        aria-label={badge.label}
-        className="mr-1 inline-block align-middle"
-        style={{ color: readable(glyph.color, mode) }}
-      />
-    )
-  }
+  const glyph = badge.url && !failed ? undefined : badge.id ? BADGE_GLYPH[badge.id] : undefined
 
   return (
     <span
-      title={badge.label}
-      className="mr-1 rounded-sm px-1 text-[.75em] font-semibold tracking-wide uppercase"
-      style={{ background: 'var(--chip-bg)', color: 'var(--chip-fg)' }}
+      className="relative mr-1 inline-block align-middle"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      {badge.label.slice(0, 3)}
+      {badge.url && !failed ? (
+        <img
+          src={badge.url}
+          srcSet={badge.srcSet}
+          alt={badge.label}
+          loading="lazy"
+          draggable={false}
+          className="inline-block h-[1.1em] w-[1.1em] object-contain align-middle"
+          onError={() => setFailed(true)}
+        />
+      ) : glyph ? (
+        <glyph.icon
+          size="1.1em"
+          strokeWidth={2.5}
+          aria-hidden
+          className="inline-block align-middle"
+          style={{ color: readable(glyph.color, mode) }}
+        />
+      ) : (
+        <span
+          className="rounded-sm px-1 text-[.75em] font-semibold tracking-wide uppercase"
+          style={{ background: 'var(--chip-bg)', color: 'var(--chip-fg)' }}
+        >
+          {badge.label.slice(0, 3)}
+        </span>
+      )}
+
+      {hovered && (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 text-[.9em] whitespace-nowrap"
+          style={{
+            bottom: 'calc(100% + 5px)',
+            left: '50%',
+            background: 'var(--ink-600)',
+            border: '1px solid var(--line-2)',
+            borderRadius: 6,
+            padding: '.3em .55em',
+            boxShadow: '0 8px 20px rgba(0,0,0,.5)',
+            color: 'var(--heading)'
+          }}
+        >
+          {badge.label}
+        </span>
+      )}
     </span>
   )
 }
@@ -171,16 +201,22 @@ function BadgeView({ badge, mode }: { badge: Badge; mode: ThemeMode }): React.Re
 function FragmentView({
   fragment,
   platform,
+  providers,
   onOpenLink
 }: {
   fragment: Fragment
   platform: Platform
+  providers: EmoteProviderSettings | undefined
   onOpenLink: (url: string) => void
 }): React.ReactElement {
   switch (fragment.kind) {
     case 'text':
       return <span>{fragment.text}</span>
     case 'emote':
+      if (!emoteProviderEnabled(fragment.provider, providers)) {
+        return <span style={{ color: 'var(--chip-fg)' }}>{fragment.name}</span>
+      }
+
       return (
         <Emote
           name={fragment.name}
@@ -233,6 +269,11 @@ export interface MessageRowProps {
   /** The OBS dock omits this too, and gets 'author' — its one column never merges
       platforms, so there is nothing for 'platform' or 'none' to usefully change. */
   nameColorMode?: NameColorMode
+
+  /** Keyed by platform because a merged pane holds messages from more than one.
+      Omitted by the OBS dock, which has no Settings screen of its own to read
+      these from — its emotes stay always-on, same as before this existed. */
+  emoteProviders?: Partial<Record<Platform, EmoteProviderSettings>>
   onOpenLink: (url: string) => void
 }
 
@@ -244,10 +285,12 @@ function MessageRowImpl({
   compact,
   mode = 'dark',
   nameColorMode = 'author',
+  emoteProviders,
   onOpenLink
 }: MessageRowProps): React.ReactElement {
   const event = EVENT_ACCENT[msg.kind as keyof typeof EVENT_ACCENT]
   const Glyph = KIND_GLYPH[msg.kind]
+  const providers = emoteProviders?.[msg.platform]
 
   return (
     <div
@@ -342,7 +385,12 @@ function MessageRowImpl({
 
         {msg.fragments.map((fragment, i) => (
           <span key={i}>
-            <FragmentView fragment={fragment} platform={msg.platform} onOpenLink={onOpenLink} />{' '}
+            <FragmentView
+              fragment={fragment}
+              platform={msg.platform}
+              providers={providers}
+              onOpenLink={onOpenLink}
+            />{' '}
           </span>
         ))}
       </span>

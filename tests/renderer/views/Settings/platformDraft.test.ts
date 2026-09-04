@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { PlatformConfig } from '@shared/types'
-import { dirtyPatch, draftFrom, type PlatformDraft } from '@/views/Settings/platformDraft'
+import {
+  dirtyPatch,
+  draftFrom,
+  keyPlaceholder,
+  type PlatformDraft
+} from '@/views/Settings/platformDraft'
 
 function config(overrides: Partial<PlatformConfig> = {}): PlatformConfig {
   return {
@@ -8,6 +13,7 @@ function config(overrides: Partial<PlatformConfig> = {}): PlatformConfig {
     channel: 'xqc',
     ingestUrl: '',
     hasStreamKey: true,
+    streamKeyLength: 16,
     forward: false,
     emoteProviders: { sevenTv: true, bttv: true },
     ...overrides
@@ -74,5 +80,25 @@ describe('dirtyPatch', () => {
     expect(
       dirtyPatch(draft({ channel: 'new', streamKey: 'k' }), config({ channel: 'xqc' }))
     ).toEqual({ channel: 'new', streamKey: 'k' })
+  })
+})
+
+describe('keyPlaceholder', () => {
+  // Main never sends the real key back, only its length — so the placeholder
+  // is dots matching that length, not a fixed run that lies about it.
+  it('masks a saved key at its real length', () => {
+    expect(keyPlaceholder(config({ hasStreamKey: true, streamKeyLength: 24 }))).toBe(
+      '•'.repeat(24)
+    )
+  })
+
+  it('prompts for a key when none is set', () => {
+    expect(keyPlaceholder(config({ hasStreamKey: false, streamKeyLength: 0 }))).toBe(
+      'Paste your stream key'
+    )
+  })
+
+  it('prompts for a key when the config has not loaded yet', () => {
+    expect(keyPlaceholder(undefined)).toBe('Paste your stream key')
   })
 })

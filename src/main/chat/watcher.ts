@@ -48,6 +48,10 @@ export abstract class BaseChatWatcher<
     return this.currentLabel;
   }
 
+  get url(): string | undefined {
+    return this.connected?.url;
+  }
+
   async connect(): Promise<void> {
     if (this.running) return;
 
@@ -233,6 +237,7 @@ export interface ChatWatcher {
   readonly sourceId: string;
   readonly platform: Platform;
   readonly label: string;
+  readonly url: string | undefined;
 
   connect(): Promise<void>;
   disconnect(): Promise<void>;

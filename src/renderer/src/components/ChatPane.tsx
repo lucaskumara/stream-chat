@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, MessageSquare } from 'lucide-react'
-import type { ChatMessage, SourceState } from '@shared/types'
+import type { ChatMessage, EmoteProviderSettings, Platform, SourceState } from '@shared/types'
 import type { ThemeMode } from '../theme'
 import { bridge } from '../bridge'
 import { authorTerm, matchesSearch, parseSearch } from '../search'
@@ -33,6 +33,7 @@ export interface ChatPaneProps {
   onSearchDraft: (draft: string) => void
   onAddSearchTerm: (term: string) => void
   fontSize: number
+  emoteProviders: Partial<Record<Platform, EmoteProviderSettings>>
 }
 
 export function ChatPane({
@@ -53,7 +54,8 @@ export function ChatPane({
   onSearchTerms,
   onSearchDraft,
   onAddSearchTerm,
-  fontSize
+  fontSize,
+  emoteProviders
 }: ChatPaneProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState(true)
@@ -156,6 +158,8 @@ export function ChatPane({
       <ChatPaneBar
         label={label}
         offline={alone !== null && (alone.status === 'offline' || alone.status === 'error')}
+        platform={alone?.platform}
+        channelUrl={alone?.channelUrl}
         filterOpen={filterOpen}
         terms={searchTerms}
         draft={searchDraft}
@@ -198,6 +202,7 @@ export function ChatPane({
                     compact={density === 'compact'}
                     nameColorMode={nameColorMode}
                     mode={mode}
+                    emoteProviders={emoteProviders}
                     onOpenLink={openLink}
                   />
                 </div>

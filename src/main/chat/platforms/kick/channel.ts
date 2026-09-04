@@ -36,6 +36,10 @@ export class KickChannel extends Channel {
     return { platform: 'kick', channelId: String(this.userId) }
   }
 
+  get url(): string {
+    return `https://kick.com/${this.slug}`
+  }
+
   static fromApi(raw: ApiChannel, requestedSlug: string): KickChannel | null {
     const chatroomId = raw.chatroom?.id
     if (!chatroomId) return null

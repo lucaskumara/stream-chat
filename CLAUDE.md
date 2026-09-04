@@ -938,17 +938,18 @@ cannot shift the text of every other row sideways. Both maps are keyed on the sa
 a kind in one and not the other renders a chip with `undefined` colours. Twitch is still the
 only platform that emits any of them, so this whole path is dark on Kick and YouTube.
 
-**The chrome does not explain itself on hover — with one deliberate exception.** The pane
-bar's icon buttons, the search field, the platform tabs, and badge *images* all carry
-`aria-label` but no `title`, so nothing pops a caption while you read chat. The one `title`
-left in a message row is on the three-letter badge chip that stands in for a badge with no
-image — there the title is the only place the full label exists. Do not reintroduce
-tooltips on the bar; they were removed on purpose. **Emotes are the exception**: hovering one
-shows a small custom popup (not a native `title`) with the raw token that was replaced and
-which provider drew the image — 7TV, BTTV, or the platform's own name for a native emote,
-via `PLATFORM_NAME` in `theme.ts`. With enough unfamiliar third-party emotes on screen at
-once, "what did that image used to say, and where did it come from" was worth the one
-exception.
+**The chrome does not explain itself on hover — with two deliberate exceptions.** The pane
+bar's icon buttons, the search field and the platform tabs all carry `aria-label` but no
+`title`, so nothing pops a caption while you read chat. Do not reintroduce tooltips on the
+bar; they were removed on purpose. **Emotes and badges are the exceptions**: hovering either
+shows a small custom popup (not a native `title`) — an emote's names the raw token that was
+replaced and which provider drew the image (7TV, BTTV, or the platform's own name for a
+native emote, via `PLATFORM_NAME` in `theme.ts`); a badge's names its full label, which for
+an image or glyph badge exists nowhere else on screen. Badges no longer carry a native
+`title` at all — the popup replaced it, for every badge shape (image, glyph, and the
+three-letter chip fallback alike), rather than doubling up a browser tooltip on top of a
+custom one. With enough unfamiliar third-party emotes or undecorated badges on screen at
+once, "what does that mean, and where did it come from" was worth the exception.
 
 **`useStore()` with no selector subscribes to the whole store, and in a chat app that is a
 performance bug rather than a shortcut.** `App`'s `Pane` did it: every 100ms batch, every

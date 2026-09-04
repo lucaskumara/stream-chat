@@ -332,6 +332,25 @@ describe('search', () => {
 
     expect(state().search['src-1']).toEqual(['author:xqc'])
   })
+
+  // Clicking a name in chat is the only caller of addSearchTerm, and it always
+  // means "filter by this person" — so the panel holding the now-nonzero term
+  // count has to open, or the click reads as if nothing happened.
+  it('opens that pane\'s filter panel', () => {
+    state().addSearchTerm('src-1', 'author:xqc')
+
+    expect(state().filterOpen['src-1']).toBe(true)
+  })
+
+  it('opens the filter panel even when the name was already filtered', () => {
+    state().addSearchTerm('src-1', 'author:xqc')
+    state().toggleFilter('src-1') // closes it — the first call already opened it
+    expect(state().filterOpen['src-1']).toBe(false)
+
+    state().addSearchTerm('src-1', 'author:xqc') // the dedupe branch
+
+    expect(state().filterOpen['src-1']).toBe(true)
+  })
 })
 
 describe('font size', () => {
@@ -380,8 +399,8 @@ describe('display options', () => {
 })
 
 describe('theme', () => {
-  it('starts dark, with the OS reading as dark until App asks', () => {
-    expect(state().themeChoice).toBe('dark')
+  it('starts on system, with the OS reading as dark until App asks', () => {
+    expect(state().themeChoice).toBe('system')
     expect(state().systemDark).toBe(true)
   })
 
@@ -452,6 +471,7 @@ describe('setPlatforms', () => {
         channel: 'xqc',
         ingestUrl: 'rtmps://ingest.global-contribute.live-video.net/app/',
         hasStreamKey: true,
+        streamKeyLength: 24,
         forward: false,
         emoteProviders: { sevenTv: true, bttv: true }
       }
@@ -469,6 +489,7 @@ describe('setPlatforms', () => {
         channel: 'xqc',
         ingestUrl: '',
         hasStreamKey: false,
+        streamKeyLength: 0,
         forward: false,
         emoteProviders: { sevenTv: true, bttv: true }
       }

@@ -20,6 +20,15 @@ export function draftFrom(config: PlatformConfig): PlatformDraft {
   }
 }
 
+/** Main never sends the key back, only its length — so a saved key is masked at
+    its real length rather than a fixed run of dots that lies about how long it
+    is. */
+export function keyPlaceholder(config: PlatformConfig | undefined): string {
+  if (!config?.hasStreamKey) return 'Paste your stream key'
+
+  return '•'.repeat(config.streamKeyLength)
+}
+
 function emoteProvidersChanged(draft: EmoteProviderSettings, saved: EmoteProviderSettings): boolean {
   return draft.sevenTv !== saved.sevenTv || draft.bttv !== saved.bttv
 }
