@@ -1,6 +1,6 @@
 {
   "name": "stream-chat",
-  "version": "0.0.1",
+  "version": "0.1.0-alpha.1",
   "description": "Unified live chat client for Twitch, YouTube and Kick",
   "main": "./out/main/index.js",
   "author": "lucaskumara",
