@@ -198,6 +198,27 @@ export interface BroadcastState {
 /** What IVS requires. Twitch and YouTube are looser but recommend the same. */
 export const REQUIRED_KEYFRAME_SECONDS = 2
 
+/** 'unsupported' covers dev and the portable build alike — neither carries the
+    `app-update.yml` electron-builder only emits for the NSIS target, so there is nothing to
+    check against. 'downloaded' is the one state Settings offers an install button for. */
+export type UpdateStatus =
+  | 'unsupported'
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'not-available'
+  | 'error'
+
+export interface UpdateState {
+  status: UpdateStatus
+  currentVersion: string
+  latestVersion?: string
+  progressPercent?: number
+  error?: string
+}
+
 export type HostPlatform = 'darwin' | 'win32' | 'linux' | 'other'
 
 export interface ChatApi {
@@ -237,4 +258,10 @@ export interface ChatApi {
   broadcast(): Promise<BroadcastState>
 
   onBroadcast(cb: (state: BroadcastState) => void): () => void
+
+  getUpdateState(): Promise<UpdateState>
+  checkForUpdates(): Promise<void>
+  installUpdate(): Promise<void>
+
+  onUpdateState(cb: (state: UpdateState) => void): () => void
 }

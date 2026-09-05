@@ -1,6 +1,6 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
-import type { Platform, SourceState } from '@shared/types'
+import type { Platform, SourceState, UpdateState } from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { MessageBus } from './bus'
 import { SourceManager } from './sources'
@@ -11,6 +11,7 @@ import { keepRendererAlive, reportChildProcessFailures } from './lifecycle'
 import { log, openLogFile, setLogLevel } from './log'
 import { config } from './config'
 import { Relay } from './broadcast'
+import { checkOnLaunch, initUpdater, startPeriodicChecks, stopPeriodicChecks } from './updater'
 
 const isDev = !app.isPackaged
 
@@ -29,6 +30,12 @@ function broadcastSources(states: SourceState[]): void {
 function broadcastPlatforms(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC.platformState, platformConfigs())
+  }
+}
+
+function broadcastUpdateState(state: UpdateState): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC.updatesState, state)
   }
 }
 
@@ -198,6 +205,7 @@ if (!app.requestSingleInstanceLock()) {
     reportChildProcessFailures()
 
     registerIpc(sources, obs, bus, relay, platformsChanged)
+    initUpdater(broadcastUpdateState, () => relay.isBroadcasting())
 
     void obs.start()
 
@@ -209,6 +217,9 @@ if (!app.requestSingleInstanceLock()) {
       relay.start()
 
       void syncChannels()
+
+      void checkOnLaunch()
+      startPeriodicChecks()
     })
 
     mainWindow.on('closed', () => {
@@ -239,6 +250,7 @@ if (!app.requestSingleInstanceLock()) {
     quitting = true
     event.preventDefault()
 
+    stopPeriodicChecks()
     relay.shutdown()
     unregisterIpc()
     bus.detach()

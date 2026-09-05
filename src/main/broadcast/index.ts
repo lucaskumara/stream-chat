@@ -12,6 +12,7 @@ import {
   hasRandomAccess,
   ingestArgs,
   ingestUrl,
+  isBroadcasting,
   isSyncedPacket,
   listenUrl,
   packetPid,
@@ -155,6 +156,12 @@ export class Relay {
       }),
       error: this.failure ?? undefined
     }
+  }
+
+  /** Whether ending this process right now would cut a live stream — the auto-installer
+      checks this before ever calling `quitAndInstall`. */
+  isBroadcasting(): boolean {
+    return isBroadcasting(this.state().destinations)
   }
 
   /** Listens from launch, whether or not anything is switched on, so the page can report

@@ -10,6 +10,7 @@ import type {
   PlatformConfig,
   PlatformPatch,
   SourceState,
+  UpdateState,
   VerifyChannelResult
 } from '@shared/types'
 
@@ -35,7 +36,11 @@ const IPC = {
   batch: 'chat:batch',
   sourceState: 'sources:state',
   platformState: 'platforms:state',
-  broadcastState: 'broadcast:changed'
+  broadcastState: 'broadcast:changed',
+  updatesCheck: 'updates:check',
+  updatesInstall: 'updates:install',
+  updatesGetState: 'updates:get-state',
+  updatesState: 'updates:state'
 } as const
 
 const HOSTS: HostPlatform[] = ['darwin', 'win32', 'linux']
@@ -125,6 +130,20 @@ const api: ChatApi = {
     ipcRenderer.on(IPC.broadcastState, handler)
     return () => {
       ipcRenderer.off(IPC.broadcastState, handler)
+    }
+  },
+
+  getUpdateState: (): Promise<UpdateState> => ipcRenderer.invoke(IPC.updatesGetState),
+
+  checkForUpdates: (): Promise<void> => ipcRenderer.invoke(IPC.updatesCheck),
+
+  installUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.updatesInstall),
+
+  onUpdateState: (cb: (state: UpdateState) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, state: UpdateState): void => cb(state)
+    ipcRenderer.on(IPC.updatesState, handler)
+    return () => {
+      ipcRenderer.off(IPC.updatesState, handler)
     }
   }
 }

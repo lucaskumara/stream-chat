@@ -11,6 +11,7 @@ const MODES: { id: View | 'settings'; label: string; Icon: typeof MessageSquare 
 export interface ModeSwitcherProps {
   view: View
   settingsOpen: boolean
+  updateReady: boolean
   onSelectView: (view: View) => void
   onOpenSettings: () => void
 }
@@ -22,6 +23,7 @@ export interface ModeSwitcherProps {
 function ModeSwitcherImpl({
   view,
   settingsOpen,
+  updateReady,
   onSelectView,
   onOpenSettings
 }: ModeSwitcherProps): React.ReactElement {
@@ -42,7 +44,7 @@ function ModeSwitcherImpl({
             role="tab"
             aria-selected={on}
             onClick={() => (id === 'settings' ? onOpenSettings() : onSelectView(id))}
-            className="flex h-[26px] cursor-pointer items-center gap-[7px] rounded-[5px] border-0 px-[11px] text-[14px]"
+            className="relative flex h-[26px] cursor-pointer items-center gap-[7px] rounded-[5px] border-0 px-[11px] text-[14px]"
             style={{
               background: on ? 'var(--segment-on)' : 'transparent',
               color: on ? 'var(--heading)' : 'var(--fg-3)'
@@ -56,6 +58,17 @@ function ModeSwitcherImpl({
           >
             <Icon size={15} strokeWidth={1.8} />
             {label}
+
+            {/* An update finished downloading and is ready to install — the badge
+                points at Settings, where General explains it and offers the
+                restart. No tooltip, matching every other title-bar control. */}
+            {id === 'settings' && updateReady && (
+              <span
+                aria-hidden
+                className="absolute h-[7px] w-[7px] rounded-full"
+                style={{ top: 3, right: 3, background: 'var(--toggle-on)' }}
+              />
+            )}
           </button>
         )
       })}

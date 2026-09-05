@@ -142,6 +142,7 @@ export default function App(): React.ReactElement {
   const themeChoice = useStore((s) => s.themeChoice)
   const systemDark = useStore((s) => s.systemDark)
   const setSystemDark = useStore((s) => s.setSystemDark)
+  const updateReady = useStore((s) => s.updateState.status === 'downloaded')
 
   const mode = resolvedTheme(themeChoice, systemDark)
 
@@ -151,6 +152,7 @@ export default function App(): React.ReactElement {
   )
   const setSources = useStore((s) => s.setSources)
   const setPlatforms = useStore((s) => s.setPlatforms)
+  const setUpdateState = useStore((s) => s.setUpdateState)
   const ingest = useStore((s) => s.ingest)
 
   useEffect(() => {
@@ -158,6 +160,7 @@ export default function App(): React.ReactElement {
     const offBatch = api.onBatch(ingest)
     const offSources = api.onSources(setSources)
     const offPlatforms = api.onPlatforms(setPlatforms)
+    const offUpdateState = api.onUpdateState(setUpdateState)
 
     // A renderer reload — after a crash, or the watchdog recovering a blank window —
     // starts with an empty store, so the replay main already keeps for OBS docks is
@@ -180,12 +183,18 @@ export default function App(): React.ReactElement {
       .then(setPlatforms)
       .catch((error: unknown) => console.debug('[platforms] unavailable:', error))
 
+    void api
+      .getUpdateState()
+      .then(setUpdateState)
+      .catch((error: unknown) => console.debug('[updates] unavailable:', error))
+
     return () => {
       offBatch()
       offSources()
       offPlatforms()
+      offUpdateState()
     }
-  }, [ingest, setSources, setPlatforms])
+  }, [ingest, setSources, setPlatforms, setUpdateState])
 
   // The palette is stamped on the root rather than resolved in CSS, so 'system' has
   // one home and the OBS dock — a second entry that never stamps — stays dark.
@@ -212,6 +221,7 @@ export default function App(): React.ReactElement {
         onView={setView}
         settingsOpen={settingsOpen}
         onOpenSettings={openSettings}
+        updateReady={updateReady}
         sources={sources}
         visiblePlatforms={visiblePlatforms}
         merged={merged}

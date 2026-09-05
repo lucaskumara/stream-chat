@@ -1,6 +1,11 @@
 appId: com.lucaskumara.streamchat
 productName: Stream Chat
 
+publish:
+  provider: github
+  owner: lucaskumara
+  repo: stream-chat
+
 directories:
   buildResources: build
   output: release

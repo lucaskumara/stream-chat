@@ -1,4 +1,4 @@
-import type { Platform, PlatformSetup } from '@shared/types'
+import type { Destination as BroadcastDestination, Platform, PlatformSetup } from '@shared/types'
 
 /** OBS pushes here. 1935 is RTMP's registered port, which is what OBS offers by default
     and what anyone copying a server address expects to see. */
@@ -50,6 +50,15 @@ export function destinationRetryMs(attempts: number): number {
   const step = DESTINATION_RETRY_MS * 2 ** Math.max(0, attempts)
 
   return Math.min(step, MAX_DESTINATION_RETRY_MS)
+}
+
+/** Pulled out of the class so it is testable directly — `Relay` itself spawns real ffmpeg
+    processes, which is why only its extracted pieces get unit tests. True only once a
+    destination has actually reached the platform, not merely queued or retrying — an
+    auto-install that quits the app has to know the difference, since it would otherwise
+    silently end a live stream. */
+export function isBroadcasting(destinations: BroadcastDestination[]): boolean {
+  return destinations.some((destination) => destination.state === 'sending')
 }
 
 export function ingestUrl(relayKey: string): string {

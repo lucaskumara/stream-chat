@@ -878,6 +878,57 @@ mid-stream.
 **No account is needed for any of it.** Stream keys are paste-once values; Twitch and Kick
 go live on RTMP connect, and YouTube does too as long as Auto-start is on in Studio.
 
+### Auto-update
+
+**`electron-updater` checks GitHub Releases, and only the NSIS build gets `app-update.yml`.**
+electron-builder only writes that file into the NSIS output — the portable target has no
+Windows updater at all in electron-updater, so it stays a manual download, same as before this
+existed. The repo is public, so the shipped app checks anonymously; a token
+(`GH_TOKEN`) is only needed to *publish* a release, via `npm run release`
+(`electron-builder --publish always`).
+
+**`autoUpdater.isUpdaterActive()` is the one guard, and it covers both dev and portable.**
+It is false whenever `app.isPackaged` is false *or* there is no update config to read — dev
+never has one and the portable build never gets one either, so both report through the same
+`unsupported` status rather than an `isDev` special case. `main/updater.ts` checks it once, in
+`initUpdater`, and every other export becomes a no-op if it was false.
+
+**Checking always downloads; only installing is gated.** `autoDownload = true`, so
+`checkForUpdates()` fetches an update the moment it finds one — on launch, on the periodic
+timer, and from the "Check for Updates" button in Settings → General all download the same
+way. What differs is what happens once `update-downloaded` fires:
+
+- **The launch check is install-eligible.** `checkOnLaunch()` marks the next download as
+  eligible, and if nothing is broadcasting when it lands, `installUpdate()` runs immediately —
+  no prompt, since nothing has had a chance to interrupt yet.
+- **Every other check (`checkNow`) is not**, on purpose — the periodic timer and the manual
+  button both go through it, and clear the eligibility flag even if a launch check is still
+  in flight. A user who explicitly asked "is there an update?" should never have the app
+  restart out from under them; the result just sits at `downloaded`, and Settings offers
+  "Install & Relaunch".
+
+**`quitAndInstall` ends every RTMP connection the relay is holding open, so broadcasting gates
+it everywhere.** `Relay.isBroadcasting()` — true only once some destination has actually
+reached `sending`, not merely `connecting` — is threaded into `initUpdater` as a callback and
+checked before the launch path ever auto-installs. The same state, fetched into Settings →
+General the way `Broadcast.tsx` already fetches it, is what decides whether clicking
+"Install & Relaunch" installs immediately or opens a confirm dialog first ("this will end your
+stream(s)"). Main never re-derives that decision on the install IPC itself — `installUpdate()`
+always installs when asked, because the confirmation is a renderer-side judgment made against
+live state it already holds, not a security boundary.
+
+**The renderer's update state is pushed the same way platform config and broadcast state
+already are.** `getUpdateState()`/`onUpdateState` is the pull-once-then-subscribe pair every
+other piece of main-owned state uses — `App.tsx` calls both on mount, the same as
+`platforms()`/`onPlatforms`. A small dot on the Settings tab (`ModeSwitcher`) is the only
+"something changed" signal outside Settings itself, shown only once `status === 'downloaded'`
+— no tooltip, matching every other title-bar control.
+
+**`electron-updater`'s dependency tree ships in the installer now.** It is externalized like
+`ws`/`youtubei.js`/`ffmpeg-static` (anything in `dependencies` is), which means its own
+`semver`/`js-yaml`/`fs-extra`/`builder-util-runtime` land in `node_modules` inside the
+installer too — see the updated list in "Packaging" below.
+
 ### Renderer UI
 
 **There is no component library any more — the chrome is hand-built.** v1 built the tab
@@ -1431,9 +1482,11 @@ to the link server, so it keeps a `connect-src` of `ws://127.0.0.1:*` that the a
 **`ffmpeg-static` is a dependency, not a devDependency**, and is `asarUnpack`ed — a binary
 inside the archive cannot be executed. It is by far the largest thing in the build.
 
-**Only `ws`, `youtubei.js` and `ffmpeg-static` reach the installer.** electron-builder ships `dependencies` and
-prunes `devDependencies`, so the packed `node_modules` is `ws`, `youtubei.js` and its three
-transitive packages — nothing else. A package in the wrong list is a shipping bug.
+**`ws`, `youtubei.js`, `ffmpeg-static` and now `electron-updater` reach the installer, and
+nothing else.** electron-builder ships `dependencies` and prunes `devDependencies`, so the
+packed `node_modules` is exactly those four plus their transitive packages —
+`electron-updater` alone brings `semver`, `js-yaml`, `fs-extra`, `builder-util-runtime` and a
+few smaller ones. A package in the wrong list is a shipping bug.
 
 **The build is unsigned and has no icon of its own.** electron-builder reports `default
 Electron icon is used`; a `build/icon.png` of 256px or more is all it needs. Unsigned means
@@ -1539,7 +1592,8 @@ does not: the app opens with empty panes every launch and refills from live chat
 
 Deliberately not done: **no message sending on any platform** (the composer, and every
 account that authorised it, were removed — a chat client that only reads is the decision, not
-an omission), no moderation, and no auto-update. YouTube is configured like the others but is
+an omission), and no moderation. Auto-update is done — see "Auto-update" — for the NSIS
+installer; the portable build stays manual. YouTube is configured like the others but is
 the least exercised of the three. OBS links are read-only mirrors: a dock shows a channel only
 while that channel is open in the app, and hitting a URL never adds one. Packaging now works — see "Packaging" — but the build
 is unsigned and has no icon of its own.
@@ -1599,6 +1653,8 @@ tests, so nothing bundles them. What is covered:
 | the destination backoff and process teardown | `broadcast/relay.ts`, `broadcast/index.ts` |
 | retrying a failed emote load | `emotes/seventv.ts`, `emotes/bttv.ts` |
 | not caching a rejected YouTube session | `platforms/youtube/connection.ts` |
+| the update state machine and the launch-vs-periodic auto-install decision | `updater.ts` |
+| whether a destination has actually reached the platform | `broadcast/relay.ts` |
 
 **Keep the tests out of `src/renderer`, and not only for tidiness.** Tailwind v4 scans the
 renderer root for class candidates and takes them from prose, not just from JSX. Four test

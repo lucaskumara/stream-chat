@@ -15,6 +15,7 @@ import { config } from './config'
 import { logDirectory } from './log'
 import type { Relay } from './broadcast'
 import { verifyChannel } from './chat/verify'
+import { checkNow, currentUpdateState, installUpdate } from './updater'
 
 const MAX_LABEL_LENGTH = 80
 const MAX_IDENTIFIER_LENGTH = 100
@@ -46,7 +47,12 @@ export const IPC = {
   batch: 'chat:batch',
   sourceState: 'sources:state',
   platformState: 'platforms:state',
-  broadcastState: 'broadcast:changed'
+  broadcastState: 'broadcast:changed',
+
+  updatesCheck: 'updates:check',
+  updatesInstall: 'updates:install',
+  updatesGetState: 'updates:get-state',
+  updatesState: 'updates:state'
 } as const
 
 type IpcHandler = Parameters<typeof ipcMain.handle>[1]
@@ -74,6 +80,7 @@ export function registerIpc(
   registerShellHandlers()
   registerWindowHandlers()
   registerObsHandlers(obs)
+  registerUpdateHandlers()
 }
 
 export function platformConfigs(): PlatformConfig[] {
@@ -164,6 +171,12 @@ function registerObsHandlers(obs: ObsServer): void {
 
     return `${base}${obsChatPath(parsePlatform(platform), identifier)}`
   })
+}
+
+function registerUpdateHandlers(): void {
+  handle(IPC.updatesCheck, () => checkNow())
+  handle(IPC.updatesInstall, () => installUpdate())
+  handle(IPC.updatesGetState, () => currentUpdateState())
 }
 
 function registerWindowHandlers(): void {

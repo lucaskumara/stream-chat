@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { PlatformSetup } from '@shared/types'
+import type { Destination, PlatformSetup } from '@shared/types'
 import {
   destinationArgs,
   destinationUrl,
   hasRandomAccess,
   ingestArgs,
   ingestUrl,
+  isBroadcasting,
   isSyncedPacket,
   listenUrl,
   normalizeIngest,
@@ -99,6 +100,29 @@ describe('destinationUrl', () => {
     expect(destinationUrl(setup({ ingestUrl: 'rtmp://x/app' }))).toBe('')
     expect(destinationUrl(setup({ streamKey: 'k' }))).toBe('')
     expect(destinationUrl(undefined)).toBe('')
+  })
+})
+
+describe('isBroadcasting', () => {
+  function destination(state: Destination['state']): Destination {
+    return { platform: 'twitch', state }
+  }
+
+  // The one state that means a destination has actually reached the platform — an
+  // auto-install that quits the app has to know this, since it would otherwise cut a
+  // live RTMP connection without warning.
+  it('is true when a destination is sending', () => {
+    expect(isBroadcasting([destination('off'), destination('sending')])).toBe(true)
+  })
+
+  it('is false while every destination is off, connecting or erroring', () => {
+    expect(isBroadcasting([destination('off'), destination('connecting'), destination('error')])).toBe(
+      false
+    )
+  })
+
+  it('is false with no destinations at all', () => {
+    expect(isBroadcasting([])).toBe(false)
   })
 })
 

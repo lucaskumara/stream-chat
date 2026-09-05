@@ -6,7 +6,8 @@ import type {
   ModerationEvent,
   Platform,
   PlatformConfig,
-  SourceState
+  SourceState,
+  UpdateState
 } from '@shared/types'
 
 const DEFAULT_CAPACITY = 500
@@ -91,8 +92,11 @@ interface ChatState {
 
   platforms: PlatformConfig[]
 
+  updateState: UpdateState
+
   setSources: (states: SourceState[]) => void
   setPlatforms: (platforms: PlatformConfig[]) => void
+  setUpdateState: (state: UpdateState) => void
   togglePlatform: (platform: Platform) => void
   toggleMerged: () => void
   ingest: (batch: ChatBatch) => void
@@ -235,6 +239,8 @@ export const useStore = create<ChatState>()((set) => ({
 
   platforms: [],
 
+  updateState: { status: 'idle', currentVersion: '' },
+
   /** A cold start adopts whatever main already has — the backlog replay after a
       renderer crash otherwise leaves the connect form up over a live chat. Later
       updates never move the tabs: a status event on one platform must not pull the
@@ -250,6 +256,8 @@ export const useStore = create<ChatState>()((set) => ({
     }),
 
   setPlatforms: (platforms) => set({ platforms }),
+
+  setUpdateState: (updateState) => set({ updateState }),
 
   /** Panes run in tab order rather than the order they were switched on, so a split
       reads left to right the same as the strip above it. The last pane cannot be

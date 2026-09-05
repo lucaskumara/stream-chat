@@ -23,6 +23,7 @@ export interface TitleBarProps {
   onView: (view: View) => void
   settingsOpen: boolean
   onOpenSettings: () => void
+  updateReady: boolean
   sources: SourceState[]
   visiblePlatforms: Platform[]
   merged: boolean
@@ -35,6 +36,7 @@ export function TitleBar({
   onView,
   settingsOpen,
   onOpenSettings,
+  updateReady,
   sources,
   visiblePlatforms,
   merged,
@@ -59,6 +61,7 @@ export function TitleBar({
       <ModeSwitcher
         view={view}
         settingsOpen={settingsOpen}
+        updateReady={updateReady}
         onSelectView={onView}
         onOpenSettings={onOpenSettings}
       />
