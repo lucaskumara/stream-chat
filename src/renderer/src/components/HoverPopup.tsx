@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 /** A hover tooltip rendered through a portal to `document.body`, so it always
@@ -18,7 +18,7 @@ export function HoverPopup({
   children: React.ReactNode
   popup: React.ReactNode
 }): React.ReactElement {
-  const ref = useRef<HTMLSpanElement>(null)
+  const [node, setNode] = useState<HTMLSpanElement | null>(null)
   const [hovered, setHovered] = useState(false)
 
   // A portaled tooltip no longer scrolls with the row it's anchored to, so a
@@ -36,16 +36,14 @@ export function HoverPopup({
 
   return (
     <span
-      ref={ref}
+      ref={setNode}
       className="relative inline-block align-middle"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {children}
 
-      {hovered &&
-        ref.current &&
-        createPortal(<TooltipBody anchor={ref.current}>{popup}</TooltipBody>, document.body)}
+      {hovered && node && createPortal(<TooltipBody anchor={node}>{popup}</TooltipBody>, document.body)}
     </span>
   )
 }

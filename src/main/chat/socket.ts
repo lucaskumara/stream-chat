@@ -1,161 +1,161 @@
-import WebSocket from "ws";
-import { reconnectDelayMs } from "./backoff";
+import WebSocket from 'ws'
+import { reconnectDelayMs } from './backoff'
 
-export type RoomHandler = (event: string, payload: unknown) => void;
+export type RoomHandler = (event: string, payload: unknown) => void
 
 export abstract class RoomSocket {
-  private ws: WebSocket | null = null;
-  private readonly rooms = new Map<string, Set<RoomHandler>>();
+  private ws: WebSocket | null = null
+  private readonly rooms = new Map<string, Set<RoomHandler>>()
 
-  private attempt = 0;
-  private silenceMs: number;
+  private attempt = 0
+  private silenceMs: number
 
-  private silenceTimer: NodeJS.Timeout | null = null;
-  private replyTimer: NodeJS.Timeout | null = null;
-  private reconnectTimer: NodeJS.Timeout | null = null;
+  private silenceTimer: NodeJS.Timeout | null = null
+  private replyTimer: NodeJS.Timeout | null = null
+  private reconnectTimer: NodeJS.Timeout | null = null
 
   constructor(
     private readonly url: string,
     private readonly defaultSilenceMs: number,
     private readonly replyDeadlineMs: number,
   ) {
-    this.silenceMs = defaultSilenceMs;
+    this.silenceMs = defaultSilenceMs
   }
 
-  protected abstract onOpen(): void;
-  protected abstract onFrame(raw: string): void;
+  protected abstract onOpen(): void
+  protected abstract onFrame(raw: string): void
 
-  protected abstract sendJoin(room: string): void;
-  protected abstract sendLeave(room: string): void;
-  protected abstract sendKeepalive(): void;
+  protected abstract sendJoin(room: string): void
+  protected abstract sendLeave(room: string): void
+  protected abstract sendKeepalive(): void
 
   join(room: string, handler: RoomHandler): () => void {
-    const existing = this.rooms.get(room);
+    const existing = this.rooms.get(room)
 
     if (existing) {
-      existing.add(handler);
+      existing.add(handler)
     } else {
-      this.rooms.set(room, new Set([handler]));
-      this.sendJoin(room);
+      this.rooms.set(room, new Set([handler]))
+      this.sendJoin(room)
     }
 
-    if (!this.ws) this.connect();
+    if (!this.ws) this.connect()
 
-    return () => this.leave(room, handler);
+    return () => this.leave(room, handler)
   }
 
   shutdown(): void {
-    this.stopTimers();
+    this.stopTimers()
 
-    const socket = this.ws;
-    this.ws = null;
-    this.attempt = 0;
+    const socket = this.ws
+    this.ws = null
+    this.attempt = 0
 
-    socket?.close();
+    socket?.close()
   }
 
   protected get joinedRooms(): IterableIterator<string> {
-    return this.rooms.keys();
+    return this.rooms.keys()
   }
 
   protected send(raw: string): void {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(raw);
+    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(raw)
   }
 
   protected deliver(room: string, event: string, payload: unknown): void {
-    const handlers = this.rooms.get(room);
-    if (!handlers) return;
+    const handlers = this.rooms.get(room)
+    if (!handlers) return
 
-    for (const handler of handlers) handler(event, payload);
+    for (const handler of handlers) handler(event, payload)
   }
 
   protected negotiateSilence(ms: number | undefined): void {
-    this.silenceMs = ms && ms > 0 ? ms : this.defaultSilenceMs;
-    this.attempt = 0;
+    this.silenceMs = ms && ms > 0 ? ms : this.defaultSilenceMs
+    this.attempt = 0
   }
 
   private leave(room: string, handler: RoomHandler): void {
-    const handlers = this.rooms.get(room);
-    if (!handlers?.delete(handler) || handlers.size > 0) return;
+    const handlers = this.rooms.get(room)
+    if (!handlers?.delete(handler) || handlers.size > 0) return
 
-    this.rooms.delete(room);
-    this.sendLeave(room);
+    this.rooms.delete(room)
+    this.sendLeave(room)
 
-    if (this.rooms.size === 0) this.shutdown();
+    if (this.rooms.size === 0) this.shutdown()
   }
 
   private connect(): void {
-    this.clearReconnect();
+    this.clearReconnect()
 
-    const socket = new WebSocket(this.url);
-    this.ws = socket;
+    const socket = new WebSocket(this.url)
+    this.ws = socket
 
-    socket.on("open", () => {
-      if (this.ws !== socket) return;
+    socket.on('open', () => {
+      if (this.ws !== socket) return
 
-      this.onOpen();
-      this.armSilence();
-    });
+      this.onOpen()
+      this.armSilence()
+    })
 
-    socket.on("message", (raw: WebSocket.RawData) => {
-      if (this.ws !== socket) return;
+    socket.on('message', (raw: WebSocket.RawData) => {
+      if (this.ws !== socket) return
 
-      this.noteActivity();
-      this.onFrame(raw.toString());
-    });
+      this.noteActivity()
+      this.onFrame(raw.toString())
+    })
 
-    socket.on("close", () => {
-      if (this.ws === socket) this.scheduleReconnect();
-    });
+    socket.on('close', () => {
+      if (this.ws === socket) this.scheduleReconnect()
+    })
 
-    socket.on("error", () => socket.close());
+    socket.on('error', () => socket.close())
   }
 
   private noteActivity(): void {
     if (this.replyTimer) {
-      clearTimeout(this.replyTimer);
-      this.replyTimer = null;
+      clearTimeout(this.replyTimer)
+      this.replyTimer = null
     }
 
-    this.armSilence();
+    this.armSilence()
   }
 
   private armSilence(): void {
-    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+    if (this.silenceTimer) clearTimeout(this.silenceTimer)
 
-    this.silenceTimer = setTimeout(() => this.probe(), this.silenceMs);
+    this.silenceTimer = setTimeout(() => this.probe(), this.silenceMs)
   }
 
   private probe(): void {
-    this.sendKeepalive();
+    this.sendKeepalive()
 
-    this.replyTimer = setTimeout(() => this.ws?.close(), this.replyDeadlineMs);
+    this.replyTimer = setTimeout(() => this.ws?.close(), this.replyDeadlineMs)
   }
 
   private scheduleReconnect(): void {
-    this.stopTimers();
-    this.ws = null;
+    this.stopTimers()
+    this.ws = null
 
-    if (this.rooms.size === 0) return;
+    if (this.rooms.size === 0) return
 
     this.reconnectTimer = setTimeout(
       () => this.connect(),
       reconnectDelayMs(this.attempt++),
-    );
+    )
   }
 
   private stopTimers(): void {
-    if (this.silenceTimer) clearTimeout(this.silenceTimer);
-    if (this.replyTimer) clearTimeout(this.replyTimer);
+    if (this.silenceTimer) clearTimeout(this.silenceTimer)
+    if (this.replyTimer) clearTimeout(this.replyTimer)
 
-    this.silenceTimer = null;
-    this.replyTimer = null;
+    this.silenceTimer = null
+    this.replyTimer = null
 
-    this.clearReconnect();
+    this.clearReconnect()
   }
 
   private clearReconnect(): void {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
   }
 }

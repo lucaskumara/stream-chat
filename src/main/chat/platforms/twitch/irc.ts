@@ -1,11 +1,11 @@
-import type { Badge, ChatMessage, Fragment, MessageKind } from "@shared/types";
-import { RoomSocket } from "../../socket";
-import { messageId, withEmotes, type ChatFeed, type FeedSink } from "../../watcher";
-import { splitLinks } from "../../links";
-import { REPLY_EXCERPT_LIMIT } from "../../fragments";
-import { twitchBadges } from "./badges";
-import { twitchEmote } from "./emotes";
-import type { TwitchChannel } from "./channel";
+import type { Badge, ChatMessage, Fragment, MessageKind } from '@shared/types'
+import { RoomSocket } from '../../socket'
+import { messageId, withEmotes, type ChatFeed, type FeedSink } from '../../watcher'
+import { splitLinks } from '../../links'
+import { REPLY_EXCERPT_LIMIT } from '../../fragments'
+import { twitchBadges } from './badges'
+import { twitchEmote } from './emotes'
+import type { TwitchChannel } from './channel'
 
 export interface IrcMessage {
   tags: Record<string, string>;
@@ -18,69 +18,69 @@ export interface IrcMessage {
 }
 
 export function unescapeTag(value: string): string {
-  let out = "";
+  let out = ''
   for (let i = 0; i < value.length; i++) {
-    if (value[i] !== "\\") {
-      out += value[i];
-      continue;
+    if (value[i] !== '\\') {
+      out += value[i]
+      continue
     }
-    const next = value[++i];
-    if (next === "s") out += " ";
-    else if (next === "n") out += "\n";
-    else if (next === "r") out += "\r";
-    else if (next === ":") out += ";";
-    else if (next === "\\") out += "\\";
-    else if (next === undefined) break;
-    else out += next;
+    const next = value[++i]
+    if (next === 's') out += ' '
+    else if (next === 'n') out += '\n'
+    else if (next === 'r') out += '\r'
+    else if (next === ':') out += ';'
+    else if (next === '\\') out += '\\'
+    else if (next === undefined) break
+    else out += next
   }
-  return out;
+  return out
 }
 
 export function parseIrcLine(line: string): IrcMessage | null {
-  if (line === "") return null;
-  let rest = line;
+  if (line === '') return null
+  let rest = line
 
-  const tags: Record<string, string> = {};
-  if (rest.startsWith("@")) {
-    const end = rest.indexOf(" ");
-    if (end === -1) return null;
-    for (const pair of rest.slice(1, end).split(";")) {
-      if (pair === "") continue;
-      const eq = pair.indexOf("=");
-      if (eq === -1) tags[pair] = "";
-      else tags[pair.slice(0, eq)] = unescapeTag(pair.slice(eq + 1));
+  const tags: Record<string, string> = {}
+  if (rest.startsWith('@')) {
+    const end = rest.indexOf(' ')
+    if (end === -1) return null
+    for (const pair of rest.slice(1, end).split(';')) {
+      if (pair === '') continue
+      const eq = pair.indexOf('=')
+      if (eq === -1) tags[pair] = ''
+      else tags[pair.slice(0, eq)] = unescapeTag(pair.slice(eq + 1))
     }
-    rest = rest.slice(end + 1);
+    rest = rest.slice(end + 1)
   }
 
-  let nick: string | undefined;
-  if (rest.startsWith(":")) {
-    const end = rest.indexOf(" ");
-    if (end === -1) return null;
-    const prefix = rest.slice(1, end);
-    const bang = prefix.indexOf("!");
-    nick = bang === -1 ? prefix : prefix.slice(0, bang);
-    rest = rest.slice(end + 1);
+  let nick: string | undefined
+  if (rest.startsWith(':')) {
+    const end = rest.indexOf(' ')
+    if (end === -1) return null
+    const prefix = rest.slice(1, end)
+    const bang = prefix.indexOf('!')
+    nick = bang === -1 ? prefix : prefix.slice(0, bang)
+    rest = rest.slice(end + 1)
   }
 
-  let trailing: string | undefined;
-  const trailingAt = rest.indexOf(" :");
-  if (rest.startsWith(":")) {
-    trailing = rest.slice(1);
-    rest = "";
+  let trailing: string | undefined
+  const trailingAt = rest.indexOf(' :')
+  if (rest.startsWith(':')) {
+    trailing = rest.slice(1)
+    rest = ''
   } else if (trailingAt !== -1) {
-    trailing = rest.slice(trailingAt + 2);
-    rest = rest.slice(0, trailingAt);
+    trailing = rest.slice(trailingAt + 2)
+    rest = rest.slice(0, trailingAt)
   }
 
-  const parts = rest.split(" ").filter(Boolean);
-  const command = parts.shift() ?? "";
-  if (command === "") return null;
+  const parts = rest.split(' ').filter(Boolean)
+  const command = parts.shift() ?? ''
+  if (command === '') return null
 
-  const result: IrcMessage = { tags, command, params: parts };
-  if (nick !== undefined) result.nick = nick;
-  if (trailing !== undefined) result.trailing = trailing;
-  return result;
+  const result: IrcMessage = { tags, command, params: parts }
+  if (nick !== undefined) result.nick = nick
+  if (trailing !== undefined) result.trailing = trailing
+  return result
 }
 
 interface EmoteSpan {
@@ -91,76 +91,76 @@ interface EmoteSpan {
 }
 
 export function parseEmoteTag(tag: string | undefined): EmoteSpan[] {
-  if (!tag) return [];
-  const spans: EmoteSpan[] = [];
+  if (!tag) return []
+  const spans: EmoteSpan[] = []
 
-  for (const group of tag.split("/")) {
-    if (group === "") continue;
-    const colon = group.indexOf(":");
-    if (colon === -1) continue;
-    const id = group.slice(0, colon);
+  for (const group of tag.split('/')) {
+    if (group === '') continue
+    const colon = group.indexOf(':')
+    if (colon === -1) continue
+    const id = group.slice(0, colon)
 
-    for (const range of group.slice(colon + 1).split(",")) {
-      const dash = range.indexOf("-");
-      if (dash === -1) continue;
-      const start = Number(range.slice(0, dash));
-      const end = Number(range.slice(dash + 1));
+    for (const range of group.slice(colon + 1).split(',')) {
+      const dash = range.indexOf('-')
+      if (dash === -1) continue
+      const start = Number(range.slice(0, dash))
+      const end = Number(range.slice(dash + 1))
       if (!Number.isFinite(start) || !Number.isFinite(end) || end < start)
-        continue;
-      spans.push({ id, start, end });
+        continue
+      spans.push({ id, start, end })
     }
   }
 
-  return spans.sort((a, b) => a.start - b.start);
+  return spans.sort((a, b) => a.start - b.start)
 }
 
-const IRC_URL = "wss://irc-ws.chat.twitch.tv:443";
+const IRC_URL = 'wss://irc-ws.chat.twitch.tv:443'
 
-const SILENCE_TIMEOUT_MS = 6 * 60 * 1000;
-const PONG_DEADLINE_MS = 30_000;
+const SILENCE_TIMEOUT_MS = 6 * 60 * 1000
+const PONG_DEADLINE_MS = 30_000
 
 export class IrcHub extends RoomSocket {
   constructor() {
-    super(IRC_URL, SILENCE_TIMEOUT_MS, PONG_DEADLINE_MS);
+    super(IRC_URL, SILENCE_TIMEOUT_MS, PONG_DEADLINE_MS)
   }
 
   protected onOpen(): void {
-    const anonymousNick = `justinfan${Math.floor(Math.random() * 80000 + 1000)}`;
+    const anonymousNick = `justinfan${Math.floor(Math.random() * 80000 + 1000)}`
 
-    this.send("CAP REQ :twitch.tv/tags twitch.tv/commands");
-    this.send(`NICK ${anonymousNick}`);
+    this.send('CAP REQ :twitch.tv/tags twitch.tv/commands')
+    this.send(`NICK ${anonymousNick}`)
 
-    for (const room of this.joinedRooms) this.sendJoin(room);
+    for (const room of this.joinedRooms) this.sendJoin(room)
   }
 
   protected onFrame(raw: string): void {
-    for (const line of raw.split("\r\n")) {
-      if (line === "") continue;
+    for (const line of raw.split('\r\n')) {
+      if (line === '') continue
 
-      const message = parseIrcLine(line);
-      if (!message) continue;
+      const message = parseIrcLine(line)
+      if (!message) continue
 
-      if (message.command === "PING") {
-        this.send(`PONG :${message.trailing ?? "tmi.twitch.tv"}`);
-        continue;
+      if (message.command === 'PING') {
+        this.send(`PONG :${message.trailing ?? 'tmi.twitch.tv'}`)
+        continue
       }
 
-      const target = message.params[0];
-      if (target?.startsWith("#"))
-        this.deliver(target.slice(1), message.command, message);
+      const target = message.params[0]
+      if (target?.startsWith('#'))
+        this.deliver(target.slice(1), message.command, message)
     }
   }
 
   protected sendJoin(room: string): void {
-    this.send(`JOIN #${room}`);
+    this.send(`JOIN #${room}`)
   }
 
   protected sendLeave(room: string): void {
-    this.send(`PART #${room}`);
+    this.send(`PART #${room}`)
   }
 
   protected sendKeepalive(): void {
-    this.send("PING :tmi.twitch.tv");
+    this.send('PING :tmi.twitch.tv')
   }
 }
 
@@ -168,69 +168,69 @@ export function buildIrcFragments(
   text: string,
   emoteTag: string | undefined,
 ): Fragment[] {
-  const spans = parseEmoteTag(emoteTag);
-  if (spans.length === 0) return splitLinks(text);
+  const spans = parseEmoteTag(emoteTag)
+  if (spans.length === 0) return splitLinks(text)
 
-  const chars = [...text];
-  const out: Fragment[] = [];
-  let cursor = 0;
+  const chars = [...text]
+  const out: Fragment[] = []
+  let cursor = 0
 
   for (const span of spans) {
-    if (span.start < cursor || span.start >= chars.length) continue;
-    const end = Math.min(span.end, chars.length - 1);
+    if (span.start < cursor || span.start >= chars.length) continue
+    const end = Math.min(span.end, chars.length - 1)
 
     if (span.start > cursor) {
-      out.push(...splitLinks(chars.slice(cursor, span.start).join("")));
+      out.push(...splitLinks(chars.slice(cursor, span.start).join('')))
     }
 
-    out.push(twitchEmote(span.id, chars.slice(span.start, end + 1).join("")));
-    cursor = end + 1;
+    out.push(twitchEmote(span.id, chars.slice(span.start, end + 1).join('')))
+    cursor = end + 1
   }
 
   if (cursor < chars.length)
-    out.push(...splitLinks(chars.slice(cursor).join("")));
-  return out;
+    out.push(...splitLinks(chars.slice(cursor).join('')))
+  return out
 }
 
 export function noticeKind(msgId: string | undefined): MessageKind {
   switch (msgId) {
-    case "sub":
-    case "resub":
-    case "subgift":
-    case "submysterygift":
-    case "giftpaidupgrade":
-    case "anonsubgift":
-      return "subscription";
-    case "raid":
-      return "raid";
-    case "announcement":
-      return "announcement";
+    case 'sub':
+    case 'resub':
+    case 'subgift':
+    case 'submysterygift':
+    case 'giftpaidupgrade':
+    case 'anonsubgift':
+      return 'subscription'
+    case 'raid':
+      return 'raid'
+    case 'announcement':
+      return 'announcement'
     default:
-      return "system";
+      return 'system'
   }
 }
 
 function badgesFor(channelLogin: string, tag: string | undefined): Badge[] {
-  if (!tag) return [];
+  if (!tag) return []
 
-  const badges: Badge[] = [];
+  const badges: Badge[] = []
 
-  for (const entry of tag.split(",")) {
-    const slash = entry.lastIndexOf("/");
-    if (slash === -1) continue;
+  for (const entry of tag.split(',')) {
+    const slash = entry.lastIndexOf('/')
+    if (slash === -1) continue
 
-    const setId = entry.slice(0, slash);
-    const version = entry.slice(slash + 1);
+    const setId = entry.slice(0, slash)
+    const version = entry.slice(slash + 1)
 
     badges.push(
       twitchBadges.lookup(channelLogin, setId, version) ?? {
         label: setId,
         id: setId,
       },
-    );
+    )
   }
 
-  return badges;
+  return badges
 }
 
 interface IrcAuthor {
@@ -247,30 +247,30 @@ function authorOf(
   channelLogin: string,
 ): IrcAuthor {
   const author: IrcAuthor = {
-    authorId: msg.tags["user-id"] ?? login,
+    authorId: msg.tags['user-id'] ?? login,
     authorName: login,
-  };
+  }
 
-  const display = msg.tags["display-name"];
-  if (display) author.authorDisplayName = display;
+  const display = msg.tags['display-name']
+  if (display) author.authorDisplayName = display
 
-  const color = msg.tags["color"];
-  if (color) author.authorColor = color;
+  const color = msg.tags['color']
+  if (color) author.authorColor = color
 
-  const badges = badgesFor(channelLogin, msg.tags["badges"]);
-  if (badges.length > 0) author.badges = badges;
+  const badges = badgesFor(channelLogin, msg.tags['badges'])
+  if (badges.length > 0) author.badges = badges
 
-  return author;
+  return author
 }
 
 function nativeIdOf(msg: IrcMessage): string {
   return (
-    msg.tags["id"] ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  );
+    msg.tags['id'] ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  )
 }
 
 function sentAt(msg: IrcMessage): number {
-  return Number(msg.tags["tmi-sent-ts"]) || Date.now();
+  return Number(msg.tags['tmi-sent-ts']) || Date.now()
 }
 
 export function normalizeIrcPrivmsg(
@@ -278,37 +278,37 @@ export function normalizeIrcPrivmsg(
   sourceId: string,
   channelLogin: string,
 ): ChatMessage {
-  const text = msg.trailing ?? "";
-  const login = msg.nick ?? msg.tags["login"] ?? "unknown";
+  const text = msg.trailing ?? ''
+  const login = msg.nick ?? msg.tags['login'] ?? 'unknown'
 
   const out: ChatMessage = {
-    id: messageId("twitch", sourceId, nativeIdOf(msg)),
+    id: messageId('twitch', sourceId, nativeIdOf(msg)),
     sourceId,
-    platform: "twitch",
-    kind: msg.tags["bits"] ? "donation" : "chat",
-    fragments: buildIrcFragments(text, msg.tags["emotes"]),
+    platform: 'twitch',
+    kind: msg.tags['bits'] ? 'donation' : 'chat',
+    fragments: buildIrcFragments(text, msg.tags['emotes']),
     plainText: text,
     timestamp: sentAt(msg),
     ...authorOf(msg, login, channelLogin),
-  };
-
-  const bits = Number(msg.tags["bits"]);
-  if (Number.isFinite(bits) && bits > 0)
-    out.monetary = { amount: bits, currency: "bits" };
-
-  const replyId = msg.tags["reply-parent-msg-id"];
-  if (replyId) {
-    out.replyTo = {
-      messageId: messageId("twitch", sourceId, replyId),
-      authorName:
-        msg.tags["reply-parent-display-name"] ??
-        msg.tags["reply-parent-user-login"] ??
-        "",
-      excerpt: (msg.tags["reply-parent-msg-body"] ?? "").slice(0, REPLY_EXCERPT_LIMIT),
-    };
   }
 
-  return out;
+  const bits = Number(msg.tags['bits'])
+  if (Number.isFinite(bits) && bits > 0)
+    out.monetary = { amount: bits, currency: 'bits' }
+
+  const replyId = msg.tags['reply-parent-msg-id']
+  if (replyId) {
+    out.replyTo = {
+      messageId: messageId('twitch', sourceId, replyId),
+      authorName:
+        msg.tags['reply-parent-display-name'] ??
+        msg.tags['reply-parent-user-login'] ??
+        '',
+      excerpt: (msg.tags['reply-parent-msg-body'] ?? '').slice(0, REPLY_EXCERPT_LIMIT),
+    }
+  }
+
+  return out
 }
 
 export function normalizeIrcUsernotice(
@@ -316,34 +316,34 @@ export function normalizeIrcUsernotice(
   sourceId: string,
   channelLogin: string,
 ): ChatMessage | null {
-  const systemMsg = msg.tags["system-msg"];
-  if (!systemMsg) return null;
+  const systemMsg = msg.tags['system-msg']
+  if (!systemMsg) return null
 
-  const login = msg.tags["login"] ?? "twitch";
-  const userText = msg.trailing ?? "";
+  const login = msg.tags['login'] ?? 'twitch'
+  const userText = msg.trailing ?? ''
 
-  const fragments: Fragment[] = [{ kind: "text", text: systemMsg }];
-  if (userText !== "") {
-    fragments.push(...buildIrcFragments(userText, msg.tags["emotes"]));
+  const fragments: Fragment[] = [{ kind: 'text', text: systemMsg }]
+  if (userText !== '') {
+    fragments.push(...buildIrcFragments(userText, msg.tags['emotes']))
   }
 
   return {
-    id: messageId("twitch", sourceId, nativeIdOf(msg)),
+    id: messageId('twitch', sourceId, nativeIdOf(msg)),
     sourceId,
-    platform: "twitch",
-    kind: noticeKind(msg.tags["msg-id"]),
+    platform: 'twitch',
+    kind: noticeKind(msg.tags['msg-id']),
     fragments,
-    plainText: userText === "" ? systemMsg : `${systemMsg} ${userText}`,
+    plainText: userText === '' ? systemMsg : `${systemMsg} ${userText}`,
     timestamp: sentAt(msg),
     ...authorOf(msg, login, channelLogin),
-  };
+  }
 }
 
-const FATAL_NOTICE_IDS = ["msg_channel_suspended", "msg_banned"];
+const FATAL_NOTICE_IDS = ['msg_channel_suspended', 'msg_banned']
 
 export class TwitchIrcFeed implements ChatFeed {
-  private leaveRoom: (() => void) | null = null;
-  private stopped = false;
+  private leaveRoom: (() => void) | null = null
+  private stopped = false
 
   constructor(
     private readonly sourceId: string,
@@ -353,44 +353,44 @@ export class TwitchIrcFeed implements ChatFeed {
   ) {}
 
   async start(): Promise<void> {
-    await twitchBadges.ready(this.channel.login);
-    if (this.stopped) return;
+    await twitchBadges.ready(this.channel.login)
+    if (this.stopped) return
 
     this.leaveRoom = this.hub.join(this.channel.login, (_event, payload) =>
       this.route(payload as IrcMessage),
-    );
+    )
   }
 
   stop(): void {
-    this.stopped = true;
+    this.stopped = true
 
-    this.leaveRoom?.();
-    this.leaveRoom = null;
+    this.leaveRoom?.()
+    this.leaveRoom = null
   }
 
   private route(message: IrcMessage): void {
     switch (message.command) {
-      case "PRIVMSG":
-        return this.publishMessage(message);
+      case 'PRIVMSG':
+        return this.publishMessage(message)
 
-      case "USERNOTICE":
-        return this.publishNotice(message);
+      case 'USERNOTICE':
+        return this.publishNotice(message)
 
-      case "CLEARMSG":
-        return this.publishDeletion(message);
+      case 'CLEARMSG':
+        return this.publishDeletion(message)
 
-      case "CLEARCHAT":
-        return this.publishClear(message);
+      case 'CLEARCHAT':
+        return this.publishClear(message)
 
-      case "NOTICE":
-        return this.reportFatalNotice(message);
+      case 'NOTICE':
+        return this.reportFatalNotice(message)
     }
   }
 
   private publishMessage(message: IrcMessage): void {
-    const chat = normalizeIrcPrivmsg(message, this.sourceId, this.channel.login);
+    const chat = normalizeIrcPrivmsg(message, this.sourceId, this.channel.login)
 
-    this.sink.message(withEmotes(chat, this.channel));
+    this.sink.message(withEmotes(chat, this.channel))
   }
 
   private publishNotice(message: IrcMessage): void {
@@ -398,40 +398,40 @@ export class TwitchIrcFeed implements ChatFeed {
       message,
       this.sourceId,
       this.channel.login,
-    );
-    if (notice) this.sink.message(withEmotes(notice, this.channel));
+    )
+    if (notice) this.sink.message(withEmotes(notice, this.channel))
   }
 
   private publishDeletion(message: IrcMessage): void {
-    const targetMessageId = message.tags["target-msg-id"];
-    if (!targetMessageId) return;
+    const targetMessageId = message.tags['target-msg-id']
+    if (!targetMessageId) return
 
     this.sink.moderation({
-      type: "delete-message",
+      type: 'delete-message',
       sourceId: this.sourceId,
-      messageId: messageId("twitch", this.sourceId, targetMessageId),
-    });
+      messageId: messageId('twitch', this.sourceId, targetMessageId),
+    })
   }
 
   private publishClear(message: IrcMessage): void {
-    const timedOutLogin = message.trailing;
+    const timedOutLogin = message.trailing
 
     if (!timedOutLogin) {
-      this.sink.moderation({ type: "clear-chat", sourceId: this.sourceId });
-      return;
+      this.sink.moderation({ type: 'clear-chat', sourceId: this.sourceId })
+      return
     }
 
     this.sink.moderation({
-      type: "clear-user",
+      type: 'clear-user',
       sourceId: this.sourceId,
-      userId: message.tags["target-user-id"] ?? timedOutLogin,
-    });
+      userId: message.tags['target-user-id'] ?? timedOutLogin,
+    })
   }
 
   private reportFatalNotice(message: IrcMessage): void {
-    const noticeId = message.tags["msg-id"] ?? "";
-    if (!FATAL_NOTICE_IDS.some((id) => noticeId.includes(id))) return;
+    const noticeId = message.tags['msg-id'] ?? ''
+    if (!FATAL_NOTICE_IDS.some((id) => noticeId.includes(id))) return
 
-    this.sink.failed(message.trailing ?? "channel unavailable");
+    this.sink.failed(message.trailing ?? 'channel unavailable')
   }
 }

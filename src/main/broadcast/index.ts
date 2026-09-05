@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
+import ffmpegStatic from 'ffmpeg-static'
 import type { BroadcastState, DestinationState, Platform } from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { config } from '../config'
@@ -27,9 +28,7 @@ import {
 /** electron-builder cannot execute a binary from inside app.asar, so the packed path
     points at the unpacked copy beside it. In dev the module resolves normally. */
 function ffmpegPath(): string {
-  const resolved = require('ffmpeg-static') as string
-
-  return resolved.replace('app.asar', 'app.asar.unpacked')
+  return (ffmpegStatic as string).replace('app.asar', 'app.asar.unpacked')
 }
 
 /** OBS pushes to this, and nothing else can: a push carrying a different key lands on a

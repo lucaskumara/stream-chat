@@ -1,27 +1,27 @@
-import type { Badge, ChatMessage, Fragment, Platform } from "@shared/types";
+import type { Badge, ChatMessage, Fragment, Platform } from '@shared/types'
 import {
   BaseChatWatcher,
   messageId,
   type ChatFeed,
   type FeedSink,
   withEmotes,
-} from "../../watcher";
-import type { ChannelLookup, RetryPolicy } from "../../channel";
-import { splitLinks } from "../../links";
-import { plainTextOf, REPLY_EXCERPT_LIMIT } from "../../fragments";
-import { resolveChannel, type KickChannel } from "./channel";
-import { kickBadges } from "./badges";
-import { kickSocket } from "./connection";
+} from '../../watcher'
+import type { ChannelLookup, RetryPolicy } from '../../channel'
+import { splitLinks } from '../../links'
+import { plainTextOf, REPLY_EXCERPT_LIMIT } from '../../fragments'
+import { resolveChannel, type KickChannel } from './channel'
+import { kickBadges } from './badges'
+import { kickSocket } from './connection'
 
 const EVENT = {
-  chatMessage: "App\\Events\\ChatMessageEvent",
-  messageDeleted: "App\\Events\\MessageDeletedEvent",
-  userBanned: "App\\Events\\UserBannedEvent",
-  chatroomCleared: "App\\Events\\ChatroomClearEvent",
-} as const;
+  chatMessage: 'App\\Events\\ChatMessageEvent',
+  messageDeleted: 'App\\Events\\MessageDeletedEvent',
+  userBanned: 'App\\Events\\UserBannedEvent',
+  chatroomCleared: 'App\\Events\\ChatroomClearEvent',
+} as const
 
-const EMOTE_TOKEN = /\[emote:(\d+):([^\]]*)\]/g;
-const EMOTE_CDN = "https://files.kick.com/emotes";
+const EMOTE_TOKEN = /\[emote:(\d+):([^\]]*)\]/g
+const EMOTE_CDN = 'https://files.kick.com/emotes'
 
 interface KickBadge {
   type?: string;
@@ -63,26 +63,26 @@ interface UserBannedEvent {
 }
 
 export class KickChatWatcher extends BaseChatWatcher<KickChannel> {
-  readonly platform: Platform = "kick";
+  readonly platform: Platform = 'kick'
 
   protected readonly retry: RetryPolicy = {
     offlineMs: 30_000,
     errorMs: 30_000,
     jitterMs: 10_000,
-  };
+  }
 
   protected resolve(identifier: string): Promise<ChannelLookup<KickChannel>> {
-    return resolveChannel(identifier);
+    return resolveChannel(identifier)
   }
 
   protected createFeed(channel: KickChannel, sink: FeedSink): ChatFeed {
-    return new KickChatFeed(this.sourceId, channel, sink);
+    return new KickChatFeed(this.sourceId, channel, sink)
   }
 }
 
 class KickChatFeed implements ChatFeed {
-  private leaveRoom: (() => void) | null = null;
-  private stopped = false;
+  private leaveRoom: (() => void) | null = null
+  private stopped = false
 
   constructor(
     private readonly sourceId: string,
@@ -91,65 +91,65 @@ class KickChatFeed implements ChatFeed {
   ) {}
 
   async start(): Promise<void> {
-    await kickBadges.ready(this.channel.slug);
-    if (this.stopped) return;
+    await kickBadges.ready(this.channel.slug)
+    if (this.stopped) return
 
     this.leaveRoom = kickSocket.join(this.channel.room, (event, payload) =>
       this.route(event, payload),
-    );
+    )
   }
 
   stop(): void {
-    this.stopped = true;
+    this.stopped = true
 
-    this.leaveRoom?.();
-    this.leaveRoom = null;
+    this.leaveRoom?.()
+    this.leaveRoom = null
   }
 
   private route(event: string, payload: unknown): void {
     switch (event) {
       case EVENT.chatMessage:
-        return this.publishMessage(payload as ChatMessageEvent);
+        return this.publishMessage(payload as ChatMessageEvent)
 
       case EVENT.messageDeleted:
-        return this.publishDeletion(payload as MessageDeletedEvent);
+        return this.publishDeletion(payload as MessageDeletedEvent)
 
       case EVENT.userBanned:
-        return this.publishBan(payload as UserBannedEvent);
+        return this.publishBan(payload as UserBannedEvent)
 
       case EVENT.chatroomCleared:
         return this.sink.moderation({
-          type: "clear-chat",
+          type: 'clear-chat',
           sourceId: this.sourceId,
-        });
+        })
     }
   }
 
   private publishMessage(event: ChatMessageEvent): void {
-    const message = toChatMessage(event, this.sourceId, this.channel);
-    if (message) this.sink.message(withEmotes(message, this.channel));
+    const message = toChatMessage(event, this.sourceId, this.channel)
+    if (message) this.sink.message(withEmotes(message, this.channel))
   }
 
   private publishDeletion(event: MessageDeletedEvent): void {
-    const deletedId = event.message?.id;
-    if (!deletedId) return;
+    const deletedId = event.message?.id
+    if (!deletedId) return
 
     this.sink.moderation({
-      type: "delete-message",
+      type: 'delete-message',
       sourceId: this.sourceId,
-      messageId: messageId("kick", this.sourceId, deletedId),
-    });
+      messageId: messageId('kick', this.sourceId, deletedId),
+    })
   }
 
   private publishBan(event: UserBannedEvent): void {
-    const userId = event.user?.id;
-    if (userId === undefined) return;
+    const userId = event.user?.id
+    if (userId === undefined) return
 
     this.sink.moderation({
-      type: "clear-user",
+      type: 'clear-user',
       sourceId: this.sourceId,
       userId: String(userId),
-    });
+    })
   }
 }
 
@@ -158,124 +158,124 @@ export function toChatMessage(
   sourceId: string,
   channel: KickChannel,
 ): ChatMessage | null {
-  const eventId = event.id;
-  const sender = event.sender;
+  const eventId = event.id
+  const sender = event.sender
 
-  if (!eventId || !sender?.username) return null;
+  if (!eventId || !sender?.username) return null
 
-  const fragments = toFragments(event.content ?? "");
+  const fragments = toFragments(event.content ?? '')
 
   const message: ChatMessage = {
-    id: messageId("kick", sourceId, eventId),
+    id: messageId('kick', sourceId, eventId),
     sourceId,
-    platform: "kick",
-    kind: "chat",
+    platform: 'kick',
+    kind: 'chat',
     authorId: sender.id === undefined ? sender.username : String(sender.id),
     authorName: sender.username,
     fragments,
     plainText: plainTextOf(fragments),
     timestamp: toTimestamp(event.created_at),
-  };
+  }
 
-  const identity = sender.identity;
+  const identity = sender.identity
 
-  if (identity?.color) message.authorColor = identity.color;
+  if (identity?.color) message.authorColor = identity.color
 
-  const badges = toBadges(identity, channel);
-  if (badges.length > 0) message.badges = badges;
+  const badges = toBadges(identity, channel)
+  if (badges.length > 0) message.badges = badges
 
-  const reply = toReply(event, sourceId);
-  if (reply) message.replyTo = reply;
+  const reply = toReply(event, sourceId)
+  if (reply) message.replyTo = reply
 
-  return message;
+  return message
 }
 
 function toBadges(
-  identity: NonNullable<ChatMessageEvent["sender"]>["identity"],
+  identity: NonNullable<ChatMessageEvent['sender']>['identity'],
   channel: KickChannel,
 ): Badge[] {
-  const badges: Badge[] = [];
+  const badges: Badge[] = []
 
   for (const badge of identity?.badges ?? []) {
-    if (!badge.type) continue;
+    if (!badge.type) continue
 
     badges.push(
       withArt(
-        badge.type === "subscriber"
+        badge.type === 'subscriber'
           ? channel.subscriberBadge(badge.count ?? 1)
           : { label: badge.text ?? badge.type, id: badge.type },
       ),
-    );
+    )
   }
 
   for (const badge of identity?.badges_v2 ?? []) {
-    if (!badge.selected || !badge.image_url) continue;
+    if (!badge.selected || !badge.image_url) continue
 
-    badges.push({ label: badge.name ?? "", url: badge.image_url });
+    badges.push({ label: badge.name ?? '', url: badge.image_url })
   }
 
-  return badges;
+  return badges
 }
 
 /** A channel's own subscriber tier image wins; everything else Kick draws itself, so it
     falls through to the artwork pulled off kick.com. */
 function withArt(badge: Badge): Badge {
-  if (badge.url || !badge.id) return badge;
+  if (badge.url || !badge.id) return badge
 
-  const art = kickBadges.lookup(badge.id);
+  const art = kickBadges.lookup(badge.id)
 
-  return art ? { ...badge, url: art } : badge;
+  return art ? { ...badge, url: art } : badge
 }
 
 export function toFragments(content: string): Fragment[] {
-  const fragments: Fragment[] = [];
-  let cursor = 0;
+  const fragments: Fragment[] = []
+  let cursor = 0
 
   for (const match of content.matchAll(EMOTE_TOKEN)) {
-    const start = match.index ?? 0;
+    const start = match.index ?? 0
 
     if (start > cursor)
-      fragments.push(...splitLinks(content.slice(cursor, start)));
+      fragments.push(...splitLinks(content.slice(cursor, start)))
 
     fragments.push({
-      kind: "emote",
-      name: match[2] ?? "",
+      kind: 'emote',
+      name: match[2] ?? '',
       url: `${EMOTE_CDN}/${match[1]}/fullsize`,
-      provider: "native",
-    });
+      provider: 'native',
+    })
 
-    cursor = start + match[0].length;
+    cursor = start + match[0].length
   }
 
   if (cursor < content.length)
-    fragments.push(...splitLinks(content.slice(cursor)));
+    fragments.push(...splitLinks(content.slice(cursor)))
 
   return fragments.filter(
-    (fragment) => fragment.kind !== "text" || fragment.text.length > 0,
-  );
+    (fragment) => fragment.kind !== 'text' || fragment.text.length > 0,
+  )
 }
 
 function toReply(
   event: ChatMessageEvent,
   sourceId: string,
-): ChatMessage["replyTo"] {
-  const original = event.metadata?.original_message;
-  const author = event.metadata?.original_sender?.username;
+): ChatMessage['replyTo'] {
+  const original = event.metadata?.original_message
+  const author = event.metadata?.original_sender?.username
 
-  if (!original?.id || !author) return undefined;
+  if (!original?.id || !author) return undefined
 
   return {
-    messageId: messageId("kick", sourceId, original.id),
+    messageId: messageId('kick', sourceId, original.id),
     authorName: author,
-    excerpt: plainTextOf(toFragments(original.content ?? "")).slice(
+    excerpt: plainTextOf(toFragments(original.content ?? '')).slice(
       0,
       REPLY_EXCERPT_LIMIT,
     ),
-  };
+  }
 }
 
 function toTimestamp(createdAt: string | undefined): number {
-  const parsed = createdAt ? Date.parse(createdAt) : Number.NaN;
+  const parsed = createdAt ? Date.parse(createdAt) : Number.NaN
 
-  return Number.isNaN(parsed) ? Date.now() : parsed;
+  return Number.isNaN(parsed) ? Date.now() : parsed
 }

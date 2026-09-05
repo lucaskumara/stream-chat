@@ -1396,13 +1396,20 @@ the relay key was the one secret sitting in plain text on a page.
 
 ### Build and tooling
 
-**There is no formatter or linter configured** — no Prettier, no ESLint, no `.editorconfig`.
-The tree is consequently split between two styles: double quotes with semicolons
-(`chat/watcher.ts`, `platforms/twitch/index.ts`, `platforms/kick/index.ts`) and single quotes
-without them (`main/index.ts`, `shared/types.ts`, `platforms/twitch/channel.ts`) — sometimes
-in the same folder. **Match the file you are editing**, and do not reformat a file wholesale
-as a side effect of another change; `npm run typecheck` will not catch it and the diff buries
-the real work.
+**ESLint is configured (flat config, `eslint.config.mjs`) and the whole tree has been
+normalized to one style: single quotes, no semicolons, double-quoted JSX attributes.**
+`npm run lint` / `npm run lint:fix` run it. The tree used to be split between that style and
+double-quotes-with-semicolons (`chat/watcher.ts`, `platforms/twitch/index.ts`,
+`platforms/kick/index.ts` were the holdouts) — that split is gone now, so a new file should
+just match everything else rather than picking a style per folder. `no-empty` allows an empty
+`catch` (the deliberate swallow-a-malformed-input pattern, e.g. `openExternalSafely`), and
+`no-console` is an error in `src/main/**` outside `log.ts` — enforcing the logging invariant
+below rather than just documenting it. `eslint-plugin-react-hooks`'s stricter (React
+Compiler-oriented) rules run too: `HoverPopup` reads its anchor node from a callback-ref
+`useState` rather than `ref.current` during render because of this, and
+`usePlatformDrafts`'s effect carries a targeted `eslint-disable` for `set-state-in-effect` —
+it's syncing from an external store (zustand fed over IPC), not redoing derived-state-in-effect,
+so the rule doesn't apply there.
 
 **Path aliases are declared in five places now.** `@shared` (and `@` for the renderer) live
 in `electron.vite.config.ts`, the three tsconfigs, and `vitest.config.ts`. Adding or renaming

@@ -46,7 +46,11 @@ export function usePlatformDrafts(): PlatformDraftsApi {
   // of that change while it's open is this hook's own save. Filling in a draft
   // only when one doesn't exist yet, rather than resyncing on every config
   // change, is what keeps a save from clobbering whatever the user is mid-typing.
+  // This is syncing local state from an external store (zustand, fed by main over
+  // IPC), not state derivable from props during render, so the effect is correct
+  // React and not the redundant-derived-state pattern the lint rule targets.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDrafts((held) => {
       const next = { ...held }
       let changed = false
